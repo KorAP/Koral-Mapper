@@ -194,6 +194,12 @@ func addupostooutput(json string, reffoundry string, foundry string) {
 
 */
 
+type Term struct {
+	Foundry string
+	Layer   string
+	Key     string
+}
+
 func Hui() string {
 	return "test"
 }
@@ -270,6 +276,26 @@ func termGroup(strBuilder *strings.Builder, foundry string, layer string, keys [
 	strBuilder.WriteString(`]}`)
 }
 
+// termGroup2 writes a termGroup to the string builder
+func termGroup2(strBuilder *strings.Builder, terms []Term, positive bool) {
+	strBuilder.WriteString(`{"@type":"koral:termGroup",`)
+
+	if positive {
+		strBuilder.WriteString(`"relation":"relation:and","operation":"operation:and",`)
+	} else {
+		strBuilder.WriteString(`"relation":"relation:or","operation":"operation:or",`)
+	}
+
+	strBuilder.WriteString(`"operands":[`)
+	for i, term := range terms {
+		term2(strBuilder, term, positive)
+		if i < len(terms)-1 {
+			strBuilder.WriteString(",")
+		}
+	}
+	strBuilder.WriteString(`]}`)
+}
+
 // term writes a term to the string builder
 func term(strBuilder *strings.Builder, foundry string, layer string, key string, match bool) {
 
@@ -289,6 +315,25 @@ func term(strBuilder *strings.Builder, foundry string, layer string, key string,
 	strBuilder.WriteString(`"}`)
 }
 
+// term writes a term to the string builder
+func term2(strBuilder *strings.Builder, term Term, match bool) {
+
+	// TODO: May have ne!!!!
+	strBuilder.WriteString(`{"@type":"koral:term","match":"match:`)
+	if match {
+		strBuilder.WriteString("eq")
+	} else {
+		strBuilder.WriteString("ne")
+	}
+	strBuilder.WriteString(`","foundry":"`)
+	strBuilder.WriteString(term.Foundry)
+	strBuilder.WriteString(`","layer":"`)
+	strBuilder.WriteString(term.Layer)
+	strBuilder.WriteString(`","key":"`)
+	strBuilder.WriteString(term.Key)
+	strBuilder.WriteString(`"}`)
+}
+
 func flatten() {
 
 	// if a termGroup isan operand in a termGroup with the same relation/operation:
@@ -297,21 +342,47 @@ func flatten() {
 	// if a termGroup has only a single term, remove the group
 }
 
-func replaceWrappedTerm(jsonString string, foundry string, layer string, key string) string {
+func replaceWrappedTerms(jsonString string, terms []Term) string {
 	var err error
-	jsonString, err = sjson.Set(jsonString, "foundry", foundry)
-	if err != nil {
-		log.Error().Err(err).Msg("Error setting foundry")
+
+	if len(terms) == 1 {
+		jsonString, err = sjson.Set(jsonString, "foundry", terms[0].Foundry)
+		if err != nil {
+			log.Error().Err(err).Msg("Error setting foundry")
+		}
+		jsonString, err = sjson.Set(jsonString, "layer", terms[0].Layer)
+		if err != nil {
+			log.Error().Err(err).Msg("Error setting layer")
+		}
+		jsonString, err = sjson.Set(jsonString, "key", terms[0].Key)
+		if err != nil {
+			log.Error().Err(err).Msg("Error setting key")
+		}
+
+		return jsonString
 	}
-	jsonString, err = sjson.Set(jsonString, "layer", layer)
-	if err != nil {
-		log.Error().Err(err).Msg("Error setting layer")
+
+	matchop := gjson.Get(jsonString, "match").String()
+
+	/*
+		foundry := gjson.Get(jsonString, "foundry").String()
+		layer := gjson.Get(jsonString, "layer").String()
+		key := gjson.Get(jsonString, "key").String()
+		term := Term{foundry, layer, key}
+
+
+		terms = append(terms, term)
+	*/
+
+	var strBuilder strings.Builder
+	if matchop == "match:ne" {
+		termGroup2(&strBuilder, terms, false)
+	} else {
+		termGroup2(&strBuilder, terms, true)
 	}
-	jsonString, err = sjson.Set(jsonString, "key", key)
-	if err != nil {
-		log.Error().Err(err).Msg("Error setting key")
-	}
-	return jsonString
+
+	return strBuilder.String()
+
 }
 
 func replaceGroupedTerm(jsonString string, op []int, foundry string, layer string, key string) string {
