@@ -7,11 +7,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestConstants(t *testing.T) {
-	assert := assert.New(t)
-	assert.Equal(Hui(), "test")
-}
-
 // KoralPipe-TermMapping
 
 func TestTokenBuilder(t *testing.T) {
@@ -19,15 +14,15 @@ func TestTokenBuilder(t *testing.T) {
 	assert := assert.New(t)
 
 	var strBuilder strings.Builder
-	term(&strBuilder, "myfoundry", "mylayer", "mykey1", true)
+	term(&strBuilder, Term{"myfoundry", "mylayer", "mykey1"}, true)
 	assert.Equal(strBuilder.String(), `{"@type":"koral:term","match":"match:eq","foundry":"myfoundry","layer":"mylayer","key":"mykey1"}`)
 	strBuilder.Reset()
 
-	token(&strBuilder, "myfoundry", "mylayer", []string{"mykey1", "mykey2"})
+	token(&strBuilder, []Term{{"myfoundry", "mylayer", "mykey1"}, {"myfoundry", "mylayer", "mykey2"}}, true)
 	assert.Equal(strBuilder.String(), "{\"@type\":\"koral:token\",\"wrap\":{\"@type\":\"koral:termGroup\",\"relation\":\"relation:and\",\"operation\":\"operation:and\",\"operands\":[{\"@type\":\"koral:term\",\"match\":\"match:eq\",\"foundry\":\"myfoundry\",\"layer\":\"mylayer\",\"key\":\"mykey1\"},{\"@type\":\"koral:term\",\"match\":\"match:eq\",\"foundry\":\"myfoundry\",\"layer\":\"mylayer\",\"key\":\"mykey2\"}]}}")
 	strBuilder.Reset()
 
-	token(&strBuilder, "myfoundry", "mylayer", []string{"mykey2"})
+	token(&strBuilder, []Term{{"myfoundry", "mylayer", "mykey2"}}, true)
 	assert.Equal(strBuilder.String(), "{\"@type\":\"koral:token\",\"wrap\":{\"@type\":\"koral:term\",\"match\":\"match:eq\",\"foundry\":\"myfoundry\",\"layer\":\"mylayer\",\"key\":\"mykey2\"}}")
 	strBuilder.Reset()
 }

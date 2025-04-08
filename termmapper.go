@@ -200,10 +200,6 @@ type Term struct {
 	Key     string
 }
 
-func Hui() string {
-	return "test"
-}
-
 func Map2(json []byte) string {
 	/*
 		result := gjson.GetBytes(json, "query")
@@ -254,30 +250,18 @@ func Map2(json []byte) string {
 }
 
 // token writes a token to the string builder
-func token(strBuilder *strings.Builder, foundry string, layer string, keys []string) {
+func token(strBuilder *strings.Builder, terms []Term, positive bool) {
 	strBuilder.WriteString(`{"@type":"koral:token","wrap":`)
-	if len(keys) > 1 {
-		termGroup(strBuilder, foundry, layer, keys)
+	if len(terms) > 1 {
+		termGroup(strBuilder, terms, positive)
 	} else {
-		term(strBuilder, foundry, layer, keys[0], true)
+		term(strBuilder, terms[0], positive)
 	}
 	strBuilder.WriteString(`}`)
 }
 
 // termGroup writes a termGroup to the string builder
-func termGroup(strBuilder *strings.Builder, foundry string, layer string, keys []string) {
-	strBuilder.WriteString(`{"@type":"koral:termGroup","relation":"relation:and","operation":"operation:and","operands":[`)
-	for i, key := range keys {
-		term(strBuilder, foundry, layer, key, true) // temporary
-		if i < len(keys)-1 {
-			strBuilder.WriteString(",")
-		}
-	}
-	strBuilder.WriteString(`]}`)
-}
-
-// termGroup2 writes a termGroup to the string builder
-func termGroup2(strBuilder *strings.Builder, terms []Term, positive bool) {
+func termGroup(strBuilder *strings.Builder, terms []Term, positive bool) {
 	strBuilder.WriteString(`{"@type":"koral:termGroup",`)
 
 	if positive {
@@ -287,8 +271,8 @@ func termGroup2(strBuilder *strings.Builder, terms []Term, positive bool) {
 	}
 
 	strBuilder.WriteString(`"operands":[`)
-	for i, term := range terms {
-		term2(strBuilder, term, positive)
+	for i, t := range terms {
+		term(strBuilder, t, positive)
 		if i < len(terms)-1 {
 			strBuilder.WriteString(",")
 		}
@@ -297,28 +281,8 @@ func termGroup2(strBuilder *strings.Builder, terms []Term, positive bool) {
 }
 
 // term writes a term to the string builder
-func term(strBuilder *strings.Builder, foundry string, layer string, key string, match bool) {
+func term(strBuilder *strings.Builder, term Term, match bool) {
 
-	// TODO: May have ne!!!!
-	strBuilder.WriteString(`{"@type":"koral:term","match":"match:`)
-	if match {
-		strBuilder.WriteString("eq")
-	} else {
-		strBuilder.WriteString("ne")
-	}
-	strBuilder.WriteString(`","foundry":"`)
-	strBuilder.WriteString(foundry)
-	strBuilder.WriteString(`","layer":"`)
-	strBuilder.WriteString(layer)
-	strBuilder.WriteString(`","key":"`)
-	strBuilder.WriteString(key)
-	strBuilder.WriteString(`"}`)
-}
-
-// term writes a term to the string builder
-func term2(strBuilder *strings.Builder, term Term, match bool) {
-
-	// TODO: May have ne!!!!
 	strBuilder.WriteString(`{"@type":"koral:term","match":"match:`)
 	if match {
 		strBuilder.WriteString("eq")
@@ -376,9 +340,9 @@ func replaceWrappedTerms(jsonString string, terms []Term) string {
 
 	var strBuilder strings.Builder
 	if matchop == "match:ne" {
-		termGroup2(&strBuilder, terms, false)
+		termGroup(&strBuilder, terms, false)
 	} else {
-		termGroup2(&strBuilder, terms, true)
+		termGroup(&strBuilder, terms, true)
 	}
 
 	return strBuilder.String()
