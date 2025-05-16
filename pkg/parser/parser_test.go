@@ -183,12 +183,16 @@ func TestParseJSON(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "Invalid node type",
+			name: "Unknown node type",
 			input: `{
 				"@type": "koral:unknown",
 				"key": "value"
 			}`,
-			wantErr: true,
+			expected: &ast.CatchallNode{
+				NodeType:   "koral:unknown",
+				RawContent: json.RawMessage(`{"@type":"koral:unknown","key":"value"}`),
+			},
+			wantErr: false,
 		},
 	}
 
@@ -273,6 +277,21 @@ func TestSerializeToJSON(t *testing.T) {
 }`,
 			wantErr: false,
 		},
+		{
+			name: "Serialize unknown node type",
+			input: &ast.CatchallNode{
+				NodeType: "koral:unknown",
+				RawContent: json.RawMessage(`{
+  "@type": "koral:unknown",
+  "key": "value"
+}`),
+			},
+			expected: `{
+  "@type": "koral:unknown",
+  "key": "value"
+}`,
+			wantErr: false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -325,6 +344,56 @@ func TestRoundTrip(t *testing.T) {
 	// Parse JSON to AST
 	node, err := ParseJSON([]byte(input))
 	require.NoError(t, err)
+
+	// Serialize AST back to JSON
+	output, err := SerializeToJSON(node)
+	require.NoError(t, err)
+
+	// Compare JSON objects
+	var expected, actual interface{}
+	err = json.Unmarshal([]byte(input), &expected)
+	require.NoError(t, err)
+	err = json.Unmarshal(output, &actual)
+	require.NoError(t, err)
+	assert.Equal(t, expected, actual)
+}
+
+func TestRoundTripUnknownType(t *testing.T) {
+	// Test that parsing and then serializing an unknown node type preserves the structure
+	input := `{
+		"@type": "koral:unknown",
+		"key": "value",
+		"wrap": {
+			"@type": "koral:term",
+			"foundry": "opennlp",
+			"key": "DET",
+			"layer": "p",
+			"match": "match:eq"
+		},
+		"operands": [
+			{
+				"@type": "koral:term",
+				"foundry": "opennlp",
+				"key": "AdjType",
+				"layer": "m",
+				"match": "match:eq",
+				"value": "Pdt"
+			}
+		]
+	}`
+
+	// Parse JSON to AST
+	node, err := ParseJSON([]byte(input))
+	require.NoError(t, err)
+
+	// Check that it's a CatchallNode
+	catchall, ok := node.(*ast.CatchallNode)
+	require.True(t, ok)
+	assert.Equal(t, "koral:unknown", catchall.NodeType)
+
+	// Check that wrap and operands were parsed
+	require.NotNil(t, catchall.Wrap)
+	require.Len(t, catchall.Operands, 1)
 
 	// Serialize AST back to JSON
 	output, err := SerializeToJSON(node)

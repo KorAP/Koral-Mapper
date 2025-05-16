@@ -1,5 +1,9 @@
 package ast
 
+import (
+	"encoding/json"
+)
+
 // NodeType represents the type of a node in the AST
 type NodeType string
 
@@ -70,4 +74,16 @@ type Pattern struct {
 // Replacement represents a replacement pattern
 type Replacement struct {
 	Root Node
+}
+
+// CatchallNode represents any node type not explicitly handled
+type CatchallNode struct {
+	NodeType   string          // The original @type value
+	RawContent json.RawMessage // The original JSON content
+	Wrap       Node            // Optional wrapped node
+	Operands   []Node          // Optional operands
+}
+
+func (c *CatchallNode) Type() NodeType {
+	return NodeType(c.NodeType)
 }

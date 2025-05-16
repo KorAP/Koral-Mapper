@@ -42,6 +42,22 @@ func (m *Matcher) Replace(node ast.Node) ast.Node {
 		n.Operands = newOperands
 		return n
 
+	case *ast.CatchallNode:
+		newNode := &ast.CatchallNode{
+			NodeType:   n.NodeType,
+			RawContent: n.RawContent,
+		}
+		if n.Wrap != nil {
+			newNode.Wrap = m.Replace(n.Wrap)
+		}
+		if len(n.Operands) > 0 {
+			newNode.Operands = make([]ast.Node, len(n.Operands))
+			for i, op := range n.Operands {
+				newNode.Operands[i] = m.Replace(op)
+			}
+		}
+		return newNode
+
 	default:
 		return node
 	}
@@ -61,6 +77,7 @@ func (m *Matcher) matchNode(node, pattern ast.Node) bool {
 		if t, ok := node.(*ast.Token); ok {
 			return m.matchNode(t.Wrap, p.Wrap)
 		}
+		return false
 
 	case *ast.TermGroup:
 		// If we're matching against a term, try to match it against any operand
@@ -113,6 +130,44 @@ func (m *Matcher) matchNode(node, pattern ast.Node) bool {
 			}
 			return true
 		}
+		return false
+
+	case *ast.CatchallNode:
+		// For catchall nodes, we need to check both wrap and operands
+		if t, ok := node.(*ast.CatchallNode); ok {
+			// If pattern has wrap, match it
+			if p.Wrap != nil && !m.matchNode(t.Wrap, p.Wrap) {
+				return false
+			}
+
+			// If pattern has operands, match them
+			if len(p.Operands) > 0 {
+				if len(t.Operands) < len(p.Operands) {
+					return false
+				}
+
+				// Try to match pattern operands against node operands in any order
+				matched := make([]bool, len(t.Operands))
+				for _, pOp := range p.Operands {
+					found := false
+					for j, tOp := range t.Operands {
+						if !matched[j] && m.matchNode(tOp, pOp) {
+							matched[j] = true
+							found = true
+							break
+						}
+					}
+					if !found {
+						return false
+					}
+				}
+				return true
+			}
+
+			// If no wrap or operands to match, it's a match
+			return true
+		}
+		return false
 
 	case *ast.Term:
 		// If we're matching against a term group with OR relation,
@@ -134,6 +189,7 @@ func (m *Matcher) matchNode(node, pattern ast.Node) bool {
 				t.Match == p.Match &&
 				(p.Value == "" || t.Value == p.Value)
 		}
+		return false
 	}
 
 	return false
@@ -169,6 +225,22 @@ func (m *Matcher) cloneNode(node ast.Node) ast.Node {
 			Match:   n.Match,
 			Value:   n.Value,
 		}
+
+	case *ast.CatchallNode:
+		newNode := &ast.CatchallNode{
+			NodeType:   n.NodeType,
+			RawContent: n.RawContent,
+		}
+		if n.Wrap != nil {
+			newNode.Wrap = m.cloneNode(n.Wrap)
+		}
+		if len(n.Operands) > 0 {
+			newNode.Operands = make([]ast.Node, len(n.Operands))
+			for i, op := range n.Operands {
+				newNode.Operands[i] = m.cloneNode(op)
+			}
+		}
+		return newNode
 
 	default:
 		return nil
