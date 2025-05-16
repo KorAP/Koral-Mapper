@@ -27,6 +27,10 @@ PDS	=>	PRON	PronType=Dem	das, dies, die, diese, der
 PIAT	=>	DET	PronType=Ind,Neg,Tot	keine, mehr, alle, kein, beiden
 PIDAT	=>	DET	AdjType=Pdt|PronType=Ind,Neg,Tot
 PIS	=>	PRON	PronType=Ind,Neg,Tot	man, allem, nichts, alles, mehr
+
+
+PIS => PRON & PronType=[Ind|Neg|Tot]
+
 PPER	=>	PRON	PronType=Prs	es, sie, er, wir, ich
 PPOSAT	=>	DET	Poss=Yes|PronType=Prs	ihre, seine, seiner, ihrer, ihren
 PPOSS	=>	PRON	Poss=Yes|PronType=Prs	ihren, Seinen, seinem, unsrigen, meiner
@@ -253,7 +257,7 @@ func Map2(json []byte) string {
 func token(strBuilder *strings.Builder, terms []Term, positive bool) {
 	strBuilder.WriteString(`{"@type":"koral:token","wrap":`)
 	if len(terms) > 1 {
-		termGroup(strBuilder, terms, positive)
+		termGroup(strBuilder, terms, true, positive)
 	} else {
 		term(strBuilder, terms[0], positive)
 	}
@@ -261,10 +265,10 @@ func token(strBuilder *strings.Builder, terms []Term, positive bool) {
 }
 
 // termGroup writes a termGroup to the string builder
-func termGroup(strBuilder *strings.Builder, terms []Term, positive bool) {
+func termGroup(strBuilder *strings.Builder, terms []Term, operationAnd bool, positive bool) {
 	strBuilder.WriteString(`{"@type":"koral:termGroup",`)
 
-	if positive {
+	if operationAnd {
 		strBuilder.WriteString(`"relation":"relation:and","operation":"operation:and",`)
 	} else {
 		strBuilder.WriteString(`"relation":"relation:or","operation":"operation:or",`)
@@ -281,10 +285,9 @@ func termGroup(strBuilder *strings.Builder, terms []Term, positive bool) {
 }
 
 // term writes a term to the string builder
-func term(strBuilder *strings.Builder, term Term, match bool) {
-
+func term(strBuilder *strings.Builder, term Term, positive bool) {
 	strBuilder.WriteString(`{"@type":"koral:term","match":"match:`)
-	if match {
+	if positive {
 		strBuilder.WriteString("eq")
 	} else {
 		strBuilder.WriteString("ne")
@@ -306,9 +309,11 @@ func flatten() {
 	// if a termGroup has only a single term, remove the group
 }
 
+// replaceWrappedTerm replaces the wrapped term with the new term group
 func replaceWrappedTerms(jsonString string, terms []Term) string {
 	var err error
 
+	// Replace with a single term
 	if len(terms) == 1 {
 		jsonString, err = sjson.Set(jsonString, "foundry", terms[0].Foundry)
 		if err != nil {
@@ -340,9 +345,10 @@ func replaceWrappedTerms(jsonString string, terms []Term) string {
 
 	var strBuilder strings.Builder
 	if matchop == "match:ne" {
-		termGroup(&strBuilder, terms, false)
+		// ! Make or-Group with nes
+		termGroup(&strBuilder, terms, false, false)
 	} else {
-		termGroup(&strBuilder, terms, true)
+		termGroup(&strBuilder, terms, true, true)
 	}
 
 	return strBuilder.String()
@@ -372,6 +378,106 @@ func replaceGroupedTerm(jsonString string, op []int, foundry string, layer strin
 			if err != nil {
 				log.Error().Err(err).Msg("Error deleting operand")
 			}
+		}
+	}
+
+	return jsonString
+}
+
+func replaceGroupedTerms(jsonString string, op []int, terms []Term) string {
+	var err error
+
+	positive := true
+	operationAnd := true
+
+	operation := gjson.Get(jsonString, "operation")
+	if operation.String() == "operation:or" {
+		operationAnd = false
+	}
+
+	// TODO:
+	// matchop := gjson.Get(jsonString, strInt).String()
+
+	if len(op) == 1 {
+		strInt := "operands." + strconv.Itoa(op[0]) + ".match"
+
+		matchop := gjson.Get(jsonString, strInt).String()
+
+		if matchop == "match:ne" {
+			positive = false
+		}
+
+		// Delete the first term
+		jsonString, err = sjson.Delete(jsonString, strInt)
+
+		if err != nil {
+			log.Error().Err(err).Msg("Error deleting match")
+		}
+	}
+
+	for i := 0; i < len(op); i++ {
+		jsonString, err = sjson.Delete(jsonString, "operands."+strconv.Itoa(op[i]))
+
+		if err != nil {
+			log.Error().Err(err).Msg("Error deleting operand")
+		}
+	}
+
+	// TODO:
+	// Check if the group has only a single operand!
+
+	// TODO:
+	// All terms in the group require the same match!
+	// It's not possible to deal with !a & b
+	/*
+		jsonString, err = sjson.Set(jsonString, strInt+"foundry", foundry)
+		if err != nil {
+			log.Error().Err(err).Msg("Error setting foundry")
+		}
+		jsonString, err = sjson.Set(jsonString, strInt+"layer", layer)
+		if err != nil {
+			log.Error().Err(err).Msg("Error setting layer")
+		}
+		jsonString, err = sjson.Set(jsonString, strInt+"key", key)
+		if err != nil {
+			log.Error().Err(err).Msg("Error setting key")
+		}
+
+		if len(op) > 1 {
+			for i := 1; i < len(op); i++ {
+				jsonString, err = sjson.Delete(jsonString, "operands."+strconv.Itoa(op[i]))
+				if err != nil {
+					log.Error().Err(err).Msg("Error deleting operand")
+				}
+			}
+		}
+	*/
+
+	var strBuilder strings.Builder
+	// Embed a new termGroup
+	if !operationAnd {
+		termGroup(&strBuilder, terms, true, false)
+		jsonString, err = sjson.SetRaw(jsonString, "operands.-1", strBuilder.String())
+		if err != nil {
+			log.Error().Err(err).Msg("Error adding termGroup")
+		}
+		strBuilder.Reset()
+	} else if !positive {
+		termGroup(&strBuilder, terms, false, false)
+		jsonString, err = sjson.SetRaw(jsonString, "operands.-1", strBuilder.String())
+		if err != nil {
+			log.Error().Err(err).Msg("Error adding termGroup")
+		}
+		strBuilder.Reset()
+	} else {
+		for i := 0; i < len(terms); i++ {
+			term(&strBuilder, terms[i], positive)
+			jsonString, err = sjson.SetRaw(jsonString, "operands.-1", strBuilder.String())
+
+			if err != nil {
+				log.Error().Err(err).Msg("Error adding term")
+			}
+			strBuilder.Reset()
 		}
 	}
 

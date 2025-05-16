@@ -144,9 +144,56 @@ func TestTermReplacement(t *testing.T) {
 	assert.Equal(testStr, "{\"@type\":\"koral:termGroup\",\"relation\":\"relation:or\",\"operation\":\"operation:or\",\"operands\":[{\"@type\":\"koral:term\",\"match\":\"match:ne\",\"foundry\":\"myfoundry1\",\"layer\":\"mylayer1\",\"key\":\"mykey1\"},{\"@type\":\"koral:term\",\"match\":\"match:ne\",\"foundry\":\"myfoundry2\",\"layer\":\"mylayer2\",\"key\":\"mykey2\"}]}")
 
 	// case6: 1 -> n the term is an operand in a termGroup with the same relation/operation
-	// [PPOSAT] -> [PRON & Poss=yes & PronType=Prs]
+	// [PPOSAT & ...] -> [PRON & Poss=yes & PronType=Prs]
+	testStr = replaceGroupedTerms(
+		"{\"@type\":\"koral:termGroup\",\"relation\":\"relation:and\",\"operation\":\"operation:and\",\"operands\":[{\"@type\":\"koral:term\",\"match\":\"match:eq\",\"foundry\":\"myfoundry\",\"layer\":\"mylayer\",\"key\":\"mykey1\"},{\"@type\":\"koral:term\",\"match\":\"match:eq\",\"foundry\":\"myfoundry\",\"layer\":\"mylayer\",\"key\":\"mykey2\"}]}",
+		[]int{0},
+		[]Term{{
+			"myfoundry3",
+			"mylayer3",
+			"mykey3",
+		}, {
+			"myfoundry4",
+			"mylayer4",
+			"mykey4",
+		}},
+	)
+	assert.Equal(testStr, "{\"@type\":\"koral:termGroup\",\"relation\":\"relation:and\",\"operation\":\"operation:and\",\"operands\":[{\"@type\":\"koral:term\",\"match\":\"match:eq\",\"foundry\":\"myfoundry\",\"layer\":\"mylayer\",\"key\":\"mykey2\"},{\"@type\":\"koral:term\",\"match\":\"match:eq\",\"foundry\":\"myfoundry3\",\"layer\":\"mylayer3\",\"key\":\"mykey3\"},{\"@type\":\"koral:term\",\"match\":\"match:eq\",\"foundry\":\"myfoundry4\",\"layer\":\"mylayer4\",\"key\":\"mykey4\"}]}")
 
 	// case7: 1 -> n the term is an operand in a termGroup with a different relation/operation
+	testStr = replaceGroupedTerms(
+
+		"{\"@type\":\"koral:termGroup\",\"relation\":\"relation:and\",\"operation\":\"operation:and\",\"operands\":["+
+			"{\"@type\":\"koral:term\",\"match\":\"match:ne\",\"foundry\":\"myfoundry\",\"layer\":\"mylayer\",\"key\":\"mykey1\"},"+
+			"{\"@type\":\"koral:term\",\"match\":\"match:eq\",\"foundry\":\"myfoundry\",\"layer\":\"mylayer\",\"key\":\"mykey2\"}"+
+			"]}",
+		[]int{0},
+		[]Term{{
+			"myfoundry3",
+			"mylayer3",
+			"mykey3",
+		}, {
+			"myfoundry4",
+			"mylayer4",
+			"mykey4",
+		}},
+	)
+
+	// TODO: Add a termGroup with reversed signs
+	assert.Equal(testStr,
+
+		"{\"@type\":\"koral:termGroup\",\"relation\":\"relation:and\",\"operation\":\"operation:and\",\"operands\":["+
+
+			"{\"@type\":\"koral:term\",\"match\":\"match:eq\",\"foundry\":\"myfoundry\",\"layer\":\"mylayer\",\"key\":\"mykey2\"},"+
+
+			"{\"@type\":\"koral:termGroup\",\"relation\":\"relation:or\",\"operation\":\"operation:or\",\"operands\":["+
+
+			"{\"@type\":\"koral:term\",\"match\":\"match:ne\",\"foundry\":\"myfoundry3\",\"layer\":\"mylayer3\",\"key\":\"mykey3\"},"+
+			"{\"@type\":\"koral:term\",\"match\":\"match:ne\",\"foundry\":\"myfoundry4\",\"layer\":\"mylayer4\",\"key\":\"mykey4\"}"+
+			"]}"+
+
+			"]"+
+			"}")
 	// case8: n -> n the term is an operand in a termGroup with the same relation/operation
 	// case9: n -> n the term is an operand in a termGroup with a different relation/operation
 
