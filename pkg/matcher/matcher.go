@@ -25,22 +25,37 @@ func (m *Matcher) Match(node ast.Node) bool {
 
 // Replace replaces all occurrences of the pattern in the given node with the replacement
 func (m *Matcher) Replace(node ast.Node) ast.Node {
+	// If this node matches the pattern, create replacement while preserving outer structure
 	if m.Match(node) {
-		return m.cloneNode(m.replacement.Root)
+		switch node.(type) {
+		case *ast.Token:
+			// For Token nodes, preserve the Token wrapper but replace its wrap
+			newToken := &ast.Token{
+				Wrap: m.cloneNode(m.replacement.Root),
+			}
+			return newToken
+		default:
+			return m.cloneNode(m.replacement.Root)
+		}
 	}
 
+	// Otherwise recursively process children
 	switch n := node.(type) {
 	case *ast.Token:
-		n.Wrap = m.Replace(n.Wrap)
-		return n
+		newToken := &ast.Token{
+			Wrap: m.Replace(n.Wrap),
+		}
+		return newToken
 
 	case *ast.TermGroup:
 		newOperands := make([]ast.Node, len(n.Operands))
 		for i, op := range n.Operands {
 			newOperands[i] = m.Replace(op)
 		}
-		n.Operands = newOperands
-		return n
+		return &ast.TermGroup{
+			Operands: newOperands,
+			Relation: n.Relation,
+		}
 
 	case *ast.CatchallNode:
 		newNode := &ast.CatchallNode{
@@ -72,52 +87,80 @@ func (m *Matcher) matchNode(node, pattern ast.Node) bool {
 		return false
 	}
 
-	switch p := pattern.(type) {
-	case *ast.Token:
-		if t, ok := node.(*ast.Token); ok {
-			return m.matchNode(t.Wrap, p.Wrap)
+	// Handle pattern being a Token
+	if pToken, ok := pattern.(*ast.Token); ok {
+		if nToken, ok := node.(*ast.Token); ok {
+			return m.matchNode(nToken.Wrap, pToken.Wrap)
 		}
 		return false
+	}
 
-	case *ast.TermGroup:
-		// If we're matching against a term, try to match it against any operand
-		if t, ok := node.(*ast.Term); ok && p.Relation == ast.OrRelation {
-			for _, op := range p.Operands {
-				if m.matchNode(t, op) {
+	// Handle pattern being a Term
+	if pTerm, ok := pattern.(*ast.Term); ok {
+		// Direct term to term matching
+		if t, ok := node.(*ast.Term); ok {
+			return t.Foundry == pTerm.Foundry &&
+				t.Key == pTerm.Key &&
+				t.Layer == pTerm.Layer &&
+				t.Match == pTerm.Match &&
+				(pTerm.Value == "" || t.Value == pTerm.Value)
+		}
+		// If node is a Token, check its wrap
+		if tkn, ok := node.(*ast.Token); ok {
+			if tkn.Wrap == nil {
+				return false
+			}
+			return m.matchNode(tkn.Wrap, pattern)
+		}
+		// If node is a TermGroup, check its operands
+		if tg, ok := node.(*ast.TermGroup); ok {
+			for _, op := range tg.Operands {
+				if m.matchNode(op, pattern) {
+					return true
+				}
+			}
+			return false
+		}
+		// If node is a CatchallNode, check its wrap and operands
+		if c, ok := node.(*ast.CatchallNode); ok {
+			if c.Wrap != nil && m.matchNode(c.Wrap, pattern) {
+				return true
+			}
+			for _, op := range c.Operands {
+				if m.matchNode(op, pattern) {
+					return true
+				}
+			}
+			return false
+		}
+		return false
+	}
+
+	// Handle pattern being a TermGroup
+	if pGroup, ok := pattern.(*ast.TermGroup); ok {
+		// For OR relations, check if any operand matches the node
+		if pGroup.Relation == ast.OrRelation {
+			for _, pOp := range pGroup.Operands {
+				if m.matchNode(node, pOp) {
 					return true
 				}
 			}
 			return false
 		}
 
-		// If we're matching against a term group
-		if t, ok := node.(*ast.TermGroup); ok {
-			if t.Relation != p.Relation {
+		// For AND relations, node must be a TermGroup with matching relation
+		if tg, ok := node.(*ast.TermGroup); ok {
+			if tg.Relation != pGroup.Relation {
 				return false
 			}
-
-			if p.Relation == ast.OrRelation {
-				// For OR relation, at least one operand must match
-				for _, pOp := range p.Operands {
-					for _, tOp := range t.Operands {
-						if m.matchNode(tOp, pOp) {
-							return true
-						}
-					}
-				}
+			// Check that all pattern operands match in any order
+			if len(tg.Operands) < len(pGroup.Operands) {
 				return false
 			}
-
-			// For AND relation, all pattern operands must match
-			if len(t.Operands) < len(p.Operands) {
-				return false
-			}
-
-			// Try to match pattern operands against node operands in any order
-			matched := make([]bool, len(t.Operands))
-			for _, pOp := range p.Operands {
+			matched := make([]bool, len(tg.Operands))
+			for _, pOp := range pGroup.Operands {
 				found := false
-				for j, tOp := range t.Operands {
+				for j, tOp := range tg.Operands {
 					if !matched[j] && m.matchNode(tOp, pOp) {
 						matched[j] = true
 						found = true
@@ -130,65 +173,28 @@ func (m *Matcher) matchNode(node, pattern ast.Node) bool {
 			}
 			return true
 		}
-		return false
 
-	case *ast.CatchallNode:
-		// For catchall nodes, we need to check both wrap and operands
-		if t, ok := node.(*ast.CatchallNode); ok {
-			// If pattern has wrap, match it
-			if p.Wrap != nil && !m.matchNode(t.Wrap, p.Wrap) {
+		// If node is a Token, check its wrap
+		if tkn, ok := node.(*ast.Token); ok {
+			if tkn.Wrap == nil {
 				return false
 			}
+			return m.matchNode(tkn.Wrap, pattern)
+		}
 
-			// If pattern has operands, match them
-			if len(p.Operands) > 0 {
-				if len(t.Operands) < len(p.Operands) {
-					return false
-				}
-
-				// Try to match pattern operands against node operands in any order
-				matched := make([]bool, len(t.Operands))
-				for _, pOp := range p.Operands {
-					found := false
-					for j, tOp := range t.Operands {
-						if !matched[j] && m.matchNode(tOp, pOp) {
-							matched[j] = true
-							found = true
-							break
-						}
-					}
-					if !found {
-						return false
-					}
-				}
+		// If node is a CatchallNode, check its wrap and operands
+		if c, ok := node.(*ast.CatchallNode); ok {
+			if c.Wrap != nil && m.matchNode(c.Wrap, pattern) {
 				return true
 			}
-
-			// If no wrap or operands to match, it's a match
-			return true
-		}
-		return false
-
-	case *ast.Term:
-		// If we're matching against a term group with OR relation,
-		// try to match against any of its operands
-		if t, ok := node.(*ast.TermGroup); ok && t.Relation == ast.OrRelation {
-			for _, op := range t.Operands {
-				if m.matchNode(op, p) {
+			for _, op := range c.Operands {
+				if m.matchNode(op, pattern) {
 					return true
 				}
 			}
 			return false
 		}
 
-		// Direct term to term matching
-		if t, ok := node.(*ast.Term); ok {
-			return t.Foundry == p.Foundry &&
-				t.Key == p.Key &&
-				t.Layer == p.Layer &&
-				t.Match == p.Match &&
-				(p.Value == "" || t.Value == p.Value)
-		}
 		return false
 	}
 

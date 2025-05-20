@@ -1,5 +1,8 @@
 package parser
 
+// parser is a function that takes a JSON string and returns an AST node.
+// It is used to parse a JSON string into an AST node.
+
 import (
 	"encoding/json"
 	"fmt"

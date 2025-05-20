@@ -1,5 +1,7 @@
 package ast
 
+// ast is the abstract syntax tree for the term mapper.
+
 import (
 	"encoding/json"
 )

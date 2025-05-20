@@ -1,6 +1,10 @@
 package matcher
 
+// matcher is a function that takes a pattern and a node and returns true if the node matches the pattern.
+// It is used to match a pattern against a node in the AST.
+
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/KorAP/KoralPipe-TermMapper2/pkg/ast"
@@ -76,7 +80,7 @@ func TestMatchSimplePattern(t *testing.T) {
 			expected: false,
 		},
 		{
-			name: "Wrong node type",
+			name: "Nested node",
 			input: &ast.Token{
 				Wrap: &ast.Term{
 					Foundry: "opennlp",
@@ -85,7 +89,7 @@ func TestMatchSimplePattern(t *testing.T) {
 					Match:   ast.MatchEqual,
 				},
 			},
-			expected: false,
+			expected: true,
 		},
 	}
 
@@ -501,4 +505,177 @@ func TestMatchNodeOrder(t *testing.T) {
 
 	assert.True(t, m.Match(input1), "Should match with original order")
 	assert.True(t, m.Match(input2), "Should match with reversed order")
+}
+
+func TestMatchWithUnknownNodes(t *testing.T) {
+	// Create a pattern that looks for a term with DET inside any structure
+	pattern := ast.Pattern{
+		Root: &ast.Term{
+			Foundry: "opennlp",
+			Key:     "DET",
+			Layer:   "p",
+			Match:   ast.MatchEqual,
+		},
+	}
+
+	replacement := ast.Replacement{
+		Root: &ast.Term{
+			Foundry: "opennlp",
+			Key:     "COMBINED_DET",
+			Layer:   "p",
+			Match:   ast.MatchEqual,
+		},
+	}
+
+	m := NewMatcher(pattern, replacement)
+
+	tests := []struct {
+		name     string
+		input    ast.Node
+		expected bool
+	}{
+		{
+			name: "Match term inside unknown node with wrap",
+			input: &ast.CatchallNode{
+				NodeType: "koral:custom",
+				RawContent: json.RawMessage(`{
+					"@type": "koral:custom",
+					"customField": "value"
+				}`),
+				Wrap: &ast.Term{
+					Foundry: "opennlp",
+					Key:     "DET",
+					Layer:   "p",
+					Match:   ast.MatchEqual,
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "Match term inside unknown node's operands",
+			input: &ast.CatchallNode{
+				NodeType: "koral:custom",
+				RawContent: json.RawMessage(`{
+					"@type": "koral:custom",
+					"customField": "value"
+				}`),
+				Operands: []ast.Node{
+					&ast.Term{
+						Foundry: "opennlp",
+						Key:     "DET",
+						Layer:   "p",
+						Match:   ast.MatchEqual,
+					},
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "No match in unknown node with different term",
+			input: &ast.CatchallNode{
+				NodeType: "koral:custom",
+				RawContent: json.RawMessage(`{
+					"@type": "koral:custom",
+					"customField": "value"
+				}`),
+				Wrap: &ast.Term{
+					Foundry: "opennlp",
+					Key:     "NOUN",
+					Layer:   "p",
+					Match:   ast.MatchEqual,
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "Match in deeply nested unknown nodes",
+			input: &ast.CatchallNode{
+				NodeType: "koral:outer",
+				RawContent: json.RawMessage(`{
+					"@type": "koral:outer",
+					"outerField": "value"
+				}`),
+				Wrap: &ast.CatchallNode{
+					NodeType: "koral:inner",
+					RawContent: json.RawMessage(`{
+						"@type": "koral:inner",
+						"innerField": "value"
+					}`),
+					Wrap: &ast.Term{
+						Foundry: "opennlp",
+						Key:     "DET",
+						Layer:   "p",
+						Match:   ast.MatchEqual,
+					},
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "Match in mixed known and unknown nodes",
+			input: &ast.Token{
+				Wrap: &ast.CatchallNode{
+					NodeType: "koral:custom",
+					RawContent: json.RawMessage(`{
+						"@type": "koral:custom",
+						"customField": "value"
+					}`),
+					Operands: []ast.Node{
+						&ast.TermGroup{
+							Operands: []ast.Node{
+								&ast.Term{
+									Foundry: "opennlp",
+									Key:     "DET",
+									Layer:   "p",
+									Match:   ast.MatchEqual,
+								},
+							},
+							Relation: ast.AndRelation,
+						},
+					},
+				},
+			},
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := m.Match(tt.input)
+			assert.Equal(t, tt.expected, result)
+
+			if tt.expected {
+				// Test replacement when there's a match
+				replaced := m.Replace(tt.input)
+				// Verify the replacement happened somewhere in the structure
+				containsReplacement := false
+				var checkNode func(ast.Node)
+				checkNode = func(node ast.Node) {
+					switch n := node.(type) {
+					case *ast.Term:
+						if n.Key == "COMBINED_DET" {
+							containsReplacement = true
+						}
+					case *ast.Token:
+						if n.Wrap != nil {
+							checkNode(n.Wrap)
+						}
+					case *ast.TermGroup:
+						for _, op := range n.Operands {
+							checkNode(op)
+						}
+					case *ast.CatchallNode:
+						if n.Wrap != nil {
+							checkNode(n.Wrap)
+						}
+						for _, op := range n.Operands {
+							checkNode(op)
+						}
+					}
+				}
+				checkNode(replaced)
+				assert.True(t, containsReplacement, "Replacement should be found in the result")
+			}
+		})
+	}
 }
