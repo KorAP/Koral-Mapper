@@ -74,12 +74,13 @@ func TestGrammarParserSimpleTerm(t *testing.T) {
 			parser, err := NewGrammarParser(tt.defaultFoundry, tt.defaultLayer)
 			require.NoError(t, err)
 
-			grammar, err := parser.parser.ParseString("", tt.input)
+			grammar, err := parser.tokenParser.ParseString("", tt.input)
 			if tt.expectError {
 				assert.Error(t, err)
 				return
 			}
 			require.NoError(t, err)
+			require.NotNil(t, grammar.Token, "Expected token expression")
 			assert.Equal(t, tt.expected, grammar.Token.Expr.First.Simple)
 		})
 	}
@@ -212,6 +213,101 @@ func TestGrammarParser(t *testing.T) {
 				return
 			}
 			require.NoError(t, err)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestMappingRules(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected *MappingResult
+		wantErr  bool
+	}{
+		{
+			name:  "Simple PIDAT mapping",
+			input: "[PIDAT] <> [opennlp/p=PIDAT & opennlp/p=AdjType:Pdt]",
+			expected: &MappingResult{
+				Upper: &ast.Token{
+					Wrap: &ast.Term{
+						Key:   "PIDAT",
+						Match: ast.MatchEqual,
+					},
+				},
+				Lower: &ast.Token{
+					Wrap: &ast.TermGroup{
+						Relation: ast.AndRelation,
+						Operands: []ast.Node{
+							&ast.Term{
+								Foundry: "opennlp",
+								Layer:   "p",
+								Key:     "PIDAT",
+								Match:   ast.MatchEqual,
+							},
+							&ast.Term{
+								Foundry: "opennlp",
+								Layer:   "p",
+								Key:     "AdjType",
+								Value:   "Pdt",
+								Match:   ast.MatchEqual,
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name:  "PAV mapping",
+			input: "[PAV] <> [ADV & PronType:Dem]",
+			expected: &MappingResult{
+				Upper: &ast.Token{
+					Wrap: &ast.Term{
+						Key:   "PAV",
+						Match: ast.MatchEqual,
+					},
+				},
+				Lower: &ast.Token{
+					Wrap: &ast.TermGroup{
+						Relation: ast.AndRelation,
+						Operands: []ast.Node{
+							&ast.Term{
+								Key:   "ADV",
+								Match: ast.MatchEqual,
+							},
+							&ast.Term{
+								Key:   "PronType",
+								Value: "Dem",
+								Match: ast.MatchEqual,
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name:    "Invalid mapping syntax",
+			input:   "[PAV] -> [ADV]",
+			wantErr: true,
+		},
+		{
+			name:    "Missing closing bracket",
+			input:   "[PAV <> [ADV]",
+			wantErr: true,
+		},
+	}
+
+	parser, err := NewGrammarParser("", "")
+	assert.NoError(t, err)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := parser.ParseMapping(tt.input)
+			if tt.wantErr {
+				assert.Error(t, err)
+				return
+			}
+			assert.NoError(t, err)
 			assert.Equal(t, tt.expected, result)
 		})
 	}

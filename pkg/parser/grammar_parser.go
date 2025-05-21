@@ -13,12 +13,31 @@ import (
 type GrammarParser struct {
 	defaultFoundry string
 	defaultLayer   string
-	parser         *participle.Parser[Grammar]
+	tokenParser    *participle.Parser[TokenGrammar]
+	mappingParser  *participle.Parser[MappingGrammar]
 }
 
+// TokenGrammar represents a single token expression
+type TokenGrammar struct {
+	Token *TokenExpr `parser:"@@"`
+}
+
+// MappingGrammar represents a mapping rule
+type MappingGrammar struct {
+	Mapping *MappingRule `parser:"@@"`
+}
+
+/*
 // Grammar represents the root of our grammar
 type Grammar struct {
-	Token *TokenExpr `parser:"@@"`
+	Token   *TokenExpr   `parser:"  @@"`
+	Mapping *MappingRule `parser:"| @@"`
+}*/
+
+// MappingRule represents a mapping between two token expressions
+type MappingRule struct {
+	Upper *TokenExpr `parser:"@@"`
+	Lower *TokenExpr `parser:"'<>' @@"`
 }
 
 // TokenExpr represents a token expression in square brackets
@@ -86,27 +105,37 @@ type KeyTerm struct {
 func NewGrammarParser(defaultFoundry, defaultLayer string) (*GrammarParser, error) {
 	lex := lexer.MustSimple([]lexer.SimpleRule{
 		{Name: "Ident", Pattern: `[a-zA-Z][a-zA-Z0-9_]*`},
-		{Name: "Punct", Pattern: `[\[\]()&\|=:/]`},
+		{Name: "Punct", Pattern: `[\[\]()&\|=:/]|<>`},
 		{Name: "Whitespace", Pattern: `\s+`},
 	})
 
-	parser, err := participle.Build[Grammar](
+	tokenParser, err := participle.Build[TokenGrammar](
 		participle.Lexer(lex),
 		participle.UseLookahead(2),
 		participle.Elide("Whitespace"),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to build parser: %w", err)
+		return nil, fmt.Errorf("failed to build token parser: %w", err)
+	}
+
+	mappingParser, err := participle.Build[MappingGrammar](
+		participle.Lexer(lex),
+		participle.UseLookahead(2),
+		participle.Elide("Whitespace"),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build mapping parser: %w", err)
 	}
 
 	return &GrammarParser{
 		defaultFoundry: defaultFoundry,
 		defaultLayer:   defaultLayer,
-		parser:         parser,
+		tokenParser:    tokenParser,
+		mappingParser:  mappingParser,
 	}, nil
 }
 
-// Parse parses a grammar string into an AST node
+// Parse parses a grammar string into an AST node (for backward compatibility)
 func (p *GrammarParser) Parse(input string) (ast.Node, error) {
 	// Remove extra spaces around operators to help the parser
 	input = strings.ReplaceAll(input, " & ", "&")
@@ -119,9 +148,13 @@ func (p *GrammarParser) Parse(input string) (ast.Node, error) {
 	// Remove any extra spaces
 	input = strings.TrimSpace(input)
 
-	grammar, err := p.parser.ParseString("", input)
+	grammar, err := p.tokenParser.ParseString("", input)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse grammar: %w", err)
+	}
+
+	if grammar.Token == nil {
+		return nil, fmt.Errorf("expected token expression, got mapping rule")
 	}
 
 	wrap, err := p.parseExpr(grammar.Token.Expr)
@@ -129,6 +162,51 @@ func (p *GrammarParser) Parse(input string) (ast.Node, error) {
 		return nil, err
 	}
 	return &ast.Token{Wrap: wrap}, nil
+}
+
+// ParseMapping parses a mapping rule string into a MappingResult
+func (p *GrammarParser) ParseMapping(input string) (*MappingResult, error) {
+	// Remove extra spaces around operators to help the parser
+	input = strings.ReplaceAll(input, " & ", "&")
+	input = strings.ReplaceAll(input, " | ", "|")
+	input = strings.ReplaceAll(input, " <> ", "<>")
+
+	// Add spaces around parentheses to help the parser
+	input = strings.ReplaceAll(input, "(", " ( ")
+	input = strings.ReplaceAll(input, ")", " ) ")
+
+	// Remove any extra spaces
+	input = strings.TrimSpace(input)
+
+	grammar, err := p.mappingParser.ParseString("", input)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse grammar: %w", err)
+	}
+
+	if grammar.Mapping == nil {
+		return nil, fmt.Errorf("expected mapping rule, got token expression")
+	}
+
+	upper, err := p.parseExpr(grammar.Mapping.Upper.Expr)
+	if err != nil {
+		return nil, err
+	}
+
+	lower, err := p.parseExpr(grammar.Mapping.Lower.Expr)
+	if err != nil {
+		return nil, err
+	}
+
+	return &MappingResult{
+		Upper: &ast.Token{Wrap: upper},
+		Lower: &ast.Token{Wrap: lower},
+	}, nil
+}
+
+// MappingResult represents the parsed mapping rule
+type MappingResult struct {
+	Upper *ast.Token
+	Lower *ast.Token
 }
 
 // parseExpr builds the AST from the parsed Expr
