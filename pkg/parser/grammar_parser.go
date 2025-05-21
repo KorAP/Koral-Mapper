@@ -18,68 +18,68 @@ type GrammarParser struct {
 
 // Grammar represents the root of our grammar
 type Grammar struct {
-	Token *TokenExpr `@@`
+	Token *TokenExpr `parser:"@@"`
 }
 
 // TokenExpr represents a token expression in square brackets
 type TokenExpr struct {
-	Expr *Expr `"[" @@ "]"`
+	Expr *Expr `parser:"'[' @@ ']'"`
 }
 
 // Expr represents a sequence of terms and operators
 type Expr struct {
-	First *Term `@@`
-	Rest  []*Op `@@*`
+	First *Term `parser:"@@"`
+	Rest  []*Op `parser:"@@*"`
 }
 
 type Op struct {
-	Operator string `@("&" | "|")`
-	Term     *Term  `@@`
+	Operator string `parser:"@('&' | '|')"`
+	Term     *Term  `parser:"@@"`
 }
 
 // Term represents either a simple term or a parenthesized expression
 type Term struct {
-	Simple *SimpleTerm `@@`
-	Paren  *ParenExpr  `| @@`
+	Simple *SimpleTerm `parser:"@@"`
+	Paren  *ParenExpr  `parser:"| @@"`
 }
 
 type ParenExpr struct {
-	Expr *Expr `"(" @@ ")"`
+	Expr *Expr `parser:"'(' @@ ')'"`
 }
 
 // SimpleTerm represents any valid term form
 type SimpleTerm struct {
-	WithFoundryLayer *FoundryLayerTerm `@@`
-	WithFoundryKey   *FoundryKeyTerm   `| @@`
-	WithLayer        *LayerTerm        `| @@`
-	SimpleKey        *KeyTerm          `| @@`
+	WithFoundryLayer *FoundryLayerTerm `parser:"@@"`
+	WithFoundryKey   *FoundryKeyTerm   `parser:"| @@"`
+	WithLayer        *LayerTerm        `parser:"| @@"`
+	SimpleKey        *KeyTerm          `parser:"| @@"`
 }
 
 // FoundryLayerTerm represents foundry/layer=key:value
 type FoundryLayerTerm struct {
-	Foundry string `@Ident "/"`
-	Layer   string `@Ident "="`
-	Key     string `@Ident`
-	Value   string `(":" @Ident)?`
+	Foundry string `parser:"@Ident '/'"`
+	Layer   string `parser:"@Ident '='"`
+	Key     string `parser:"@Ident"`
+	Value   string `parser:"(':' @Ident)?"`
 }
 
 // FoundryKeyTerm represents foundry/key
 type FoundryKeyTerm struct {
-	Foundry string `@Ident "/"`
-	Key     string `@Ident`
+	Foundry string `parser:"@Ident '/'"`
+	Key     string `parser:"@Ident"`
 }
 
 // LayerTerm represents layer=key:value
 type LayerTerm struct {
-	Layer string `@Ident "="`
-	Key   string `@Ident`
-	Value string `(":" @Ident)?`
+	Layer string `parser:"@Ident '='"`
+	Key   string `parser:"@Ident"`
+	Value string `parser:"(':' @Ident)?"`
 }
 
 // KeyTerm represents key:value
 type KeyTerm struct {
-	Key   string `@Ident`
-	Value string `(":" @Ident)?`
+	Key   string `parser:"@Ident"`
+	Value string `parser:"(':' @Ident)?"`
 }
 
 // NewGrammarParser creates a new grammar parser with optional default foundry and layer
@@ -255,16 +255,4 @@ func (p *GrammarParser) parseSimpleTerm(term *SimpleTerm) (ast.Node, error) {
 		Match:   ast.MatchEqual,
 		Value:   value,
 	}, nil
-}
-
-// indexRune returns the index of the first instance of any of the runes in chars in s, or -1 if no rune is present.
-func indexRune(s string, chars ...rune) int {
-	for i, c := range s {
-		for _, ch := range chars {
-			if c == ch {
-				return i
-			}
-		}
-	}
-	return -1
 }
