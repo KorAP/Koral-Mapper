@@ -1,0 +1,185 @@
+package mapper
+
+import (
+	"encoding/json"
+	"fmt"
+
+	"github.com/KorAP/KoralPipe-TermMapper2/pkg/ast"
+	"github.com/KorAP/KoralPipe-TermMapper2/pkg/config"
+	"github.com/KorAP/KoralPipe-TermMapper2/pkg/matcher"
+	"github.com/KorAP/KoralPipe-TermMapper2/pkg/parser"
+)
+
+// Direction represents the mapping direction (A to B or B to A)
+type Direction string
+
+const (
+	AtoB Direction = "atob"
+	BtoA Direction = "btoa"
+)
+
+// Mapper handles the application of mapping rules to JSON objects
+type Mapper struct {
+	mappingLists map[string]*config.MappingList
+	parsedRules  map[string][]*parser.MappingResult
+}
+
+// NewMapper creates a new Mapper instance
+func NewMapper(configFiles ...string) (*Mapper, error) {
+	m := &Mapper{
+		mappingLists: make(map[string]*config.MappingList),
+		parsedRules:  make(map[string][]*parser.MappingResult),
+	}
+
+	// Load and parse all config files
+	for _, file := range configFiles {
+		cfg, err := config.LoadConfig(file)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load config from %s: %w", file, err)
+		}
+
+		// Store mapping lists by ID
+		for _, list := range cfg.Lists {
+			if _, exists := m.mappingLists[list.ID]; exists {
+				return nil, fmt.Errorf("duplicate mapping list ID found: %s", list.ID)
+			}
+
+			// Create a copy of the list to store
+			listCopy := list
+			m.mappingLists[list.ID] = &listCopy
+
+			// Parse the rules immediately
+			parsedRules, err := list.ParseMappings()
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse mappings for list %s: %w", list.ID, err)
+			}
+			m.parsedRules[list.ID] = parsedRules
+		}
+	}
+
+	return m, nil
+}
+
+// MappingOptions contains the options for applying mappings
+type MappingOptions struct {
+	FoundryA  string
+	LayerA    string
+	FoundryB  string
+	LayerB    string
+	Direction Direction
+}
+
+// ApplyMappings applies the specified mapping rules to a JSON object
+func (m *Mapper) ApplyMappings(mappingID string, opts MappingOptions, jsonData interface{}) (interface{}, error) {
+	// Validate mapping ID
+	if _, exists := m.mappingLists[mappingID]; !exists {
+		return nil, fmt.Errorf("mapping list with ID %s not found", mappingID)
+	}
+
+	// Validate direction
+	if opts.Direction != AtoB && opts.Direction != BtoA {
+		return nil, fmt.Errorf("invalid direction: %s", opts.Direction)
+	}
+
+	// Get the parsed rules
+	rules := m.parsedRules[mappingID]
+
+	// Convert input JSON to AST
+	jsonBytes, err := json.Marshal(jsonData)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal input JSON: %w", err)
+	}
+
+	node, err := parser.ParseJSON(jsonBytes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse JSON into AST: %w", err)
+	}
+
+	// Extract the inner node if it's a token
+	if token, ok := node.(*ast.Token); ok {
+		node = token.Wrap
+	}
+
+	// Apply each rule to the AST
+	for _, rule := range rules {
+		// Create pattern and replacement based on direction
+		var pattern, replacement ast.Node
+		if opts.Direction == AtoB {
+			pattern = rule.Upper
+			replacement = rule.Lower
+		} else {
+			pattern = rule.Lower
+			replacement = rule.Upper
+		}
+
+		// Extract the inner nodes from the pattern and replacement tokens
+		if token, ok := pattern.(*ast.Token); ok {
+			pattern = token.Wrap
+		}
+		if token, ok := replacement.(*ast.Token); ok {
+			replacement = token.Wrap
+		}
+
+		// Apply foundry and layer overrides
+		if opts.Direction == AtoB {
+			applyFoundryAndLayerOverrides(pattern, opts.FoundryA, opts.LayerA)
+			applyFoundryAndLayerOverrides(replacement, opts.FoundryB, opts.LayerB)
+		} else {
+			applyFoundryAndLayerOverrides(pattern, opts.FoundryB, opts.LayerB)
+			applyFoundryAndLayerOverrides(replacement, opts.FoundryA, opts.LayerA)
+		}
+
+		// Create matcher and apply replacement
+		m := matcher.NewMatcher(ast.Pattern{Root: pattern}, ast.Replacement{Root: replacement})
+		node = m.Replace(node)
+	}
+
+	// Wrap the result in a token
+	result := &ast.Token{Wrap: node}
+
+	// Convert AST back to JSON
+	resultBytes, err := parser.SerializeToJSON(result)
+	if err != nil {
+		return nil, fmt.Errorf("failed to serialize AST to JSON: %w", err)
+	}
+
+	// Parse the JSON string back into an interface{}
+	var resultData interface{}
+	if err := json.Unmarshal(resultBytes, &resultData); err != nil {
+		return nil, fmt.Errorf("failed to parse result JSON: %w", err)
+	}
+
+	return resultData, nil
+}
+
+// applyFoundryAndLayerOverrides recursively applies foundry and layer overrides to terms
+func applyFoundryAndLayerOverrides(node ast.Node, foundry, layer string) {
+	if node == nil {
+		return
+	}
+
+	switch n := node.(type) {
+	case *ast.Term:
+		if foundry != "" {
+			n.Foundry = foundry
+		}
+		if layer != "" {
+			n.Layer = layer
+		}
+	case *ast.TermGroup:
+		for _, op := range n.Operands {
+			applyFoundryAndLayerOverrides(op, foundry, layer)
+		}
+	case *ast.Token:
+		if n.Wrap != nil {
+			applyFoundryAndLayerOverrides(n.Wrap, foundry, layer)
+		}
+	case *ast.CatchallNode:
+		if n.Wrap != nil {
+			applyFoundryAndLayerOverrides(n.Wrap, foundry, layer)
+		}
+		for _, op := range n.Operands {
+			applyFoundryAndLayerOverrides(op, foundry, layer)
+		}
+	}
+}
