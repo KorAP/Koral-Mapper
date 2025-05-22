@@ -34,16 +34,29 @@ func LoadConfig(filename string) (*Config, error) {
 		return nil, fmt.Errorf("failed to read config file: %w", err)
 	}
 
+	// Check for empty file
+	if len(data) == 0 {
+		return nil, fmt.Errorf("EOF: config file is empty")
+	}
+
 	var lists []MappingList
 	if err := yaml.Unmarshal(data, &lists); err != nil {
 		return nil, fmt.Errorf("failed to parse YAML: %w", err)
 	}
 
 	// Validate the configuration
+	seenIDs := make(map[string]bool)
 	for i, list := range lists {
 		if list.ID == "" {
 			return nil, fmt.Errorf("mapping list at index %d is missing an ID", i)
 		}
+
+		// Check for duplicate IDs
+		if seenIDs[list.ID] {
+			return nil, fmt.Errorf("duplicate mapping list ID found: %s", list.ID)
+		}
+		seenIDs[list.ID] = true
+
 		if len(list.Mappings) == 0 {
 			return nil, fmt.Errorf("mapping list '%s' has no mapping rules", list.ID)
 		}
@@ -69,6 +82,11 @@ func (list *MappingList) ParseMappings() ([]*parser.MappingResult, error) {
 
 	results := make([]*parser.MappingResult, len(list.Mappings))
 	for i, rule := range list.Mappings {
+		// Check for empty rules first
+		if rule == "" {
+			return nil, fmt.Errorf("empty mapping rule at index %d in list '%s'", i, list.ID)
+		}
+
 		// Parse the mapping rule
 		result, err := grammarParser.ParseMapping(string(rule))
 		if err != nil {

@@ -162,3 +162,203 @@ func TestLoadConfigValidation(t *testing.T) {
 		})
 	}
 }
+
+func TestLoadConfigEdgeCases(t *testing.T) {
+	tests := []struct {
+		name    string
+		content string
+		wantErr string
+	}{
+		{
+			name: "Duplicate mapping list IDs",
+			content: `
+- id: test
+  mappings:
+    - "[A] <> [B]"
+- id: test
+  mappings:
+    - "[C] <> [D]"`,
+			wantErr: "duplicate mapping list ID found: test",
+		},
+		{
+			name: "Invalid YAML syntax",
+			content: `
+- id: test
+  mappings:
+    - [A] <> [B]  # Unquoted special characters
+`,
+			wantErr: "yaml",
+		},
+		{
+			name:    "Empty file",
+			content: "",
+			wantErr: "EOF",
+		},
+		{
+			name: "Non-list YAML",
+			content: `
+id: test
+mappings:
+  - "[A] <> [B]"`,
+			wantErr: "cannot unmarshal",
+		},
+		{
+			name: "Missing required fields",
+			content: `
+- mappings:
+    - "[A] <> [B]"
+- id: test2
+  foundryA: opennlp`,
+			wantErr: "missing an ID",
+		},
+		{
+			name: "Empty mappings list",
+			content: `
+- id: test
+  foundryA: opennlp
+  mappings: []`,
+			wantErr: "has no mapping rules",
+		},
+		{
+			name: "Null values in optional fields",
+			content: `
+- id: test
+  foundryA: null
+  layerA: null
+  foundryB: null
+  layerB: null
+  mappings:
+    - "[A] <> [B]"`,
+			wantErr: "",
+		},
+		{
+			name: "Special characters in IDs",
+			content: `
+- id: "test/special@chars#1"
+  mappings:
+    - "[A] <> [B]"`,
+			wantErr: "",
+		},
+		{
+			name: "Unicode characters in mappings",
+			content: `
+- id: test
+  mappings:
+    - "[ß] <> [ss]"
+    - "[é] <> [e]"`,
+			wantErr: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmpfile, err := os.CreateTemp("", "config-*.yaml")
+			require.NoError(t, err)
+			defer os.Remove(tmpfile.Name())
+
+			_, err = tmpfile.WriteString(tt.content)
+			require.NoError(t, err)
+			err = tmpfile.Close()
+			require.NoError(t, err)
+
+			config, err := LoadConfig(tmpfile.Name())
+			if tt.wantErr != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.wantErr)
+				return
+			}
+			require.NoError(t, err)
+			require.NotNil(t, config)
+		})
+	}
+}
+
+func TestParseMappingsEdgeCases(t *testing.T) {
+	tests := []struct {
+		name     string
+		list     *MappingList
+		wantErr  bool
+		errCheck func(t *testing.T, err error)
+	}{
+		{
+			name: "Empty mapping rule",
+			list: &MappingList{
+				ID:       "test",
+				Mappings: []MappingRule{""},
+			},
+			wantErr: true,
+			errCheck: func(t *testing.T, err error) {
+				assert.Contains(t, err.Error(), "empty")
+			},
+		},
+		{
+			name: "Invalid mapping syntax",
+			list: &MappingList{
+				ID:       "test",
+				Mappings: []MappingRule{"[A] -> [B]"},
+			},
+			wantErr: true,
+			errCheck: func(t *testing.T, err error) {
+				assert.Contains(t, err.Error(), "failed to parse")
+			},
+		},
+		{
+			name: "Missing brackets",
+			list: &MappingList{
+				ID:       "test",
+				Mappings: []MappingRule{"A <> B"},
+			},
+			wantErr: true,
+			errCheck: func(t *testing.T, err error) {
+				assert.Contains(t, err.Error(), "failed to parse")
+			},
+		},
+		{
+			name: "Complex nested expressions",
+			list: &MappingList{
+				ID: "test",
+				Mappings: []MappingRule{
+					"[A & (B | C) & (D | (E & F))] <> [X & (Y | Z)]",
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "Multiple foundry/layer combinations",
+			list: &MappingList{
+				ID: "test",
+				Mappings: []MappingRule{
+					"[foundry1/layer1=A & foundry2/layer2=B] <> [foundry3/layer3=C]",
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "Default foundry/layer override",
+			list: &MappingList{
+				ID:       "test",
+				FoundryA: "defaultFoundry",
+				LayerA:   "defaultLayer",
+				Mappings: []MappingRule{
+					"[A] <> [B]", // Should use defaults
+				},
+			},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			results, err := tt.list.ParseMappings()
+			if tt.wantErr {
+				require.Error(t, err)
+				if tt.errCheck != nil {
+					tt.errCheck(t, err)
+				}
+				return
+			}
+			require.NoError(t, err)
+			require.NotNil(t, results)
+		})
+	}
+}
