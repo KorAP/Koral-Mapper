@@ -1,0 +1,286 @@
+package main
+
+import (
+	"bytes"
+	"encoding/json"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/KorAP/KoralPipe-TermMapper2/pkg/mapper"
+	"github.com/gofiber/fiber/v2"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+func TestTransformEndpoint(t *testing.T) {
+	// Create a temporary config file
+	tmpDir := t.TempDir()
+	configFile := filepath.Join(tmpDir, "test-config.yaml")
+
+	configContent := `- id: test-mapper
+  foundryA: opennlp
+  layerA: p
+  foundryB: upos
+  layerB: p
+  mappings:
+    - "[PIDAT] <> [opennlp/p=PIDAT & opennlp/p=AdjType:Pdt]"
+    - "[DET] <> [opennlp/p=DET]"`
+
+	err := os.WriteFile(configFile, []byte(configContent), 0644)
+	require.NoError(t, err)
+
+	// Create mapper
+	m, err := mapper.NewMapper(configFile)
+	require.NoError(t, err)
+
+	// Create fiber app
+	app := fiber.New()
+	setupRoutes(app, m)
+
+	tests := []struct {
+		name          string
+		mapID         string
+		direction     string
+		foundryA      string
+		foundryB      string
+		layerA        string
+		layerB        string
+		input         string
+		expectedCode  int
+		expectedBody  string
+		expectedError string
+	}{
+		{
+			name:      "Simple A to B mapping",
+			mapID:     "test-mapper",
+			direction: "atob",
+			input: `{
+				"@type": "koral:token",
+				"wrap": {
+					"@type": "koral:term",
+					"foundry": "opennlp",
+					"key": "PIDAT",
+					"layer": "p",
+					"match": "match:eq"
+				}
+			}`,
+			expectedCode: http.StatusOK,
+			expectedBody: `{
+				"@type": "koral:token",
+				"wrap": {
+					"@type": "koral:termGroup",
+					"operands": [
+						{
+							"@type": "koral:term",
+							"foundry": "opennlp",
+							"key": "PIDAT",
+							"layer": "p",
+							"match": "match:eq"
+						},
+						{
+							"@type": "koral:term",
+							"foundry": "opennlp",
+							"key": "AdjType",
+							"layer": "p",
+							"match": "match:eq",
+							"value": "Pdt"
+						}
+					],
+					"relation": "relation:and"
+				}
+			}`,
+		},
+		{
+			name:      "B to A mapping",
+			mapID:     "test-mapper",
+			direction: "btoa",
+			input: `{
+				"@type": "koral:token",
+				"wrap": {
+					"@type": "koral:termGroup",
+					"operands": [
+						{
+							"@type": "koral:term",
+							"foundry": "opennlp",
+							"key": "PIDAT",
+							"layer": "p",
+							"match": "match:eq"
+						},
+						{
+							"@type": "koral:term",
+							"foundry": "opennlp",
+							"key": "AdjType",
+							"layer": "p",
+							"match": "match:eq",
+							"value": "Pdt"
+						}
+					],
+					"relation": "relation:and"
+				}
+			}`,
+			expectedCode: http.StatusOK,
+			expectedBody: `{
+				"@type": "koral:token",
+				"wrap": {
+					"@type": "koral:term",
+					"foundry": "opennlp",
+					"key": "PIDAT",
+					"layer": "p",
+					"match": "match:eq"
+				}
+			}`,
+		},
+		{
+			name:      "Mapping with foundry override",
+			mapID:     "test-mapper",
+			direction: "atob",
+			foundryB:  "custom",
+			input: `{
+				"@type": "koral:token",
+				"wrap": {
+					"@type": "koral:term",
+					"foundry": "opennlp",
+					"key": "PIDAT",
+					"layer": "p",
+					"match": "match:eq"
+				}
+			}`,
+			expectedCode: http.StatusOK,
+			expectedBody: `{
+				"@type": "koral:token",
+				"wrap": {
+					"@type": "koral:termGroup",
+					"operands": [
+						{
+							"@type": "koral:term",
+							"foundry": "custom",
+							"key": "PIDAT",
+							"layer": "p",
+							"match": "match:eq"
+						},
+						{
+							"@type": "koral:term",
+							"foundry": "custom",
+							"key": "AdjType",
+							"layer": "p",
+							"match": "match:eq",
+							"value": "Pdt"
+						}
+					],
+					"relation": "relation:and"
+				}
+			}`,
+		},
+		{
+			name:          "Invalid mapping ID",
+			mapID:         "nonexistent",
+			direction:     "atob",
+			input:         `{"@type": "koral:token"}`,
+			expectedCode:  http.StatusInternalServerError,
+			expectedError: "mapping list with ID nonexistent not found",
+		},
+		{
+			name:          "Invalid direction",
+			mapID:         "test-mapper",
+			direction:     "invalid",
+			input:         `{"@type": "koral:token"}`,
+			expectedCode:  http.StatusBadRequest,
+			expectedError: "invalid direction, must be 'atob' or 'btoa'",
+		},
+		{
+			name:          "Invalid JSON",
+			mapID:         "test-mapper",
+			direction:     "atob",
+			input:         `invalid json`,
+			expectedCode:  http.StatusBadRequest,
+			expectedError: "invalid JSON in request body",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Build URL with query parameters
+			url := "/" + tt.mapID + "/query"
+			if tt.direction != "" {
+				url += "?dir=" + tt.direction
+			}
+			if tt.foundryA != "" {
+				url += "&foundryA=" + tt.foundryA
+			}
+			if tt.foundryB != "" {
+				url += "&foundryB=" + tt.foundryB
+			}
+			if tt.layerA != "" {
+				url += "&layerA=" + tt.layerA
+			}
+			if tt.layerB != "" {
+				url += "&layerB=" + tt.layerB
+			}
+
+			// Make request
+			req := httptest.NewRequest(http.MethodPost, url, bytes.NewBufferString(tt.input))
+			req.Header.Set("Content-Type", "application/json")
+			resp, err := app.Test(req)
+			require.NoError(t, err)
+			defer resp.Body.Close()
+
+			// Check status code
+			assert.Equal(t, tt.expectedCode, resp.StatusCode)
+
+			// Read response body
+			body, err := io.ReadAll(resp.Body)
+			require.NoError(t, err)
+
+			if tt.expectedError != "" {
+				// Check error message
+				var errResp fiber.Map
+				err = json.Unmarshal(body, &errResp)
+				require.NoError(t, err)
+				assert.Equal(t, tt.expectedError, errResp["error"])
+			} else {
+				// Compare JSON responses
+				var expected, actual interface{}
+				err = json.Unmarshal([]byte(tt.expectedBody), &expected)
+				require.NoError(t, err)
+				err = json.Unmarshal(body, &actual)
+				require.NoError(t, err)
+				assert.Equal(t, expected, actual)
+			}
+		})
+	}
+}
+
+func TestHealthEndpoint(t *testing.T) {
+	// Create a temporary config file for the mapper
+	tmpDir := t.TempDir()
+	configFile := filepath.Join(tmpDir, "test-config.yaml")
+	configContent := `- id: test-mapper
+  mappings:
+    - "[A] <> [B]"`
+
+	err := os.WriteFile(configFile, []byte(configContent), 0644)
+	require.NoError(t, err)
+
+	// Create mapper with config
+	m, err := mapper.NewMapper(configFile)
+	require.NoError(t, err)
+
+	// Create fiber app
+	app := fiber.New()
+	setupRoutes(app, m)
+
+	// Test health endpoint
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	resp, err := app.Test(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	assert.Equal(t, "OK", string(body))
+}
