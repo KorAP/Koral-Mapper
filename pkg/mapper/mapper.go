@@ -70,7 +70,7 @@ type MappingOptions struct {
 }
 
 // ApplyMappings applies the specified mapping rules to a JSON object
-func (m *Mapper) ApplyMappings(mappingID string, opts MappingOptions, jsonData interface{}) (interface{}, error) {
+func (m *Mapper) ApplyMappings(mappingID string, opts MappingOptions, jsonData any) (any, error) {
 	// Validate mapping ID
 	if _, exists := m.mappingLists[mappingID]; !exists {
 		return nil, fmt.Errorf("mapping list with ID %s not found", mappingID)
@@ -95,9 +95,13 @@ func (m *Mapper) ApplyMappings(mappingID string, opts MappingOptions, jsonData i
 		return nil, fmt.Errorf("failed to parse JSON into AST: %w", err)
 	}
 
-	// Extract the inner node if it's a token
+	// Store whether the input was a Token
+	isToken := false
+	var tokenWrap ast.Node
 	if token, ok := node.(*ast.Token); ok {
-		node = token.Wrap
+		isToken = true
+		tokenWrap = token.Wrap
+		node = tokenWrap
 	}
 
 	// Apply each rule to the AST
@@ -130,12 +134,20 @@ func (m *Mapper) ApplyMappings(mappingID string, opts MappingOptions, jsonData i
 		}
 
 		// Create matcher and apply replacement
-		m := matcher.NewMatcher(ast.Pattern{Root: pattern}, ast.Replacement{Root: replacement})
+		m, err := matcher.NewMatcher(ast.Pattern{Root: pattern}, ast.Replacement{Root: replacement})
+		if err != nil {
+			return nil, fmt.Errorf("failed to create matcher: %w", err)
+		}
 		node = m.Replace(node)
 	}
 
-	// Wrap the result in a token
-	result := &ast.Token{Wrap: node}
+	// Wrap the result in a token if the input was a token
+	var result ast.Node
+	if isToken {
+		result = &ast.Token{Wrap: node}
+	} else {
+		result = node
+	}
 
 	// Convert AST back to JSON
 	resultBytes, err := parser.SerializeToJSON(result)

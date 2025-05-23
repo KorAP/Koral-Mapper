@@ -11,6 +11,130 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func TestNewMatcherValidation(t *testing.T) {
+	tests := []struct {
+		name          string
+		pattern       ast.Pattern
+		replacement   ast.Replacement
+		expectedError string
+	}{
+		{
+			name: "Valid pattern and replacement",
+			pattern: ast.Pattern{
+				Root: &ast.Term{
+					Foundry: "opennlp",
+					Key:     "DET",
+					Layer:   "p",
+					Match:   ast.MatchEqual,
+				},
+			},
+			replacement: ast.Replacement{
+				Root: &ast.Term{
+					Foundry: "opennlp",
+					Key:     "COMBINED_DET",
+					Layer:   "p",
+					Match:   ast.MatchEqual,
+				},
+			},
+			expectedError: "",
+		},
+		{
+			name: "Invalid pattern - CatchallNode",
+			pattern: ast.Pattern{
+				Root: &ast.CatchallNode{
+					NodeType: "custom",
+				},
+			},
+			replacement: ast.Replacement{
+				Root: &ast.Term{
+					Foundry: "opennlp",
+					Key:     "DET",
+					Layer:   "p",
+					Match:   ast.MatchEqual,
+				},
+			},
+			expectedError: "invalid pattern: catchall nodes are not allowed in pattern/replacement ASTs",
+		},
+		{
+			name: "Invalid replacement - CatchallNode",
+			pattern: ast.Pattern{
+				Root: &ast.Term{
+					Foundry: "opennlp",
+					Key:     "DET",
+					Layer:   "p",
+					Match:   ast.MatchEqual,
+				},
+			},
+			replacement: ast.Replacement{
+				Root: &ast.CatchallNode{
+					NodeType: "custom",
+				},
+			},
+			expectedError: "invalid replacement: catchall nodes are not allowed in pattern/replacement ASTs",
+		},
+		{
+			name: "Invalid pattern - Empty TermGroup",
+			pattern: ast.Pattern{
+				Root: &ast.TermGroup{
+					Operands: []ast.Node{},
+					Relation: ast.AndRelation,
+				},
+			},
+			replacement: ast.Replacement{
+				Root: &ast.Term{
+					Foundry: "opennlp",
+					Key:     "DET",
+					Layer:   "p",
+					Match:   ast.MatchEqual,
+				},
+			},
+			expectedError: "invalid pattern: empty term group",
+		},
+		{
+			name: "Invalid pattern - Nested CatchallNode",
+			pattern: ast.Pattern{
+				Root: &ast.TermGroup{
+					Operands: []ast.Node{
+						&ast.Term{
+							Foundry: "opennlp",
+							Key:     "DET",
+							Layer:   "p",
+							Match:   ast.MatchEqual,
+						},
+						&ast.CatchallNode{
+							NodeType: "custom",
+						},
+					},
+					Relation: ast.AndRelation,
+				},
+			},
+			replacement: ast.Replacement{
+				Root: &ast.Term{
+					Foundry: "opennlp",
+					Key:     "DET",
+					Layer:   "p",
+					Match:   ast.MatchEqual,
+				},
+			},
+			expectedError: "invalid pattern: invalid operand: catchall nodes are not allowed in pattern/replacement ASTs",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			matcher, err := NewMatcher(tt.pattern, tt.replacement)
+			if tt.expectedError != "" {
+				assert.Error(t, err)
+				assert.Equal(t, tt.expectedError, err.Error())
+				assert.Nil(t, matcher)
+			} else {
+				assert.NoError(t, err)
+				assert.NotNil(t, matcher)
+			}
+		})
+	}
+}
+
 func TestMatchSimplePattern(t *testing.T) {
 	// Create a simple pattern: match a term with DET
 	pattern := ast.Pattern{
@@ -32,7 +156,9 @@ func TestMatchSimplePattern(t *testing.T) {
 		},
 	}
 
-	m := NewMatcher(pattern, replacement)
+	m, err := NewMatcher(pattern, replacement)
+	assert.NoError(t, err)
+	assert.NotNil(t, m)
 
 	tests := []struct {
 		name     string
@@ -149,7 +275,9 @@ func TestMatchComplexPattern(t *testing.T) {
 		},
 	}
 
-	m := NewMatcher(pattern, replacement)
+	m, err := NewMatcher(pattern, replacement)
+	assert.NoError(t, err)
+	assert.NotNil(t, m)
 
 	tests := []struct {
 		name     string
@@ -263,25 +391,12 @@ func TestMatchComplexPattern(t *testing.T) {
 }
 
 func TestReplace(t *testing.T) {
-	// Create pattern and replacement
 	pattern := ast.Pattern{
-		Root: &ast.TermGroup{
-			Operands: []ast.Node{
-				&ast.Term{
-					Foundry: "opennlp",
-					Key:     "DET",
-					Layer:   "p",
-					Match:   ast.MatchEqual,
-				},
-				&ast.Term{
-					Foundry: "opennlp",
-					Key:     "AdjType",
-					Layer:   "m",
-					Match:   ast.MatchEqual,
-					Value:   "Pdt",
-				},
-			},
-			Relation: ast.AndRelation,
+		Root: &ast.Term{
+			Foundry: "opennlp",
+			Key:     "DET",
+			Layer:   "p",
+			Match:   ast.MatchEqual,
 		},
 	}
 
@@ -294,7 +409,9 @@ func TestReplace(t *testing.T) {
 		},
 	}
 
-	m := NewMatcher(pattern, replacement)
+	m, err := NewMatcher(pattern, replacement)
+	assert.NoError(t, err)
+	assert.NotNil(t, m)
 
 	tests := []struct {
 		name     string
@@ -321,11 +438,23 @@ func TestReplace(t *testing.T) {
 				},
 				Relation: ast.AndRelation,
 			},
-			expected: &ast.Term{
-				Foundry: "opennlp",
-				Key:     "COMBINED_DET",
-				Layer:   "p",
-				Match:   ast.MatchEqual,
+			expected: &ast.TermGroup{
+				Operands: []ast.Node{
+					&ast.Term{
+						Foundry: "opennlp",
+						Key:     "COMBINED_DET",
+						Layer:   "p",
+						Match:   ast.MatchEqual,
+					},
+					&ast.Term{
+						Foundry: "opennlp",
+						Key:     "AdjType",
+						Layer:   "m",
+						Match:   ast.MatchEqual,
+						Value:   "Pdt",
+					},
+				},
+				Relation: ast.AndRelation,
 			},
 		},
 		{
@@ -431,7 +560,6 @@ func TestReplace(t *testing.T) {
 }
 
 func TestMatchNodeOrder(t *testing.T) {
-	// Test that operands can match in any order
 	pattern := ast.Pattern{
 		Root: &ast.TermGroup{
 			Operands: []ast.Node{
@@ -462,7 +590,9 @@ func TestMatchNodeOrder(t *testing.T) {
 		},
 	}
 
-	m := NewMatcher(pattern, replacement)
+	m, err := NewMatcher(pattern, replacement)
+	assert.NoError(t, err)
+	assert.NotNil(t, m)
 
 	// Test with operands in different orders
 	input1 := &ast.TermGroup{
@@ -508,7 +638,6 @@ func TestMatchNodeOrder(t *testing.T) {
 }
 
 func TestMatchWithUnknownNodes(t *testing.T) {
-	// Create a pattern that looks for a term with DET inside any structure
 	pattern := ast.Pattern{
 		Root: &ast.Term{
 			Foundry: "opennlp",
@@ -527,7 +656,9 @@ func TestMatchWithUnknownNodes(t *testing.T) {
 		},
 	}
 
-	m := NewMatcher(pattern, replacement)
+	m, err := NewMatcher(pattern, replacement)
+	assert.NoError(t, err)
+	assert.NotNil(t, m)
 
 	tests := []struct {
 		name     string
