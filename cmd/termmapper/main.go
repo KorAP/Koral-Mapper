@@ -132,7 +132,7 @@ func handleTransform(m *mapper.Mapper) fiber.Handler {
 		}
 
 		// Parse request body
-		var jsonData interface{}
+		var jsonData any
 		if err := c.BodyParser(&jsonData); err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"error": "invalid JSON in request body",
