@@ -1,6 +1,7 @@
 package ast
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -187,4 +188,186 @@ func TestPatternAndReplacement(t *testing.T) {
 	// Test replacement
 	assert.NotNil(t, replacement.Root)
 	assert.Equal(t, replacementTerm, replacement.Root)
+}
+
+func TestCatchallNode(t *testing.T) {
+	tests := []struct {
+		name       string
+		nodeType   string
+		content    string
+		wrap       Node
+		operands   []Node
+		expectType NodeType
+	}{
+		{
+			name:       "CatchallNode with custom type",
+			nodeType:   "customType",
+			content:    `{"key": "value"}`,
+			expectType: NodeType("customType"),
+		},
+		{
+			name:     "CatchallNode with wrapped term",
+			nodeType: "wrapper",
+			content:  `{"key": "value"}`,
+			wrap: &Term{
+				Foundry: "test",
+				Key:     "TEST",
+				Layer:   "x",
+				Match:   MatchEqual,
+			},
+			expectType: NodeType("wrapper"),
+		},
+		{
+			name:     "CatchallNode with operands",
+			nodeType: "custom_group",
+			content:  `{"key": "value"}`,
+			operands: []Node{
+				&Term{Foundry: "test1", Key: "TEST1", Layer: "x", Match: MatchEqual},
+				&Term{Foundry: "test2", Key: "TEST2", Layer: "y", Match: MatchEqual},
+			},
+			expectType: NodeType("custom_group"),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rawContent := json.RawMessage(tt.content)
+			node := &CatchallNode{
+				NodeType:   tt.nodeType,
+				RawContent: rawContent,
+				Wrap:       tt.wrap,
+				Operands:   tt.operands,
+			}
+
+			assert.Equal(t, tt.expectType, node.Type())
+			if tt.wrap != nil {
+				assert.Equal(t, tt.wrap, node.Wrap)
+			}
+			if tt.operands != nil {
+				assert.Equal(t, tt.operands, node.Operands)
+			}
+			assert.Equal(t, rawContent, node.RawContent)
+		})
+	}
+}
+
+func TestComplexNestedStructures(t *testing.T) {
+	// Create a complex nested structure
+	innerGroup1 := &TermGroup{
+		Operands: []Node{
+			&Term{Foundry: "f1", Key: "k1", Layer: "l1", Match: MatchEqual},
+			&Term{Foundry: "f2", Key: "k2", Layer: "l2", Match: MatchNotEqual},
+		},
+		Relation: AndRelation,
+	}
+
+	innerGroup2 := &TermGroup{
+		Operands: []Node{
+			&Term{Foundry: "f3", Key: "k3", Layer: "l3", Match: MatchEqual},
+			&Term{Foundry: "f4", Key: "k4", Layer: "l4", Match: MatchEqual, Value: "test"},
+		},
+		Relation: OrRelation,
+	}
+
+	topGroup := &TermGroup{
+		Operands: []Node{
+			innerGroup1,
+			innerGroup2,
+			&Token{Wrap: &Term{Foundry: "f5", Key: "k5", Layer: "l5", Match: MatchEqual}},
+		},
+		Relation: AndRelation,
+	}
+
+	assert.Equal(t, TermGroupNode, topGroup.Type())
+	assert.Len(t, topGroup.Operands, 3)
+	assert.Equal(t, AndRelation, topGroup.Relation)
+
+	// Test inner groups
+	group1 := topGroup.Operands[0].(*TermGroup)
+	assert.Len(t, group1.Operands, 2)
+	assert.Equal(t, AndRelation, group1.Relation)
+
+	group2 := topGroup.Operands[1].(*TermGroup)
+	assert.Len(t, group2.Operands, 2)
+	assert.Equal(t, OrRelation, group2.Relation)
+
+	// Test token wrapping
+	token := topGroup.Operands[2].(*Token)
+	assert.NotNil(t, token.Wrap)
+	assert.Equal(t, TermNode, token.Wrap.Type())
+}
+
+func TestEdgeCases(t *testing.T) {
+	tests := []struct {
+		name string
+		test func(t *testing.T)
+	}{
+		{
+			name: "Empty TermGroup",
+			test: func(t *testing.T) {
+				group := &TermGroup{
+					Operands: []Node{},
+					Relation: AndRelation,
+				}
+				assert.Empty(t, group.Operands)
+				assert.Equal(t, AndRelation, group.Relation)
+			},
+		},
+		{
+			name: "Token with nil wrap",
+			test: func(t *testing.T) {
+				token := &Token{Wrap: nil}
+				assert.Equal(t, TokenNode, token.Type())
+				assert.Nil(t, token.Wrap)
+			},
+		},
+		{
+			name: "Term with empty strings",
+			test: func(t *testing.T) {
+				term := &Term{
+					Foundry: "",
+					Key:     "",
+					Layer:   "",
+					Match:   MatchEqual,
+					Value:   "",
+				}
+				assert.Equal(t, TermNode, term.Type())
+				assert.Empty(t, term.Foundry)
+				assert.Empty(t, term.Key)
+				assert.Empty(t, term.Layer)
+				assert.Empty(t, term.Value)
+			},
+		},
+		{
+			name: "Complex Pattern and Replacement",
+			test: func(t *testing.T) {
+				// Create a complex pattern
+				patternGroup := &TermGroup{
+					Operands: []Node{
+						&Term{Foundry: "f1", Key: "k1", Layer: "l1", Match: MatchEqual},
+						&Token{Wrap: &Term{Foundry: "f2", Key: "k2", Layer: "l2", Match: MatchNotEqual}},
+					},
+					Relation: OrRelation,
+				}
+				pattern := Pattern{Root: patternGroup}
+
+				// Create a complex replacement
+				replacementGroup := &TermGroup{
+					Operands: []Node{
+						&Term{Foundry: "f3", Key: "k3", Layer: "l3", Match: MatchEqual},
+						&Term{Foundry: "f4", Key: "k4", Layer: "l4", Match: MatchEqual},
+					},
+					Relation: AndRelation,
+				}
+				replacement := Replacement{Root: replacementGroup}
+
+				assert.Equal(t, TermGroupNode, pattern.Root.Type())
+				assert.Equal(t, TermGroupNode, replacement.Root.Type())
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, tt.test)
+	}
 }
