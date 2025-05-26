@@ -11,12 +11,32 @@ import (
 )
 
 // Direction represents the mapping direction (A to B or B to A)
-type Direction string
+type Direction bool
 
 const (
-	AtoB Direction = "atob"
-	BtoA Direction = "btoa"
+	AtoB Direction = true
+	BtoA Direction = false
 )
+
+// String converts the Direction to its string representation
+func (d Direction) String() string {
+	if d {
+		return "atob"
+	}
+	return "btoa"
+}
+
+// ParseDirection converts a string direction to Direction type
+func ParseDirection(dir string) (Direction, error) {
+	switch dir {
+	case "atob":
+		return AtoB, nil
+	case "btoa":
+		return BtoA, nil
+	default:
+		return false, fmt.Errorf("invalid direction: %s", dir)
+	}
+}
 
 // Mapper handles the application of mapping rules to JSON objects
 type Mapper struct {
@@ -68,11 +88,6 @@ func (m *Mapper) ApplyMappings(mappingID string, opts MappingOptions, jsonData a
 		return nil, fmt.Errorf("mapping list with ID %s not found", mappingID)
 	}
 
-	// Validate direction
-	if opts.Direction != AtoB && opts.Direction != BtoA {
-		return nil, fmt.Errorf("invalid direction: %s", opts.Direction)
-	}
-
 	// Get the parsed rules
 	rules := m.parsedRules[mappingID]
 
@@ -100,7 +115,7 @@ func (m *Mapper) ApplyMappings(mappingID string, opts MappingOptions, jsonData a
 	for _, rule := range rules {
 		// Create pattern and replacement based on direction
 		var pattern, replacement ast.Node
-		if opts.Direction == AtoB {
+		if opts.Direction { // true means AtoB
 			pattern = rule.Upper
 			replacement = rule.Lower
 		} else {
@@ -117,7 +132,7 @@ func (m *Mapper) ApplyMappings(mappingID string, opts MappingOptions, jsonData a
 		}
 
 		// Apply foundry and layer overrides
-		if opts.Direction == AtoB {
+		if opts.Direction { // true means AtoB
 			applyFoundryAndLayerOverrides(pattern, opts.FoundryA, opts.LayerA)
 			applyFoundryAndLayerOverrides(replacement, opts.FoundryB, opts.LayerB)
 		} else {

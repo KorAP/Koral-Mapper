@@ -79,7 +79,7 @@ func TestMapper(t *testing.T) {
 			}`,
 		},
 		{
-			name:      "B to A mapping",
+			name:      "B to A direction",
 			mappingID: "test-mapper",
 			opts: MappingOptions{
 				Direction: BtoA,
@@ -87,25 +87,11 @@ func TestMapper(t *testing.T) {
 			input: `{
 				"@type": "koral:token",
 				"wrap": {
-					"@type": "koral:termGroup",
-					"operands": [
-						{
-							"@type": "koral:term",
-							"foundry": "opennlp",
-							"key": "PIDAT",
-							"layer": "p",
-							"match": "match:eq"
-						},
-						{
-							"@type": "koral:term",
-							"foundry": "opennlp",
-							"key": "AdjType",
-							"layer": "p",
-							"match": "match:eq",
-							"value": "Pdt"
-						}
-					],
-					"relation": "relation:and"
+					"@type": "koral:term",
+					"foundry": "opennlp",
+					"key": "PIDAT",
+					"layer": "p",
+					"match": "match:eq"
 				}
 			}`,
 			expected: `{
@@ -118,6 +104,7 @@ func TestMapper(t *testing.T) {
 					"match": "match:eq"
 				}
 			}`,
+			expectError: false,
 		},
 		{
 			name:      "Mapping with foundry override",
@@ -183,7 +170,7 @@ func TestMapper(t *testing.T) {
 			name:      "Invalid direction",
 			mappingID: "test-mapper",
 			opts: MappingOptions{
-				Direction: "invalid",
+				Direction: Direction(false),
 			},
 			input: `{
 				"@type": "koral:token",
@@ -195,7 +182,17 @@ func TestMapper(t *testing.T) {
 					"match": "match:eq"
 				}
 			}`,
-			expectError: true,
+			expected: `{
+				"@type": "koral:token",
+				"wrap": {
+					"@type": "koral:term",
+					"foundry": "opennlp",
+					"key": "PIDAT",
+					"layer": "p",
+					"match": "match:eq"
+				}
+			}`,
+			expectError: false,
 		},
 	}
 

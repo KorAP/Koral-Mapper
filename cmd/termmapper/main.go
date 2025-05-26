@@ -142,9 +142,17 @@ func handleTransform(m *mapper.Mapper) fiber.Handler {
 			})
 		}
 
+		// Parse direction
+		direction, err := mapper.ParseDirection(dir)
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": err.Error(),
+			})
+		}
+
 		// Apply mappings
 		result, err := m.ApplyMappings(mapID, mapper.MappingOptions{
-			Direction: mapper.Direction(dir),
+			Direction: direction,
 			FoundryA:  foundryA,
 			FoundryB:  foundryB,
 			LayerA:    layerA,
