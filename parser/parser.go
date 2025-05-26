@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"strings"
 
+	"maps"
+
 	"github.com/KorAP/KoralPipe-TermMapper/ast"
 )
 
@@ -23,13 +25,13 @@ type rawNode struct {
 	Match    string          `json:"match,omitempty"`
 	Value    string          `json:"value,omitempty"`
 	// Store any additional fields
-	Extra map[string]interface{} `json:"-"`
+	Extra map[string]any `json:"-"`
 }
 
 // UnmarshalJSON implements the json.Unmarshaler interface
 func (r *rawNode) UnmarshalJSON(data []byte) error {
 	// First unmarshal into a map to capture all fields
-	var raw map[string]interface{}
+	var raw map[string]any
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return err
 	}
@@ -43,7 +45,7 @@ func (r *rawNode) UnmarshalJSON(data []byte) error {
 	*r = rawNode(temp)
 
 	// Store any fields not in the struct in Extra
-	r.Extra = make(map[string]interface{})
+	r.Extra = make(map[string]any)
 	for k, v := range raw {
 		switch k {
 		case "@type", "wrap", "operands", "relation", "foundry", "key", "layer", "match", "value":
@@ -59,7 +61,7 @@ func (r *rawNode) UnmarshalJSON(data []byte) error {
 // MarshalJSON implements the json.Marshaler interface
 func (r rawNode) MarshalJSON() ([]byte, error) {
 	// Create a map with all fields
-	raw := make(map[string]interface{})
+	raw := make(map[string]any)
 
 	// Add the known fields if they're not empty
 	raw["@type"] = r.Type
@@ -89,9 +91,7 @@ func (r rawNode) MarshalJSON() ([]byte, error) {
 	}
 
 	// Add any extra fields
-	for k, v := range r.Extra {
-		raw[k] = v
-	}
+	maps.Copy(raw, r.Extra)
 
 	return json.Marshal(raw)
 }
@@ -243,8 +243,7 @@ func parseNode(raw rawNode) (ast.Node, error) {
 
 // SerializeToJSON converts an AST node back to JSON
 func SerializeToJSON(node ast.Node) ([]byte, error) {
-	raw := nodeToRaw(node)
-	return json.MarshalIndent(raw, "", "  ")
+	return json.MarshalIndent(nodeToRaw(node), "", "  ")
 }
 
 // nodeToRaw converts an AST node to a raw node for JSON serialization

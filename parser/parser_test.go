@@ -416,7 +416,7 @@ func TestSerializeToJSON(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := JSON(tt.input)
+			result, err := SerializeToJSON(tt.input)
 			if tt.wantErr {
 				assert.Error(t, err)
 				return
@@ -466,7 +466,7 @@ func TestRoundTrip(t *testing.T) {
 	require.NoError(t, err)
 
 	// Serialize AST back to JSON
-	output, err := JSON(node)
+	output, err := SerializeToJSON(node)
 	require.NoError(t, err)
 
 	// Compare JSON objects
@@ -516,7 +516,7 @@ func TestRoundTripUnknownType(t *testing.T) {
 	require.Len(t, catchall.Operands, 1)
 
 	// Serialize AST back to JSON
-	output, err := JSON(node)
+	output, err := SerializeToJSON(node)
 	require.NoError(t, err)
 
 	// Compare JSON objects

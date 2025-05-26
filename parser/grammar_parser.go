@@ -27,13 +27,6 @@ type MappingGrammar struct {
 	Mapping *MappingRule `parser:"@@"`
 }
 
-/*
-// Grammar represents the root of our grammar
-type Grammar struct {
-	Token   *TokenExpr   `parser:"  @@"`
-	Mapping *MappingRule `parser:"| @@"`
-}*/
-
 // MappingRule represents a mapping between two token expressions
 type MappingRule struct {
 	Upper *TokenExpr `parser:"@@"`
