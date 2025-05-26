@@ -1,7 +1,6 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"os"
 	"os/signal"
@@ -9,6 +8,7 @@ import (
 	"syscall"
 
 	"github.com/KorAP/KoralPipe-TermMapper/mapper"
+	"github.com/alecthomas/kong"
 	"github.com/gofiber/fiber/v2"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -20,38 +20,21 @@ const (
 )
 
 type config struct {
-	port     int
-	config   string
-	logLevel string
+	Port     int    `kong:"short='p',default='8080',help='Port to listen on'"`
+	Config   string `kong:"short='c',required,help='YAML configuration file containing mapping directives'"`
+	LogLevel string `kong:"short='l',default='info',help='Log level (debug, info, warn, error)'"`
 }
 
-func parseFlags() *config {
+func parseConfig() *config {
 	cfg := &config{}
-
-	flag.IntVar(&cfg.port, "port", 8080, "Port to listen on")
-	flag.IntVar(&cfg.port, "p", 8080, "Port to listen on (shorthand)")
-
-	flag.StringVar(&cfg.config, "config", "", "YAML configuration file containing mapping directives")
-	flag.StringVar(&cfg.config, "c", "", "YAML configuration file containing mapping directives (shorthand)")
-
-	flag.StringVar(&cfg.logLevel, "log-level", "info", "Log level (debug, info, warn, error)")
-	flag.StringVar(&cfg.logLevel, "l", "info", "Log level (shorthand)")
-
-	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage of %s:\n", os.Args[0])
-		fmt.Fprintf(os.Stderr, "\nA web service for transforming JSON objects using term mapping rules.\n\n")
-		fmt.Fprintf(os.Stderr, "Options:\n")
-		flag.PrintDefaults()
-	}
-
-	flag.Parse()
-
-	if cfg.config == "" {
-		fmt.Fprintln(os.Stderr, "Error: config file is required")
-		flag.Usage()
+	ctx := kong.Parse(cfg,
+		kong.Description("A web service for transforming JSON objects using term mapping rules."),
+		kong.UsageOnError(),
+	)
+	if ctx.Error != nil {
+		fmt.Fprintln(os.Stderr, ctx.Error)
 		os.Exit(1)
 	}
-
 	return cfg
 }
 
@@ -70,13 +53,13 @@ func setupLogger(level string) {
 
 func main() {
 	// Parse command line flags
-	cfg := parseFlags()
+	cfg := parseConfig()
 
 	// Set up logging
-	setupLogger(cfg.logLevel)
+	setupLogger(cfg.LogLevel)
 
 	// Create a new mapper instance
-	m, err := mapper.NewMapper(cfg.config)
+	m, err := mapper.NewMapper(cfg.Config)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to create mapper")
 	}
@@ -92,8 +75,8 @@ func main() {
 
 	// Start server
 	go func() {
-		log.Info().Int("port", cfg.port).Msg("Starting server")
-		if err := app.Listen(fmt.Sprintf(":%d", cfg.port)); err != nil {
+		log.Info().Int("port", cfg.Port).Msg("Starting server")
+		if err := app.Listen(fmt.Sprintf(":%d", cfg.Port)); err != nil {
 			log.Fatal().Err(err).Msg("Server error")
 		}
 	}()

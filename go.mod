@@ -5,6 +5,7 @@ go 1.23.0
 toolchain go1.23.9
 
 require (
+	github.com/alecthomas/kong v1.11.0
 	github.com/alecthomas/participle/v2 v2.1.4
 	github.com/gofiber/fiber/v2 v2.52.8
 	github.com/rs/zerolog v1.34.0
