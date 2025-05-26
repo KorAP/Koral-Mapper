@@ -14,6 +14,11 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+const (
+	maxInputLength = 1024 * 1024 // 1MB
+	maxParamLength = 1024        // 1KB
+)
+
 type config struct {
 	port     int
 	config   string
@@ -79,6 +84,7 @@ func main() {
 	// Create fiber app
 	app := fiber.New(fiber.Config{
 		DisableStartupMessage: true,
+		BodyLimit:             maxInputLength,
 	})
 
 	// Set up routes
@@ -124,6 +130,13 @@ func handleTransform(m *mapper.Mapper) fiber.Handler {
 		layerA := c.Query("layerA", "")
 		layerB := c.Query("layerB", "")
 
+		// Validate input parameters
+		if err := validateInput(mapID, dir, foundryA, foundryB, layerA, layerB, c.Body()); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": err.Error(),
+			})
+		}
+
 		// Validate direction
 		if dir != "atob" && dir != "btoa" {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -161,4 +174,49 @@ func handleTransform(m *mapper.Mapper) fiber.Handler {
 
 		return c.JSON(result)
 	}
+}
+
+// validateInput checks if the input parameters are valid
+func validateInput(mapID, dir, foundryA, foundryB, layerA, layerB string, body []byte) error {
+	// Check input lengths
+	if len(mapID) > maxParamLength {
+		return fmt.Errorf("map ID too long (max %d bytes)", maxParamLength)
+	}
+	if len(dir) > maxParamLength {
+		return fmt.Errorf("direction too long (max %d bytes)", maxParamLength)
+	}
+	if len(foundryA) > maxParamLength {
+		return fmt.Errorf("foundryA too long (max %d bytes)", maxParamLength)
+	}
+	if len(foundryB) > maxParamLength {
+		return fmt.Errorf("foundryB too long (max %d bytes)", maxParamLength)
+	}
+	if len(layerA) > maxParamLength {
+		return fmt.Errorf("layerA too long (max %d bytes)", maxParamLength)
+	}
+	if len(layerB) > maxParamLength {
+		return fmt.Errorf("layerB too long (max %d bytes)", maxParamLength)
+	}
+	if len(body) > maxInputLength {
+		return fmt.Errorf("request body too large (max %d bytes)", maxInputLength)
+	}
+
+	// Check for invalid characters in parameters
+	for _, param := range []struct {
+		name  string
+		value string
+	}{
+		{"mapID", mapID},
+		{"dir", dir},
+		{"foundryA", foundryA},
+		{"foundryB", foundryB},
+		{"layerA", layerA},
+		{"layerB", layerB},
+	} {
+		if strings.ContainsAny(param.value, "<>{}[]\\") {
+			return fmt.Errorf("%s contains invalid characters", param.name)
+		}
+	}
+
+	return nil
 }

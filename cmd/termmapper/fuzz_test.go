@@ -3,16 +3,20 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/KorAP/KoralPipe-TermMapper2/pkg/mapper"
 	"github.com/gofiber/fiber/v2"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // FuzzInput represents the input data for the fuzzer
@@ -60,6 +64,7 @@ func FuzzTransformEndpoint(f *testing.F) {
 				"error": "internal server error",
 			})
 		},
+		BodyLimit: maxInputLength,
 	})
 	setupRoutes(app, m)
 
@@ -71,8 +76,16 @@ func FuzzTransformEndpoint(f *testing.F) {
 	f.Add("test-mapper", "atob", "", "", "", "", []byte(`{"@type": "koral:token", "wrap": null}`))                    // Valid JSON, invalid structure
 	f.Add("test-mapper", "atob", "", "", "", "", []byte(`{"@type": "koral:token", "wrap": {"@type": "unknown"}}`))    // Unknown type
 	f.Add("test-mapper", "atob", "", "", "", "", []byte(`{"@type": "koral:token", "wrap": {"@type": "koral:term"}}`)) // Missing required fields
+	f.Add("0", "0", strings.Repeat("\x83", 1000), "0", "Q", "", []byte("0"))                                          // Failing fuzz test case
 
 	f.Fuzz(func(t *testing.T, mapID, dir, foundryA, foundryB, layerA, layerB string, body []byte) {
+
+		// Validate input first
+		if err := validateInput(mapID, dir, foundryA, foundryB, layerA, layerB, body); err != nil {
+			// Skip this test case as it's invalid
+			t.Skip(err)
+		}
+
 		// Build URL with query parameters
 		params := url.Values{}
 		if dir != "" {
@@ -125,4 +138,141 @@ func FuzzTransformEndpoint(f *testing.F) {
 			}
 		}
 	})
+}
+
+func TestLargeInput(t *testing.T) {
+	// Create a temporary config file
+	tmpDir := t.TempDir()
+	configFile := filepath.Join(tmpDir, "test-config.yaml")
+
+	configContent := `- id: test-mapper
+  mappings:
+    - "[A] <> [B]"`
+
+	err := os.WriteFile(configFile, []byte(configContent), 0644)
+	require.NoError(t, err)
+
+	// Create mapper
+	m, err := mapper.NewMapper(configFile)
+	require.NoError(t, err)
+
+	// Create fiber app
+	app := fiber.New(fiber.Config{
+		DisableStartupMessage: true,
+		ErrorHandler: func(c *fiber.Ctx, err error) error {
+			// For body limit errors, return 413 status code
+			if err.Error() == "body size exceeds the given limit" || errors.Is(err, fiber.ErrRequestEntityTooLarge) {
+				return c.Status(fiber.StatusRequestEntityTooLarge).JSON(fiber.Map{
+					"error": fmt.Sprintf("request body too large (max %d bytes)", maxInputLength),
+				})
+			}
+			// For other errors, return 500 status code
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": err.Error(),
+			})
+		},
+		BodyLimit: maxInputLength,
+	})
+	setupRoutes(app, m)
+
+	tests := []struct {
+		name          string
+		mapID         string
+		direction     string
+		foundryA      string
+		foundryB      string
+		layerA        string
+		layerB        string
+		input         string
+		expectedCode  int
+		expectedError string
+	}{
+		{
+			name:          "Large map ID",
+			mapID:         strings.Repeat("a", maxParamLength+1),
+			direction:     "atob",
+			input:         "{}",
+			expectedCode:  http.StatusBadRequest,
+			expectedError: "map ID too long (max 1024 bytes)",
+		},
+		{
+			name:          "Large direction",
+			mapID:         "test-mapper",
+			direction:     strings.Repeat("a", maxParamLength+1),
+			input:         "{}",
+			expectedCode:  http.StatusBadRequest,
+			expectedError: "direction too long (max 1024 bytes)",
+		},
+		{
+			name:          "Large foundryA",
+			mapID:         "test-mapper",
+			direction:     "atob",
+			foundryA:      strings.Repeat("a", maxParamLength+1),
+			input:         "{}",
+			expectedCode:  http.StatusBadRequest,
+			expectedError: "foundryA too long (max 1024 bytes)",
+		},
+		{
+			name:          "Invalid characters in mapID",
+			mapID:         "test<>mapper",
+			direction:     "atob",
+			input:         "{}",
+			expectedCode:  http.StatusBadRequest,
+			expectedError: "mapID contains invalid characters",
+		},
+		{
+			name:          "Large request body",
+			mapID:         "test-mapper",
+			direction:     "atob",
+			input:         strings.Repeat("a", maxInputLength+1),
+			expectedCode:  http.StatusRequestEntityTooLarge,
+			expectedError: "body size exceeds the given limit",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Build URL with query parameters
+			url := "/" + tt.mapID + "/query"
+			if tt.direction != "" {
+				url += "?dir=" + tt.direction
+			}
+			if tt.foundryA != "" {
+				url += "&foundryA=" + tt.foundryA
+			}
+			if tt.foundryB != "" {
+				url += "&foundryB=" + tt.foundryB
+			}
+			if tt.layerA != "" {
+				url += "&layerA=" + tt.layerA
+			}
+			if tt.layerB != "" {
+				url += "&layerB=" + tt.layerB
+			}
+
+			// Make request
+			req := httptest.NewRequest(http.MethodPost, url, strings.NewReader(tt.input))
+			req.Header.Set("Content-Type", "application/json")
+			resp, err := app.Test(req)
+
+			if resp == nil {
+				assert.Equal(t, tt.expectedError, err.Error())
+				return
+			}
+
+			require.NoError(t, err)
+			defer resp.Body.Close()
+
+			// Check status code
+			assert.Equal(t, tt.expectedCode, resp.StatusCode)
+
+			// Check error message
+			var result map[string]interface{}
+			err = json.NewDecoder(resp.Body).Decode(&result)
+			require.NoError(t, err)
+			errMsg, ok := result["error"].(string)
+			require.True(t, ok)
+			assert.Equal(t, tt.expectedError, errMsg)
+		})
+	}
 }
