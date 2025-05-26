@@ -81,8 +81,8 @@ type MappingOptions struct {
 	Direction Direction
 }
 
-// ApplyMappings applies the specified mapping rules to a JSON object
-func (m *Mapper) ApplyMappings(mappingID string, opts MappingOptions, jsonData any) (any, error) {
+// ApplyQueryMappings applies the specified mapping rules to a JSON object
+func (m *Mapper) ApplyQueryMappings(mappingID string, opts MappingOptions, jsonData any) (any, error) {
 	// Validate mapping ID
 	if _, exists := m.mappingLists[mappingID]; !exists {
 		return nil, fmt.Errorf("mapping list with ID %s not found", mappingID)
@@ -91,8 +91,32 @@ func (m *Mapper) ApplyMappings(mappingID string, opts MappingOptions, jsonData a
 	// Get the parsed rules
 	rules := m.parsedRules[mappingID]
 
+	// Check if we have a wrapper object with a "query" field
+	var queryData any
+	var hasQueryWrapper bool
+
+	if jsonMap, ok := jsonData.(map[string]any); ok {
+		if query, exists := jsonMap["query"]; exists {
+			queryData = query
+			hasQueryWrapper = true
+		}
+	}
+
+	// If no query wrapper was found, use the entire input
+	if !hasQueryWrapper {
+		// If the input itself is not a valid query object, return it as is
+		if !isValidQueryObject(jsonData) {
+			return jsonData, nil
+		}
+		queryData = jsonData
+	} else if queryData == nil || !isValidQueryObject(queryData) {
+		// If we have a query wrapper but the query is nil or not a valid object,
+		// return the original data
+		return jsonData, nil
+	}
+
 	// Convert input JSON to AST
-	jsonBytes, err := json.Marshal(jsonData)
+	jsonBytes, err := json.Marshal(queryData)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal input JSON: %w", err)
 	}
@@ -168,7 +192,31 @@ func (m *Mapper) ApplyMappings(mappingID string, opts MappingOptions, jsonData a
 		return nil, fmt.Errorf("failed to parse result JSON: %w", err)
 	}
 
+	// If we had a query wrapper, put the transformed data back in it
+	if hasQueryWrapper {
+		if wrapper, ok := jsonData.(map[string]any); ok {
+			wrapper["query"] = resultData
+			return wrapper, nil
+		}
+	}
+
 	return resultData, nil
+}
+
+// isValidQueryObject checks if the query data is a valid object that can be processed
+func isValidQueryObject(data any) bool {
+	// Check if it's a map
+	queryMap, ok := data.(map[string]any)
+	if !ok {
+		return false
+	}
+
+	// Check if it has the required @type field
+	if _, ok := queryMap["@type"]; !ok {
+		return false
+	}
+
+	return true
 }
 
 // applyFoundryAndLayerOverrides recursively applies foundry and layer overrides to terms

@@ -2,5 +2,6 @@ testdata
 testdata/sandbox
 examples/
 README.md
+todo.txt
 /vendor
 /termmapper

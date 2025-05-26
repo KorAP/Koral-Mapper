@@ -204,7 +204,7 @@ func TestMapper(t *testing.T) {
 			require.NoError(t, err)
 
 			// Apply mappings
-			result, err := m.ApplyMappings(tt.mappingID, tt.opts, inputData)
+			result, err := m.ApplyQueryMappings(tt.mappingID, tt.opts, inputData)
 			if tt.expectError {
 				assert.Error(t, err)
 				return
@@ -354,7 +354,7 @@ func TestInvalidPatternReplacement(t *testing.T) {
 			err := json.Unmarshal([]byte(tt.input), &inputData)
 			require.NoError(t, err)
 
-			result, err := m.ApplyMappings("test-mapper", MappingOptions{Direction: AtoB}, inputData)
+			result, err := m.ApplyQueryMappings("test-mapper", MappingOptions{Direction: AtoB}, inputData)
 			if tt.expectError {
 				assert.Error(t, err)
 				assert.Equal(t, tt.errorMsg, err.Error())
@@ -363,6 +363,173 @@ func TestInvalidPatternReplacement(t *testing.T) {
 				assert.NoError(t, err)
 				assert.NotNil(t, result)
 			}
+		})
+	}
+}
+
+func TestQueryWrapperMappings(t *testing.T) {
+
+	mappingList := config.MappingList{
+		ID:       "test-wrapper",
+		FoundryA: "opennlp",
+		LayerA:   "orth",
+		FoundryB: "upos",
+		LayerB:   "orth",
+		Mappings: []config.MappingRule{
+			"[opennlp/orth=Baum] <> [opennlp/orth=X]",
+		},
+	}
+
+	// Create a new mapper
+	m, err := NewMapper([]config.MappingList{mappingList})
+	require.NoError(t, err)
+
+	tests := []struct {
+		name        string
+		mappingID   string
+		opts        MappingOptions
+		input       string
+		expected    string
+		expectError bool
+	}{
+		{
+			name:      "Query wrapper case",
+			mappingID: "test-wrapper",
+			opts: MappingOptions{
+				Direction: AtoB,
+			},
+			input: `{
+				"@context": "http://korap.ids-mannheim.de/ns/KoralQuery/v0.3/context.jsonld",
+				"collection": {
+					"@type": "koral:doc",
+					"key": "availability",
+					"match": "match:eq",
+					"rewrites": [
+						{
+							"@type": "koral:rewrite",
+							"_comment": "Free corpus access policy has been added.",
+							"editor": "Kustvakt",
+							"operation": "operation:injection",
+							"src": "Kustvakt"
+						}
+					],
+					"type": "type:regex",
+					"value": "CC.*"
+				},
+				"query": {
+					"@type": "koral:token",
+					"wrap": {
+						"@type": "koral:term",
+						"foundry": "opennlp",
+						"key": "Baum",
+						"layer": "orth",
+						"match": "match:eq"
+					}
+				}
+			}`,
+			expected: `{
+				"@context": "http://korap.ids-mannheim.de/ns/KoralQuery/v0.3/context.jsonld",
+				"collection": {
+					"@type": "koral:doc",
+					"key": "availability",
+					"match": "match:eq",
+					"rewrites": [
+						{
+							"@type": "koral:rewrite",
+							"_comment": "Free corpus access policy has been added.",
+							"editor": "Kustvakt",
+							"operation": "operation:injection",
+							"src": "Kustvakt"
+						}
+					],
+					"type": "type:regex",
+					"value": "CC.*"
+				},
+				"query": {
+					"@type": "koral:token",
+					"wrap": {
+						"@type": "koral:term",
+						"foundry": "opennlp",
+						"key": "X",
+						"layer": "orth",
+						"match": "match:eq"
+					}
+				}
+			}`,
+		},
+		{
+			name:      "Empty query field",
+			mappingID: "test-wrapper",
+			opts: MappingOptions{
+				Direction: AtoB,
+			},
+			input: `{
+				"@context": "http://korap.ids-mannheim.de/ns/KoralQuery/v0.3/context.jsonld",
+				"query": null
+			}`,
+			expected: `{
+				"@context": "http://korap.ids-mannheim.de/ns/KoralQuery/v0.3/context.jsonld",
+				"query": null
+			}`,
+		},
+		{
+			name:      "Missing query field",
+			mappingID: "test-wrapper",
+			opts: MappingOptions{
+				Direction: AtoB,
+			},
+			input: `{
+				"@context": "http://korap.ids-mannheim.de/ns/KoralQuery/v0.3/context.jsonld",
+				"collection": {
+					"@type": "koral:doc"
+				}
+			}`,
+			expected: `{
+				"@context": "http://korap.ids-mannheim.de/ns/KoralQuery/v0.3/context.jsonld",
+				"collection": {
+					"@type": "koral:doc"
+				}
+			}`,
+		},
+		{
+			name:      "Query field with non-object value",
+			mappingID: "test-wrapper",
+			opts: MappingOptions{
+				Direction: AtoB,
+			},
+			input: `{
+				"@context": "http://korap.ids-mannheim.de/ns/KoralQuery/v0.3/context.jsonld",
+				"query": "invalid"
+			}`,
+			expected: `{
+				"@context": "http://korap.ids-mannheim.de/ns/KoralQuery/v0.3/context.jsonld",
+				"query": "invalid"
+			}`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Parse input JSON
+			var inputData interface{}
+			err := json.Unmarshal([]byte(tt.input), &inputData)
+			require.NoError(t, err)
+
+			// Apply mappings
+			result, err := m.ApplyQueryMappings(tt.mappingID, tt.opts, inputData)
+			if tt.expectError {
+				assert.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+
+			// Parse expected JSON
+			var expectedData interface{}
+			err = json.Unmarshal([]byte(tt.expected), &expectedData)
+			require.NoError(t, err)
+
+			// Compare results
+			assert.Equal(t, expectedData, result)
 		})
 	}
 }

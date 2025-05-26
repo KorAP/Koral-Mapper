@@ -151,7 +151,7 @@ func handleTransform(m *mapper.Mapper) fiber.Handler {
 		}
 
 		// Apply mappings
-		result, err := m.ApplyMappings(mapID, mapper.MappingOptions{
+		result, err := m.ApplyQueryMappings(mapID, mapper.MappingOptions{
 			Direction: direction,
 			FoundryA:  foundryA,
 			FoundryB:  foundryB,
