@@ -21,25 +21,6 @@ func normalizeJSON(t *testing.T, data json.RawMessage) json.RawMessage {
 	return normalized
 }
 
-// compareJSON compares two JSON strings for equality, ignoring whitespace and field order
-func compareJSON(t *testing.T, expected, actual string) bool {
-	// Parse both JSON strings
-	var expectedObj, actualObj interface{}
-	err := json.Unmarshal([]byte(expected), &expectedObj)
-	require.NoError(t, err, "Failed to parse expected JSON")
-	err = json.Unmarshal([]byte(actual), &actualObj)
-	require.NoError(t, err, "Failed to parse actual JSON")
-
-	// Convert both to canonical form
-	expectedBytes, err := json.Marshal(expectedObj)
-	require.NoError(t, err)
-	actualBytes, err := json.Marshal(actualObj)
-	require.NoError(t, err)
-
-	// Compare the canonical forms
-	return string(expectedBytes) == string(actualBytes)
-}
-
 // compareNodes compares two AST nodes, normalizing JSON content in CatchallNodes
 func compareNodes(t *testing.T, expected, actual ast.Node) bool {
 	// If both nodes are CatchallNodes, normalize their JSON content before comparison
@@ -435,7 +416,7 @@ func TestSerializeToJSON(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := SerializeToJSON(tt.input)
+			result, err := JSON(tt.input)
 			if tt.wantErr {
 				assert.Error(t, err)
 				return
@@ -485,7 +466,7 @@ func TestRoundTrip(t *testing.T) {
 	require.NoError(t, err)
 
 	// Serialize AST back to JSON
-	output, err := SerializeToJSON(node)
+	output, err := JSON(node)
 	require.NoError(t, err)
 
 	// Compare JSON objects
@@ -535,7 +516,7 @@ func TestRoundTripUnknownType(t *testing.T) {
 	require.Len(t, catchall.Operands, 1)
 
 	// Serialize AST back to JSON
-	output, err := SerializeToJSON(node)
+	output, err := JSON(node)
 	require.NoError(t, err)
 
 	// Compare JSON objects
