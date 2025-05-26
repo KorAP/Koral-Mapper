@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/KorAP/KoralPipe-TermMapper2/ast"
+	"github.com/KorAP/KoralPipe-TermMapper/ast"
 	"github.com/alecthomas/participle/v2"
 	"github.com/alecthomas/participle/v2/lexer"
 )

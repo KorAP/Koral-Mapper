@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/KorAP/KoralPipe-TermMapper2/mapper"
+	"github.com/KorAP/KoralPipe-TermMapper/mapper"
 	"github.com/gofiber/fiber/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

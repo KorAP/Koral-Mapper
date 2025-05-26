@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/KorAP/KoralPipe-TermMapper2/ast"
+	"github.com/KorAP/KoralPipe-TermMapper/ast"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

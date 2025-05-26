@@ -2,4 +2,5 @@ testdata
 testdata/sandbox
 examples/
 README.md
+/vendor
 /termmapper

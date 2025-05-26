@@ -8,7 +8,7 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/KorAP/KoralPipe-TermMapper2/mapper"
+	"github.com/KorAP/KoralPipe-TermMapper/mapper"
 	"github.com/gofiber/fiber/v2"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"

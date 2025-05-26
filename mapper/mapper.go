@@ -4,10 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/KorAP/KoralPipe-TermMapper2/ast"
-	"github.com/KorAP/KoralPipe-TermMapper2/config"
-	"github.com/KorAP/KoralPipe-TermMapper2/matcher"
-	"github.com/KorAP/KoralPipe-TermMapper2/parser"
+	"github.com/KorAP/KoralPipe-TermMapper/ast"
+	"github.com/KorAP/KoralPipe-TermMapper/config"
+	"github.com/KorAP/KoralPipe-TermMapper/matcher"
+	"github.com/KorAP/KoralPipe-TermMapper/parser"
 )
 
 // Direction represents the mapping direction (A to B or B to A)
