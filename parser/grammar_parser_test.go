@@ -3,7 +3,7 @@ package parser
 import (
 	"testing"
 
-	"github.com/KorAP/KoralPipe-TermMapper2/pkg/ast"
+	"github.com/KorAP/KoralPipe-TermMapper2/ast"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

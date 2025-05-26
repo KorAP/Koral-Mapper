@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/KorAP/KoralPipe-TermMapper2/pkg/ast"
-	"github.com/KorAP/KoralPipe-TermMapper2/pkg/matcher"
+	"github.com/KorAP/KoralPipe-TermMapper2/ast"
+	"github.com/KorAP/KoralPipe-TermMapper2/matcher"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

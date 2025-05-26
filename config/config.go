@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/KorAP/KoralPipe-TermMapper2/pkg/ast"
-	"github.com/KorAP/KoralPipe-TermMapper2/pkg/parser"
+	"github.com/KorAP/KoralPipe-TermMapper2/ast"
+	"github.com/KorAP/KoralPipe-TermMapper2/parser"
 	"gopkg.in/yaml.v3"
 )
 

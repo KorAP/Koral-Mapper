@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/KorAP/KoralPipe-TermMapper2/pkg/ast"
+	"github.com/KorAP/KoralPipe-TermMapper2/ast"
 )
 
 // rawNode represents the raw JSON structure
