@@ -1,6 +1,6 @@
 package ast
 
-// ast is the abstract syntax tree for the term mapper.
+// ast is the abstract syntax tree for the query term mapper.
 
 import (
 	"encoding/json"
@@ -9,26 +9,20 @@ import (
 // NodeType represents the type of a node in the AST
 type NodeType string
 
-const (
-	TokenNode     NodeType = "token"
-	TermGroupNode NodeType = "termGroup"
-	TermNode      NodeType = "term"
-)
-
 // RelationType represents the type of relation between nodes
 type RelationType string
-
-const (
-	AndRelation RelationType = "and"
-	OrRelation  RelationType = "or"
-)
 
 // MatchType represents the type of match operation
 type MatchType string
 
 const (
-	MatchEqual    MatchType = "eq"
-	MatchNotEqual MatchType = "ne"
+	TokenNode     NodeType     = "token"
+	TermGroupNode NodeType     = "termGroup"
+	TermNode      NodeType     = "term"
+	AndRelation   RelationType = "and"
+	OrRelation    RelationType = "or"
+	MatchEqual    MatchType    = "eq"
+	MatchNotEqual MatchType    = "ne"
 )
 
 // Node represents a node in the AST
@@ -36,7 +30,7 @@ type Node interface {
 	Type() NodeType
 }
 
-// Token represents a token node in the query
+// Token represents a koral:token
 type Token struct {
 	Wrap Node `json:"wrap"`
 }
@@ -45,7 +39,7 @@ func (t *Token) Type() NodeType {
 	return TokenNode
 }
 
-// TermGroup represents a group of terms with a relation
+// TermGroup represents a koral:termGroup
 type TermGroup struct {
 	Operands []Node       `json:"operands"`
 	Relation RelationType `json:"relation"`
@@ -55,7 +49,7 @@ func (tg *TermGroup) Type() NodeType {
 	return TermGroupNode
 }
 
-// Term represents a terminal node with matching criteria
+// Term represents a koral:term
 type Term struct {
 	Foundry string    `json:"foundry"`
 	Key     string    `json:"key"`
