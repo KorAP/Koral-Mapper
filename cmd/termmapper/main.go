@@ -161,31 +161,8 @@ func handleTransform(m *mapper.Mapper) fiber.Handler {
 
 // validateInput checks if the input parameters are valid
 func validateInput(mapID, dir, foundryA, foundryB, layerA, layerB string, body []byte) error {
-	// Check input lengths
-	if len(mapID) > maxParamLength {
-		return fmt.Errorf("map ID too long (max %d bytes)", maxParamLength)
-	}
-	if len(dir) > maxParamLength {
-		return fmt.Errorf("direction too long (max %d bytes)", maxParamLength)
-	}
-	if len(foundryA) > maxParamLength {
-		return fmt.Errorf("foundryA too long (max %d bytes)", maxParamLength)
-	}
-	if len(foundryB) > maxParamLength {
-		return fmt.Errorf("foundryB too long (max %d bytes)", maxParamLength)
-	}
-	if len(layerA) > maxParamLength {
-		return fmt.Errorf("layerA too long (max %d bytes)", maxParamLength)
-	}
-	if len(layerB) > maxParamLength {
-		return fmt.Errorf("layerB too long (max %d bytes)", maxParamLength)
-	}
-	if len(body) > maxInputLength {
-		return fmt.Errorf("request body too large (max %d bytes)", maxInputLength)
-	}
-
-	// Check for invalid characters in parameters
-	for _, param := range []struct {
+	// Define parameter checks
+	params := []struct {
 		name  string
 		value string
 	}{
@@ -195,10 +172,21 @@ func validateInput(mapID, dir, foundryA, foundryB, layerA, layerB string, body [
 		{"foundryB", foundryB},
 		{"layerA", layerA},
 		{"layerB", layerB},
-	} {
+	}
+
+	for _, param := range params {
+		// Check input lengths
+		if len(param.value) > maxParamLength {
+			return fmt.Errorf("%s too long (max %d bytes)", param.name, maxParamLength)
+		}
+		// Check for invalid characters in parameters
 		if strings.ContainsAny(param.value, "<>{}[]\\") {
 			return fmt.Errorf("%s contains invalid characters", param.name)
 		}
+	}
+
+	if len(body) > maxInputLength {
+		return fmt.Errorf("request body too large (max %d bytes)", maxInputLength)
 	}
 
 	return nil

@@ -193,7 +193,7 @@ func TestLargeInput(t *testing.T) {
 			direction:     "atob",
 			input:         "{}",
 			expectedCode:  http.StatusBadRequest,
-			expectedError: "map ID too long (max 1024 bytes)",
+			expectedError: "mapID too long (max 1024 bytes)",
 		},
 		{
 			name:          "Large direction",
@@ -201,7 +201,7 @@ func TestLargeInput(t *testing.T) {
 			direction:     strings.Repeat("a", maxParamLength+1),
 			input:         "{}",
 			expectedCode:  http.StatusBadRequest,
-			expectedError: "direction too long (max 1024 bytes)",
+			expectedError: "dir too long (max 1024 bytes)",
 		},
 		{
 			name:          "Large foundryA",
