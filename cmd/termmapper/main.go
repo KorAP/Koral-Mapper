@@ -7,6 +7,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/KorAP/KoralPipe-TermMapper/config"
 	"github.com/KorAP/KoralPipe-TermMapper/mapper"
 	"github.com/alecthomas/kong"
 	"github.com/gofiber/fiber/v2"
@@ -19,14 +20,14 @@ const (
 	maxParamLength = 1024        // 1KB
 )
 
-type config struct {
+type appConfig struct {
 	Port     int    `kong:"short='p',default='8080',help='Port to listen on'"`
 	Config   string `kong:"short='c',required,help='YAML configuration file containing mapping directives'"`
 	LogLevel string `kong:"short='l',default='info',help='Log level (debug, info, warn, error)'"`
 }
 
-func parseConfig() *config {
-	cfg := &config{}
+func parseConfig() *appConfig {
+	cfg := &appConfig{}
 	ctx := kong.Parse(cfg,
 		kong.Description("A web service for transforming JSON objects using term mapping rules."),
 		kong.UsageOnError(),
@@ -58,8 +59,14 @@ func main() {
 	// Set up logging
 	setupLogger(cfg.LogLevel)
 
+	// Load configuration file
+	yamlConfig, err := config.LoadConfig(cfg.Config)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to load configuration")
+	}
+
 	// Create a new mapper instance
-	m, err := mapper.NewMapper(cfg.Config)
+	m, err := mapper.NewMapper(yamlConfig.Lists)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to create mapper")
 	}

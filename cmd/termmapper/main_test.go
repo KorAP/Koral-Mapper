@@ -6,10 +6,9 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"testing"
 
+	tmconfig "github.com/KorAP/KoralPipe-TermMapper/config"
 	"github.com/KorAP/KoralPipe-TermMapper/mapper"
 	"github.com/gofiber/fiber/v2"
 	"github.com/stretchr/testify/assert"
@@ -17,24 +16,21 @@ import (
 )
 
 func TestTransformEndpoint(t *testing.T) {
-	// Create a temporary config file
-	tmpDir := t.TempDir()
-	configFile := filepath.Join(tmpDir, "test-config.yaml")
-
-	configContent := `- id: test-mapper
-  foundryA: opennlp
-  layerA: p
-  foundryB: upos
-  layerB: p
-  mappings:
-    - "[PIDAT] <> [opennlp/p=PIDAT & opennlp/p=AdjType:Pdt]"
-    - "[DET] <> [opennlp/p=DET]"`
-
-	err := os.WriteFile(configFile, []byte(configContent), 0644)
-	require.NoError(t, err)
+	// Create test mapping list
+	mappingList := tmconfig.MappingList{
+		ID:       "test-mapper",
+		FoundryA: "opennlp",
+		LayerA:   "p",
+		FoundryB: "upos",
+		LayerB:   "p",
+		Mappings: []tmconfig.MappingRule{
+			"[PIDAT] <> [opennlp/p=PIDAT & opennlp/p=AdjType:Pdt]",
+			"[DET] <> [opennlp/p=DET]",
+		},
+	}
 
 	// Create mapper
-	m, err := mapper.NewMapper(configFile)
+	m, err := mapper.NewMapper([]tmconfig.MappingList{mappingList})
 	require.NoError(t, err)
 
 	// Create fiber app
@@ -255,18 +251,16 @@ func TestTransformEndpoint(t *testing.T) {
 }
 
 func TestHealthEndpoint(t *testing.T) {
-	// Create a temporary config file for the mapper
-	tmpDir := t.TempDir()
-	configFile := filepath.Join(tmpDir, "test-config.yaml")
-	configContent := `- id: test-mapper
-  mappings:
-    - "[A] <> [B]"`
+	// Create test mapping list
+	mappingList := tmconfig.MappingList{
+		ID: "test-mapper",
+		Mappings: []tmconfig.MappingRule{
+			"[A] <> [B]",
+		},
+	}
 
-	err := os.WriteFile(configFile, []byte(configContent), 0644)
-	require.NoError(t, err)
-
-	// Create mapper with config
-	m, err := mapper.NewMapper(configFile)
+	// Create mapper
+	m, err := mapper.NewMapper([]tmconfig.MappingList{mappingList})
 	require.NoError(t, err)
 
 	// Create fiber app

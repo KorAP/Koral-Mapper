@@ -22,13 +22,13 @@ type MappingList struct {
 	Mappings []MappingRule `yaml:"mappings"`
 }
 
-// Config represents the root configuration containing multiple mapping lists
-type Config struct {
+// MappingLists represents the root configuration containing multiple mapping lists
+type MappingLists struct {
 	Lists []MappingList
 }
 
 // LoadConfig loads a YAML configuration file and returns a Config object
-func LoadConfig(filename string) (*Config, error) {
+func LoadConfig(filename string) (*MappingLists, error) {
 	data, err := os.ReadFile(filename)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read config file: %w", err)
@@ -69,7 +69,7 @@ func LoadConfig(filename string) (*Config, error) {
 		}
 	}
 
-	return &Config{Lists: lists}, nil
+	return &MappingLists{Lists: lists}, nil
 }
 
 // ParseMappings parses all mapping rules in a list and returns a slice of parsed rules

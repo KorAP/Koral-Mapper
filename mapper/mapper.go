@@ -24,37 +24,29 @@ type Mapper struct {
 	parsedRules  map[string][]*parser.MappingResult
 }
 
-// NewMapper creates a new Mapper instance
-func NewMapper(configFiles ...string) (*Mapper, error) {
+// NewMapper creates a new Mapper instance from a list of MappingLists
+func NewMapper(lists []config.MappingList) (*Mapper, error) {
 	m := &Mapper{
 		mappingLists: make(map[string]*config.MappingList),
 		parsedRules:  make(map[string][]*parser.MappingResult),
 	}
 
-	// Load and parse all config files
-	for _, file := range configFiles {
-		cfg, err := config.LoadConfig(file)
+	// Store mapping lists by ID
+	for _, list := range lists {
+		if _, exists := m.mappingLists[list.ID]; exists {
+			return nil, fmt.Errorf("duplicate mapping list ID found: %s", list.ID)
+		}
+
+		// Create a copy of the list to store
+		listCopy := list
+		m.mappingLists[list.ID] = &listCopy
+
+		// Parse the rules immediately
+		parsedRules, err := list.ParseMappings()
 		if err != nil {
-			return nil, fmt.Errorf("failed to load config from %s: %w", file, err)
+			return nil, fmt.Errorf("failed to parse mappings for list %s: %w", list.ID, err)
 		}
-
-		// Store mapping lists by ID
-		for _, list := range cfg.Lists {
-			if _, exists := m.mappingLists[list.ID]; exists {
-				return nil, fmt.Errorf("duplicate mapping list ID found: %s", list.ID)
-			}
-
-			// Create a copy of the list to store
-			listCopy := list
-			m.mappingLists[list.ID] = &listCopy
-
-			// Parse the rules immediately
-			parsedRules, err := list.ParseMappings()
-			if err != nil {
-				return nil, fmt.Errorf("failed to parse mappings for list %s: %w", list.ID, err)
-			}
-			m.parsedRules[list.ID] = parsedRules
-		}
+		m.parsedRules[list.ID] = parsedRules
 	}
 
 	return m, nil

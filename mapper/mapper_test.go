@@ -2,35 +2,31 @@ package mapper
 
 import (
 	"encoding/json"
-	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/KorAP/KoralPipe-TermMapper/ast"
+	"github.com/KorAP/KoralPipe-TermMapper/config"
 	"github.com/KorAP/KoralPipe-TermMapper/matcher"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestMapper(t *testing.T) {
-	// Create a temporary config file
-	tmpDir := t.TempDir()
-	configFile := filepath.Join(tmpDir, "test-config.yaml")
-
-	configContent := `- id: test-mapper
-  foundryA: opennlp
-  layerA: p
-  foundryB: upos
-  layerB: p
-  mappings:
-    - "[PIDAT] <> [opennlp/p=PIDAT & opennlp/p=AdjType:Pdt]"
-    - "[DET] <> [opennlp/p=DET]"`
-
-	err := os.WriteFile(configFile, []byte(configContent), 0644)
-	require.NoError(t, err)
+	// Create test mapping list
+	mappingList := config.MappingList{
+		ID:       "test-mapper",
+		FoundryA: "opennlp",
+		LayerA:   "p",
+		FoundryB: "upos",
+		LayerB:   "p",
+		Mappings: []config.MappingRule{
+			"[PIDAT] <> [opennlp/p=PIDAT & opennlp/p=AdjType:Pdt]",
+			"[DET] <> [opennlp/p=DET]",
+		},
+	}
 
 	// Create a new mapper
-	m, err := NewMapper(configFile)
+	m, err := NewMapper([]config.MappingList{mappingList})
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -318,23 +314,20 @@ func TestMatchComplexPatterns(t *testing.T) {
 }
 
 func TestInvalidPatternReplacement(t *testing.T) {
-	// Create a temporary config file
-	tmpDir := t.TempDir()
-	configFile := filepath.Join(tmpDir, "test-config.yaml")
-
-	configContent := `- id: test-mapper
-  foundryA: opennlp
-  layerA: p
-  foundryB: upos
-  layerB: p
-  mappings:
-    - "[PIDAT] <> [opennlp/p=PIDAT & opennlp/p=AdjType:Pdt]"`
-
-	err := os.WriteFile(configFile, []byte(configContent), 0644)
-	require.NoError(t, err)
+	// Create test mapping list
+	mappingList := config.MappingList{
+		ID:       "test-mapper",
+		FoundryA: "opennlp",
+		LayerA:   "p",
+		FoundryB: "upos",
+		LayerB:   "p",
+		Mappings: []config.MappingRule{
+			"[PIDAT] <> [opennlp/p=PIDAT & opennlp/p=AdjType:Pdt]",
+		},
+	}
 
 	// Create a new mapper
-	m, err := NewMapper(configFile)
+	m, err := NewMapper([]config.MappingList{mappingList})
 	require.NoError(t, err)
 
 	tests := []struct {
