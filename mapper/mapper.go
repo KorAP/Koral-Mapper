@@ -115,6 +115,15 @@ func (m *Mapper) ApplyQueryMappings(mappingID string, opts MappingOptions, jsonD
 		return jsonData, nil
 	}
 
+	// Store rewrites if they exist
+	var oldRewrites any
+	if queryMap, ok := queryData.(map[string]any); ok {
+		if rewrites, exists := queryMap["rewrites"]; exists {
+			oldRewrites = rewrites
+			delete(queryMap, "rewrites")
+		}
+	}
+
 	// Convert input JSON to AST
 	jsonBytes, err := json.Marshal(queryData)
 	if err != nil {
@@ -190,6 +199,13 @@ func (m *Mapper) ApplyQueryMappings(mappingID string, opts MappingOptions, jsonD
 	var resultData any
 	if err := json.Unmarshal(resultBytes, &resultData); err != nil {
 		return nil, fmt.Errorf("failed to parse result JSON: %w", err)
+	}
+
+	// Restore rewrites if they existed
+	if oldRewrites != nil {
+		if resultMap, ok := resultData.(map[string]any); ok {
+			resultMap["rewrites"] = oldRewrites
+		}
 	}
 
 	// If we had a query wrapper, put the transformed data back in it

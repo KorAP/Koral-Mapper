@@ -222,6 +222,95 @@ func TestMapper(t *testing.T) {
 	}
 }
 
+func TestTokenToTermGroupWithRewrites(t *testing.T) {
+	// Create test mapping list specifically for token to termGroup test
+	mappingList := config.MappingList{
+		ID:       "test-token-to-termgroup",
+		FoundryA: "opennlp",
+		LayerA:   "p",
+		FoundryB: "opennlp", // Keep the same foundry for both sides
+		LayerB:   "p",
+		Mappings: []config.MappingRule{
+			"[PIDAT] <> [opennlp/p=PIDAT & opennlp/p=AdjType:Pdt]",
+		},
+	}
+
+	// Create a new mapper
+	m, err := NewMapper([]config.MappingList{mappingList})
+	require.NoError(t, err)
+
+	input := `{
+		"@type": "koral:token",
+		"rewrites": [
+			{
+				"@type": "koral:rewrite",
+				"_comment": "This rewrite should be preserved",
+				"editor": "TestEditor",
+				"operation": "operation:test",
+				"src": "TestSource"
+			}
+		],
+		"wrap": {
+			"@type": "koral:term",
+			"foundry": "opennlp",
+			"key": "PIDAT",
+			"layer": "p",
+			"match": "match:eq"
+		}
+	}`
+
+	expected := `{
+		"@type": "koral:token",
+		"rewrites": [
+			{
+				"@type": "koral:rewrite",
+				"_comment": "This rewrite should be preserved",
+				"editor": "TestEditor",
+				"operation": "operation:test",
+				"src": "TestSource"
+			}
+		],
+		"wrap": {
+			"@type": "koral:termGroup",
+			"operands": [
+				{
+					"@type": "koral:term",
+					"foundry": "opennlp",
+					"key": "PIDAT",
+					"layer": "p",
+					"match": "match:eq"
+				},
+				{
+					"@type": "koral:term",
+					"foundry": "opennlp",
+					"key": "AdjType",
+					"layer": "p",
+					"match": "match:eq",
+					"value": "Pdt"
+				}
+			],
+			"relation": "relation:and"
+		}
+	}`
+
+	// Parse input JSON
+	var inputData interface{}
+	err = json.Unmarshal([]byte(input), &inputData)
+	require.NoError(t, err)
+
+	// Apply mappings
+	result, err := m.ApplyQueryMappings("test-token-to-termgroup", MappingOptions{Direction: AtoB}, inputData)
+	require.NoError(t, err)
+
+	// Parse expected JSON
+	var expectedData interface{}
+	err = json.Unmarshal([]byte(expected), &expectedData)
+	require.NoError(t, err)
+
+	// Compare results
+	assert.Equal(t, expectedData, result)
+}
+
 func TestMatchComplexPatterns(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -393,7 +482,7 @@ func TestQueryWrapperMappings(t *testing.T) {
 		expectError bool
 	}{
 		{
-			name:      "Query wrapper case",
+			name:      "Query wrapper case with rewrites preservation",
 			mappingID: "test-wrapper",
 			opts: MappingOptions{
 				Direction: AtoB,
@@ -404,20 +493,20 @@ func TestQueryWrapperMappings(t *testing.T) {
 					"@type": "koral:doc",
 					"key": "availability",
 					"match": "match:eq",
-					"rewrites": [
-						{
-							"@type": "koral:rewrite",
-							"_comment": "Free corpus access policy has been added.",
-							"editor": "Kustvakt",
-							"operation": "operation:injection",
-							"src": "Kustvakt"
-						}
-					],
 					"type": "type:regex",
 					"value": "CC.*"
 				},
 				"query": {
 					"@type": "koral:token",
+					"rewrites": [
+						{
+							"@type": "koral:rewrite",
+							"_comment": "Original rewrite that should be preserved",
+							"editor": "Original",
+							"operation": "operation:original",
+							"src": "Original"
+						}
+					],
 					"wrap": {
 						"@type": "koral:term",
 						"foundry": "opennlp",
@@ -433,20 +522,20 @@ func TestQueryWrapperMappings(t *testing.T) {
 					"@type": "koral:doc",
 					"key": "availability",
 					"match": "match:eq",
-					"rewrites": [
-						{
-							"@type": "koral:rewrite",
-							"_comment": "Free corpus access policy has been added.",
-							"editor": "Kustvakt",
-							"operation": "operation:injection",
-							"src": "Kustvakt"
-						}
-					],
 					"type": "type:regex",
 					"value": "CC.*"
 				},
 				"query": {
 					"@type": "koral:token",
+					"rewrites": [
+						{
+							"@type": "koral:rewrite",
+							"_comment": "Original rewrite that should be preserved",
+							"editor": "Original",
+							"operation": "operation:original",
+							"src": "Original"
+						}
+					],
 					"wrap": {
 						"@type": "koral:term",
 						"foundry": "opennlp",
@@ -504,6 +593,51 @@ func TestQueryWrapperMappings(t *testing.T) {
 			expected: `{
 				"@context": "http://korap.ids-mannheim.de/ns/KoralQuery/v0.3/context.jsonld",
 				"query": "invalid"
+			}`,
+		},
+		{
+			name:      "Query with rewrites in nested token",
+			mappingID: "test-wrapper",
+			opts: MappingOptions{
+				Direction: AtoB,
+			},
+			input: `{
+				"@type": "koral:token",
+				"rewrites": [
+					{
+						"@type": "koral:rewrite",
+						"_comment": "Nested rewrite that should be preserved",
+						"editor": "Nested",
+						"operation": "operation:nested",
+						"src": "Nested"
+					}
+				],
+				"wrap": {
+					"@type": "koral:term",
+					"foundry": "opennlp",
+					"key": "Baum",
+					"layer": "orth",
+					"match": "match:eq"
+				}
+			}`,
+			expected: `{
+				"@type": "koral:token",
+				"rewrites": [
+					{
+						"@type": "koral:rewrite",
+						"_comment": "Nested rewrite that should be preserved",
+						"editor": "Nested",
+						"operation": "operation:nested",
+						"src": "Nested"
+					}
+				],
+				"wrap": {
+					"@type": "koral:term",
+					"foundry": "opennlp",
+					"key": "X",
+					"layer": "orth",
+					"match": "match:eq"
+				}
 			}`,
 		},
 	}
