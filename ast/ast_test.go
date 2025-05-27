@@ -36,6 +36,16 @@ func TestNodeTypes(t *testing.T) {
 			},
 			expected: TermNode,
 		},
+		{
+			name: "Rewrite node returns correct type",
+			node: &Rewrite{
+				Editor:    "Kustvakt",
+				Operation: "operation:injection",
+				Scope:     "foundry",
+				Src:       "Kustvakt",
+			},
+			expected: RewriteNode,
+		},
 	}
 
 	for _, tt := range tests {
@@ -61,14 +71,26 @@ func TestTermGroupConstruction(t *testing.T) {
 		Value:   "Pdt",
 	}
 
+	rewrites := []Rewrite{
+		{
+			Editor:    "Kustvakt",
+			Operation: "operation:injection",
+			Scope:     "foundry",
+			Src:       "Kustvakt",
+			Comment:   "Default foundry has been added.",
+		},
+	}
+
 	group := &TermGroup{
 		Operands: []Node{term1, term2},
 		Relation: AndRelation,
+		Rewrites: rewrites,
 	}
 
 	assert.Len(t, group.Operands, 2)
 	assert.Equal(t, AndRelation, group.Relation)
 	assert.Equal(t, TermGroupNode, group.Type())
+	assert.Equal(t, rewrites, group.Rewrites)
 
 	// Test operands are correctly set
 	assert.Equal(t, term1, group.Operands[0])
@@ -83,10 +105,24 @@ func TestTokenConstruction(t *testing.T) {
 		Match:   MatchEqual,
 	}
 
-	token := &Token{Wrap: term}
+	rewrites := []Rewrite{
+		{
+			Editor:    "Kustvakt",
+			Operation: "operation:injection",
+			Scope:     "foundry",
+			Src:       "Kustvakt",
+			Comment:   "Default foundry has been added.",
+		},
+	}
+
+	token := &Token{
+		Wrap:     term,
+		Rewrites: rewrites,
+	}
 
 	assert.Equal(t, TokenNode, token.Type())
 	assert.Equal(t, term, token.Wrap)
+	assert.Equal(t, rewrites, token.Rewrites)
 }
 
 func TestTermConstruction(t *testing.T) {
@@ -99,6 +135,7 @@ func TestTermConstruction(t *testing.T) {
 		match    MatchType
 		hasValue bool
 		value    string
+		rewrites []Rewrite
 	}{
 		{
 			name: "Term without value",
@@ -144,6 +181,38 @@ func TestTermConstruction(t *testing.T) {
 			match:    MatchNotEqual,
 			hasValue: false,
 		},
+		{
+			name: "Term with rewrites",
+			term: &Term{
+				Foundry: "opennlp",
+				Key:     "DET",
+				Layer:   "p",
+				Match:   MatchEqual,
+				Rewrites: []Rewrite{
+					{
+						Editor:    "Kustvakt",
+						Operation: "operation:injection",
+						Scope:     "foundry",
+						Src:       "Kustvakt",
+						Comment:   "Default foundry has been added.",
+					},
+				},
+			},
+			foundry:  "opennlp",
+			key:      "DET",
+			layer:    "p",
+			match:    MatchEqual,
+			hasValue: false,
+			rewrites: []Rewrite{
+				{
+					Editor:    "Kustvakt",
+					Operation: "operation:injection",
+					Scope:     "foundry",
+					Src:       "Kustvakt",
+					Comment:   "Default foundry has been added.",
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -157,6 +226,11 @@ func TestTermConstruction(t *testing.T) {
 				assert.Equal(t, tt.value, tt.term.Value)
 			} else {
 				assert.Empty(t, tt.term.Value)
+			}
+			if tt.rewrites != nil {
+				assert.Equal(t, tt.rewrites, tt.term.Rewrites)
+			} else {
+				assert.Empty(t, tt.term.Rewrites)
 			}
 		})
 	}
@@ -249,6 +323,23 @@ func TestCatchallNode(t *testing.T) {
 			assert.Equal(t, rawContent, node.RawContent)
 		})
 	}
+}
+
+func TestRewriteConstruction(t *testing.T) {
+	rewrite := &Rewrite{
+		Editor:    "Kustvakt",
+		Operation: "operation:injection",
+		Scope:     "foundry",
+		Src:       "Kustvakt",
+		Comment:   "Default foundry has been added.",
+	}
+
+	assert.Equal(t, RewriteNode, rewrite.Type())
+	assert.Equal(t, "Kustvakt", rewrite.Editor)
+	assert.Equal(t, "operation:injection", rewrite.Operation)
+	assert.Equal(t, "foundry", rewrite.Scope)
+	assert.Equal(t, "Kustvakt", rewrite.Src)
+	assert.Equal(t, "Default foundry has been added.", rewrite.Comment)
 }
 
 func TestComplexNestedStructures(t *testing.T) {

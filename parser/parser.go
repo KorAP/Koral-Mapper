@@ -24,6 +24,7 @@ type rawNode struct {
 	Layer    string          `json:"layer,omitempty"`
 	Match    string          `json:"match,omitempty"`
 	Value    string          `json:"value,omitempty"`
+	Rewrites []ast.Rewrite   `json:"rewrites,omitempty"`
 	// Store any additional fields
 	Extra map[string]any `json:"-"`
 }
@@ -48,7 +49,7 @@ func (r *rawNode) UnmarshalJSON(data []byte) error {
 	r.Extra = make(map[string]any)
 	for k, v := range raw {
 		switch k {
-		case "@type", "wrap", "operands", "relation", "foundry", "key", "layer", "match", "value":
+		case "@type", "wrap", "operands", "relation", "foundry", "key", "layer", "match", "value", "rewrites":
 			continue
 		default:
 			r.Extra[k] = v
@@ -89,6 +90,9 @@ func (r rawNode) MarshalJSON() ([]byte, error) {
 	if r.Value != "" {
 		raw["value"] = r.Value
 	}
+	if len(r.Rewrites) > 0 {
+		raw["rewrites"] = r.Rewrites
+	}
 
 	// Add any extra fields
 	maps.Copy(raw, r.Extra)
@@ -123,7 +127,7 @@ func parseNode(raw rawNode) (ast.Node, error) {
 		if err != nil {
 			return nil, fmt.Errorf("error parsing wrapped node: %w", err)
 		}
-		return &ast.Token{Wrap: wrap}, nil
+		return &ast.Token{Wrap: wrap, Rewrites: raw.Rewrites}, nil
 
 	case "koral:termGroup":
 		if len(raw.Operands) == 0 {
@@ -153,6 +157,7 @@ func parseNode(raw rawNode) (ast.Node, error) {
 		return &ast.TermGroup{
 			Operands: operands,
 			Relation: relation,
+			Rewrites: raw.Rewrites,
 		}, nil
 
 	case "koral:term":
@@ -170,11 +175,12 @@ func parseNode(raw rawNode) (ast.Node, error) {
 		}
 
 		return &ast.Term{
-			Foundry: raw.Foundry,
-			Key:     raw.Key,
-			Layer:   raw.Layer,
-			Match:   match,
-			Value:   raw.Value,
+			Foundry:  raw.Foundry,
+			Key:      raw.Key,
+			Layer:    raw.Layer,
+			Match:    match,
+			Value:    raw.Value,
+			Rewrites: raw.Rewrites,
 		}, nil
 
 	default:

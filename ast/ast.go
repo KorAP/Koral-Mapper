@@ -19,6 +19,7 @@ const (
 	TokenNode     NodeType     = "token"
 	TermGroupNode NodeType     = "termGroup"
 	TermNode      NodeType     = "term"
+	RewriteNode   NodeType     = "rewrite"
 	AndRelation   RelationType = "and"
 	OrRelation    RelationType = "or"
 	MatchEqual    MatchType    = "eq"
@@ -30,9 +31,23 @@ type Node interface {
 	Type() NodeType
 }
 
+// Rewrite represents a koral:rewrite
+type Rewrite struct {
+	Editor    string `json:"editor,omitempty"`
+	Operation string `json:"operation,omitempty"`
+	Scope     string `json:"scope,omitempty"`
+	Src       string `json:"src,omitempty"`
+	Comment   string `json:"_comment,omitempty"`
+}
+
+func (r *Rewrite) Type() NodeType {
+	return RewriteNode
+}
+
 // Token represents a koral:token
 type Token struct {
-	Wrap Node `json:"wrap"`
+	Wrap     Node      `json:"wrap"`
+	Rewrites []Rewrite `json:"rewrites,omitempty"`
 }
 
 func (t *Token) Type() NodeType {
@@ -43,6 +58,7 @@ func (t *Token) Type() NodeType {
 type TermGroup struct {
 	Operands []Node       `json:"operands"`
 	Relation RelationType `json:"relation"`
+	Rewrites []Rewrite    `json:"rewrites,omitempty"`
 }
 
 func (tg *TermGroup) Type() NodeType {
@@ -51,11 +67,12 @@ func (tg *TermGroup) Type() NodeType {
 
 // Term represents a koral:term
 type Term struct {
-	Foundry string    `json:"foundry"`
-	Key     string    `json:"key"`
-	Layer   string    `json:"layer"`
-	Match   MatchType `json:"match"`
-	Value   string    `json:"value,omitempty"`
+	Foundry  string    `json:"foundry"`
+	Key      string    `json:"key"`
+	Layer    string    `json:"layer"`
+	Match    MatchType `json:"match"`
+	Value    string    `json:"value,omitempty"`
+	Rewrites []Rewrite `json:"rewrites,omitempty"`
 }
 
 func (t *Term) Type() NodeType {

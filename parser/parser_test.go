@@ -293,6 +293,145 @@ func TestParseJSON(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name: "Parse token with term and rewrites",
+			input: `{
+				"@type": "koral:token",
+				"wrap": {
+					"@type": "koral:term",
+					"foundry": "opennlp",
+					"key": "Baum",
+					"layer": "orth",
+					"match": "match:eq",
+					"rewrites": [
+						{
+							"@type": "koral:rewrite",
+							"_comment": "Default foundry has been added.",
+							"editor": "Kustvakt",
+							"operation": "operation:injection",
+							"scope": "foundry",
+							"src": "Kustvakt"
+						}
+					]
+				}
+			}`,
+			expected: &ast.Token{
+				Wrap: &ast.Term{
+					Foundry: "opennlp",
+					Key:     "Baum",
+					Layer:   "orth",
+					Match:   ast.MatchEqual,
+					Rewrites: []ast.Rewrite{
+						{
+							Comment:   "Default foundry has been added.",
+							Editor:    "Kustvakt",
+							Operation: "operation:injection",
+							Scope:     "foundry",
+							Src:       "Kustvakt",
+						},
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "Parse term group with rewrites",
+			input: `{
+				"@type": "koral:termGroup",
+				"operands": [
+					{
+						"@type": "koral:term",
+						"foundry": "opennlp",
+						"key": "DET",
+						"layer": "p",
+						"match": "match:eq"
+					},
+					{
+						"@type": "koral:term",
+						"foundry": "opennlp",
+						"key": "AdjType",
+						"layer": "m",
+						"match": "match:eq",
+						"value": "Pdt"
+					}
+				],
+				"relation": "relation:and",
+				"rewrites": [
+					{
+						"@type": "koral:rewrite",
+						"_comment": "Default foundry has been added.",
+						"editor": "Kustvakt",
+						"operation": "operation:injection",
+						"scope": "foundry",
+						"src": "Kustvakt"
+					}
+				]
+			}`,
+			expected: &ast.TermGroup{
+				Operands: []ast.Node{
+					&ast.Term{
+						Foundry: "opennlp",
+						Key:     "DET",
+						Layer:   "p",
+						Match:   ast.MatchEqual,
+					},
+					&ast.Term{
+						Foundry: "opennlp",
+						Key:     "AdjType",
+						Layer:   "m",
+						Match:   ast.MatchEqual,
+						Value:   "Pdt",
+					},
+				},
+				Relation: ast.AndRelation,
+				Rewrites: []ast.Rewrite{
+					{
+						Comment:   "Default foundry has been added.",
+						Editor:    "Kustvakt",
+						Operation: "operation:injection",
+						Scope:     "foundry",
+						Src:       "Kustvakt",
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "Parse term with rewrites",
+			input: `{
+				"@type": "koral:term",
+				"foundry": "opennlp",
+				"key": "DET",
+				"layer": "p",
+				"match": "match:eq",
+				"rewrites": [
+					{
+						"@type": "koral:rewrite",
+						"_comment": "Default foundry has been added.",
+						"editor": "Kustvakt",
+						"operation": "operation:injection",
+						"scope": "foundry",
+						"src": "Kustvakt"
+					}
+				]
+			}`,
+			expected: &ast.Term{
+				Foundry: "opennlp",
+				Key:     "DET",
+				Layer:   "p",
+				Match:   ast.MatchEqual,
+				Rewrites: []ast.Rewrite{
+					{
+						Comment:   "Default foundry has been added.",
+						Editor:    "Kustvakt",
+						Operation: "operation:injection",
+						Scope:     "foundry",
+						Src:       "Kustvakt",
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
 			name:    "Invalid JSON",
 			input:   `{"invalid": json`,
 			wantErr: true,
@@ -326,6 +465,105 @@ func TestParseJSON(t *testing.T) {
 
 			require.NoError(t, err)
 			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestParseJSONErrors(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantErr bool
+	}{
+		{
+			name:    "Empty JSON",
+			input:   "{}",
+			wantErr: true,
+		},
+		{
+			name:    "Invalid JSON",
+			input:   "{",
+			wantErr: true,
+		},
+		{
+			name: "Token without wrap",
+			input: `{
+				"@type": "koral:token"
+			}`,
+			wantErr: true,
+		},
+		{
+			name: "Term without key",
+			input: `{
+				"@type": "koral:term",
+				"foundry": "opennlp",
+				"layer": "p",
+				"match": "match:eq"
+			}`,
+			wantErr: true,
+		},
+		{
+			name: "TermGroup without operands",
+			input: `{
+				"@type": "koral:termGroup",
+				"relation": "relation:and"
+			}`,
+			wantErr: true,
+		},
+		{
+			name: "TermGroup without relation",
+			input: `{
+				"@type": "koral:termGroup",
+				"operands": [
+					{
+						"@type": "koral:term",
+						"key": "DET",
+						"foundry": "opennlp",
+						"layer": "p",
+						"match": "match:eq"
+					}
+				]
+			}`,
+			wantErr: true,
+		},
+		{
+			name: "Invalid match type",
+			input: `{
+				"@type": "koral:term",
+				"key": "DET",
+				"foundry": "opennlp",
+				"layer": "p",
+				"match": "match:invalid"
+			}`,
+			wantErr: true,
+		},
+		{
+			name: "Invalid relation type",
+			input: `{
+				"@type": "koral:termGroup",
+				"operands": [
+					{
+						"@type": "koral:term",
+						"key": "DET",
+						"foundry": "opennlp",
+						"layer": "p",
+						"match": "match:eq"
+					}
+				],
+				"relation": "relation:invalid"
+			}`,
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := ParseJSON([]byte(tt.input))
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
 		})
 	}
 }
@@ -719,29 +957,6 @@ func TestParseJSONEdgeCases(t *testing.T) {
 				},
 			},
 			wantErr: false,
-		},
-		{
-			name: "Invalid match type",
-			input: `{
-				"@type": "koral:term",
-				"key": "DET",
-				"match": "match:invalid"
-			}`,
-			wantErr: true,
-		},
-		{
-			name: "Invalid relation type",
-			input: `{
-				"@type": "koral:termGroup",
-				"operands": [
-					{
-						"@type": "koral:term",
-						"key": "DET"
-					}
-				],
-				"relation": "relation:invalid"
-			}`,
-			wantErr: true,
 		},
 		{
 			name: "Empty operands in term group",
