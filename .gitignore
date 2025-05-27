@@ -1,3 +1,6 @@
+.*
+!.gitignore
+!.dockerignore
 testdata
 testdata/sandbox
 examples/

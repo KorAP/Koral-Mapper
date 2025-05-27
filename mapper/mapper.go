@@ -186,8 +186,8 @@ func (m *Mapper) ApplyQueryMappings(mappingID string, opts MappingOptions, jsonD
 		return nil, fmt.Errorf("failed to serialize AST to JSON: %w", err)
 	}
 
-	// Parse the JSON string back into an interface{}
-	var resultData interface{}
+	// Parse the JSON string back into
+	var resultData any
 	if err := json.Unmarshal(resultBytes, &resultData); err != nil {
 		return nil, fmt.Errorf("failed to parse result JSON: %w", err)
 	}
