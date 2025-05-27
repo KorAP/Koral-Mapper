@@ -223,60 +223,44 @@ func (m *Mapper) ApplyQueryMappings(mappingID string, opts MappingOptions, jsonD
 			"editor": "termMapper",
 		}
 
-		// Check if all terms in a group have their foundry changed
-		if term, ok := originalNode.(*ast.Term); ok {
-			if termGroup, ok := node.(*ast.TermGroup); ok {
-				// Check if all terms in the group have a different foundry
-				allFoundryChanged := true
-				for _, op := range termGroup.Operands {
-					if t, ok := op.(*ast.Term); ok {
-						if t.Foundry == term.Foundry {
-							allFoundryChanged = false
-							break
-						}
-					}
+		// Check if the node types are different (structural change)
+		if originalNode.Type() != node.Type() {
+			// Full node replacement
+			originalBytes, err := parser.SerializeToJSON(originalNode)
+			if err != nil {
+				return nil, fmt.Errorf("failed to serialize original node for rewrite: %w", err)
+			}
+			var originalJSON any
+			if err := json.Unmarshal(originalBytes, &originalJSON); err != nil {
+				return nil, fmt.Errorf("failed to parse original node JSON for rewrite: %w", err)
+			}
+			rewrite["original"] = originalJSON
+		} else if term, ok := originalNode.(*ast.Term); ok && ast.IsTermNode(node) {
+			// Check which attributes changed
+			newTerm := node.(*ast.Term)
+			if term.Foundry != newTerm.Foundry {
+				rewrite["scope"] = "foundry"
+				rewrite["original"] = term.Foundry
+			} else if term.Layer != newTerm.Layer {
+				rewrite["scope"] = "layer"
+				rewrite["original"] = term.Layer
+			} else if term.Key != newTerm.Key {
+				rewrite["scope"] = "key"
+				rewrite["original"] = term.Key
+			} else if term.Value != newTerm.Value {
+				rewrite["scope"] = "value"
+				rewrite["original"] = term.Value
+			} else {
+				// No specific attribute changed, use full node replacement
+				originalBytes, err := parser.SerializeToJSON(originalNode)
+				if err != nil {
+					return nil, fmt.Errorf("failed to serialize original node for rewrite: %w", err)
 				}
-				if allFoundryChanged {
-					rewrite["scope"] = "foundry"
-					rewrite["src"] = term.Foundry
-				} else {
-					// Full node replacement
-					originalBytes, err := parser.SerializeToJSON(originalNode)
-					if err != nil {
-						return nil, fmt.Errorf("failed to serialize original node for rewrite: %w", err)
-					}
-					var originalJSON any
-					if err := json.Unmarshal(originalBytes, &originalJSON); err != nil {
-						return nil, fmt.Errorf("failed to parse original node JSON for rewrite: %w", err)
-					}
-					rewrite["src"] = originalJSON
+				var originalJSON any
+				if err := json.Unmarshal(originalBytes, &originalJSON); err != nil {
+					return nil, fmt.Errorf("failed to parse original node JSON for rewrite: %w", err)
 				}
-			} else if newTerm, ok := node.(*ast.Term); ok {
-				// Single term changes
-				if term.Foundry != newTerm.Foundry {
-					rewrite["scope"] = "foundry"
-					rewrite["src"] = term.Foundry
-				} else if term.Layer != newTerm.Layer {
-					rewrite["scope"] = "layer"
-					rewrite["src"] = term.Layer
-				} else if term.Key != newTerm.Key {
-					rewrite["scope"] = "key"
-					rewrite["src"] = term.Key
-				} else if term.Value != newTerm.Value {
-					rewrite["scope"] = "value"
-					rewrite["src"] = term.Value
-				} else {
-					// No specific attribute changed, use full node replacement
-					originalBytes, err := parser.SerializeToJSON(originalNode)
-					if err != nil {
-						return nil, fmt.Errorf("failed to serialize original node for rewrite: %w", err)
-					}
-					var originalJSON any
-					if err := json.Unmarshal(originalBytes, &originalJSON); err != nil {
-						return nil, fmt.Errorf("failed to parse original node JSON for rewrite: %w", err)
-					}
-					rewrite["src"] = originalJSON
-				}
+				rewrite["original"] = originalJSON
 			}
 		} else {
 			// Full node replacement
@@ -288,7 +272,7 @@ func (m *Mapper) ApplyQueryMappings(mappingID string, opts MappingOptions, jsonD
 			if err := json.Unmarshal(originalBytes, &originalJSON); err != nil {
 				return nil, fmt.Errorf("failed to parse original node JSON for rewrite: %w", err)
 			}
-			rewrite["src"] = originalJSON
+			rewrite["original"] = originalJSON
 		}
 
 		// Add rewrite to the node

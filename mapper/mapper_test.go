@@ -121,7 +121,7 @@ func TestMapper(t *testing.T) {
 						{
 							"@type": "koral:rewrite",
 							"editor": "termMapper",
-							"src": {
+							"original": {
 								"@type": "koral:term",
 								"foundry": "opennlp",
 								"key": "PIDAT",
@@ -177,8 +177,13 @@ func TestMapper(t *testing.T) {
 						{
 							"@type": "koral:rewrite",
 							"editor": "termMapper",
-							"scope": "foundry",
-							"src": "opennlp"
+							"original": {
+								"@type": "koral:term",
+								"foundry": "opennlp",
+								"key": "PIDAT",
+								"layer": "p",
+								"match": "match:eq"
+							}
 						}
 					]
 				}
