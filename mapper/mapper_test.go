@@ -79,10 +79,11 @@ func TestMapper(t *testing.T) {
 			}`,
 		},
 		{
-			name:      "B to A direction",
+			name:      "Simple A to B mapping with rewrites",
 			mappingID: "test-mapper",
 			opts: MappingOptions{
-				Direction: BtoA,
+				Direction:   AtoB,
+				AddRewrites: true,
 			},
 			input: `{
 				"@type": "koral:token",
@@ -97,21 +98,48 @@ func TestMapper(t *testing.T) {
 			expected: `{
 				"@type": "koral:token",
 				"wrap": {
-					"@type": "koral:term",
-					"foundry": "opennlp",
-					"key": "PIDAT",
-					"layer": "p",
-					"match": "match:eq"
+					"@type": "koral:termGroup",
+					"operands": [
+						{
+							"@type": "koral:term",
+							"foundry": "opennlp",
+							"key": "PIDAT",
+							"layer": "p",
+							"match": "match:eq"
+						},
+						{
+							"@type": "koral:term",
+							"foundry": "opennlp",
+							"key": "AdjType",
+							"layer": "p",
+							"match": "match:eq",
+							"value": "Pdt"
+						}
+					],
+					"relation": "relation:and",
+					"rewrites": [
+						{
+							"@type": "koral:rewrite",
+							"editor": "termMapper",
+							"src": {
+								"@type": "koral:term",
+								"foundry": "opennlp",
+								"key": "PIDAT",
+								"layer": "p",
+								"match": "match:eq"
+							}
+						}
+					]
 				}
 			}`,
-			expectError: false,
 		},
 		{
-			name:      "Mapping with foundry override",
+			name:      "Mapping with foundry override and rewrites",
 			mappingID: "test-mapper",
 			opts: MappingOptions{
-				Direction: AtoB,
-				FoundryB:  "custom",
+				Direction:   AtoB,
+				FoundryB:    "custom",
+				AddRewrites: true,
 			},
 			input: `{
 				"@type": "koral:token",
@@ -144,9 +172,45 @@ func TestMapper(t *testing.T) {
 							"value": "Pdt"
 						}
 					],
-					"relation": "relation:and"
+					"relation": "relation:and",
+					"rewrites": [
+						{
+							"@type": "koral:rewrite",
+							"editor": "termMapper",
+							"scope": "foundry",
+							"src": "opennlp"
+						}
+					]
 				}
 			}`,
+		},
+		{
+			name:      "B to A direction",
+			mappingID: "test-mapper",
+			opts: MappingOptions{
+				Direction: BtoA,
+			},
+			input: `{
+				"@type": "koral:token",
+				"wrap": {
+					"@type": "koral:term",
+					"foundry": "opennlp",
+					"key": "PIDAT",
+					"layer": "p",
+					"match": "match:eq"
+				}
+			}`,
+			expected: `{
+				"@type": "koral:token",
+				"wrap": {
+					"@type": "koral:term",
+					"foundry": "opennlp",
+					"key": "PIDAT",
+					"layer": "p",
+					"match": "match:eq"
+				}
+			}`,
+			expectError: false,
 		},
 		{
 			name:      "Invalid mapping ID",

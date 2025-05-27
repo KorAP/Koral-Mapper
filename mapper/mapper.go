@@ -74,11 +74,12 @@ func NewMapper(lists []config.MappingList) (*Mapper, error) {
 
 // MappingOptions contains the options for applying mappings
 type MappingOptions struct {
-	FoundryA  string
-	LayerA    string
-	FoundryB  string
-	LayerB    string
-	Direction Direction
+	FoundryA    string
+	LayerA      string
+	FoundryB    string
+	LayerB      string
+	Direction   Direction
+	AddRewrites bool
 }
 
 // ApplyQueryMappings applies the specified mapping rules to a JSON object
@@ -144,6 +145,19 @@ func (m *Mapper) ApplyQueryMappings(mappingID string, opts MappingOptions, jsonD
 		node = tokenWrap
 	}
 
+	// Store original node for rewrite if needed
+	var originalNode ast.Node
+	if opts.AddRewrites {
+		originalBytes, err := parser.SerializeToJSON(node)
+		if err != nil {
+			return nil, fmt.Errorf("failed to serialize original node for rewrite: %w", err)
+		}
+		originalNode, err = parser.ParseJSON(originalBytes)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse original node for rewrite: %w", err)
+		}
+	}
+
 	// Apply each rule to the AST
 	for _, rule := range rules {
 		// Create pattern and replacement based on direction
@@ -199,6 +213,98 @@ func (m *Mapper) ApplyQueryMappings(mappingID string, opts MappingOptions, jsonD
 	var resultData any
 	if err := json.Unmarshal(resultBytes, &resultData); err != nil {
 		return nil, fmt.Errorf("failed to parse result JSON: %w", err)
+	}
+
+	// Add rewrites if enabled and node was changed
+	if opts.AddRewrites && !ast.NodesEqual(node, originalNode) {
+		// Create rewrite object
+		rewrite := map[string]any{
+			"@type":  "koral:rewrite",
+			"editor": "termMapper",
+		}
+
+		// Check if all terms in a group have their foundry changed
+		if term, ok := originalNode.(*ast.Term); ok {
+			if termGroup, ok := node.(*ast.TermGroup); ok {
+				// Check if all terms in the group have a different foundry
+				allFoundryChanged := true
+				for _, op := range termGroup.Operands {
+					if t, ok := op.(*ast.Term); ok {
+						if t.Foundry == term.Foundry {
+							allFoundryChanged = false
+							break
+						}
+					}
+				}
+				if allFoundryChanged {
+					rewrite["scope"] = "foundry"
+					rewrite["src"] = term.Foundry
+				} else {
+					// Full node replacement
+					originalBytes, err := parser.SerializeToJSON(originalNode)
+					if err != nil {
+						return nil, fmt.Errorf("failed to serialize original node for rewrite: %w", err)
+					}
+					var originalJSON any
+					if err := json.Unmarshal(originalBytes, &originalJSON); err != nil {
+						return nil, fmt.Errorf("failed to parse original node JSON for rewrite: %w", err)
+					}
+					rewrite["src"] = originalJSON
+				}
+			} else if newTerm, ok := node.(*ast.Term); ok {
+				// Single term changes
+				if term.Foundry != newTerm.Foundry {
+					rewrite["scope"] = "foundry"
+					rewrite["src"] = term.Foundry
+				} else if term.Layer != newTerm.Layer {
+					rewrite["scope"] = "layer"
+					rewrite["src"] = term.Layer
+				} else if term.Key != newTerm.Key {
+					rewrite["scope"] = "key"
+					rewrite["src"] = term.Key
+				} else if term.Value != newTerm.Value {
+					rewrite["scope"] = "value"
+					rewrite["src"] = term.Value
+				} else {
+					// No specific attribute changed, use full node replacement
+					originalBytes, err := parser.SerializeToJSON(originalNode)
+					if err != nil {
+						return nil, fmt.Errorf("failed to serialize original node for rewrite: %w", err)
+					}
+					var originalJSON any
+					if err := json.Unmarshal(originalBytes, &originalJSON); err != nil {
+						return nil, fmt.Errorf("failed to parse original node JSON for rewrite: %w", err)
+					}
+					rewrite["src"] = originalJSON
+				}
+			}
+		} else {
+			// Full node replacement
+			originalBytes, err := parser.SerializeToJSON(originalNode)
+			if err != nil {
+				return nil, fmt.Errorf("failed to serialize original node for rewrite: %w", err)
+			}
+			var originalJSON any
+			if err := json.Unmarshal(originalBytes, &originalJSON); err != nil {
+				return nil, fmt.Errorf("failed to parse original node JSON for rewrite: %w", err)
+			}
+			rewrite["src"] = originalJSON
+		}
+
+		// Add rewrite to the node
+		if resultMap, ok := resultData.(map[string]any); ok {
+			if wrapMap, ok := resultMap["wrap"].(map[string]any); ok {
+				rewrites, exists := wrapMap["rewrites"]
+				if !exists {
+					rewrites = []any{}
+				}
+				if rewritesList, ok := rewrites.([]any); ok {
+					wrapMap["rewrites"] = append(rewritesList, rewrite)
+				} else {
+					wrapMap["rewrites"] = []any{rewrite}
+				}
+			}
+		}
 	}
 
 	// Restore rewrites if they existed
