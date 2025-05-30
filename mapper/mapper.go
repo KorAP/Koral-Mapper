@@ -148,18 +148,30 @@ func (m *Mapper) ApplyQueryMappings(mappingID string, opts MappingOptions, jsonD
 	// Store original node for rewrite if needed
 	var originalNode ast.Node
 	if opts.AddRewrites {
-		originalBytes, err := parser.SerializeToJSON(node)
-		if err != nil {
-			return nil, fmt.Errorf("failed to serialize original node for rewrite: %w", err)
-		}
-		originalNode, err = parser.ParseJSON(originalBytes)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse original node for rewrite: %w", err)
-		}
+		originalNode = node.Clone()
 	}
 
+	// Pre-check foundry/layer overrides to optimize processing
+	var patternFoundry, patternLayer, replacementFoundry, replacementLayer string
+	if opts.Direction { // true means AtoB
+		patternFoundry, patternLayer = opts.FoundryA, opts.LayerA
+		replacementFoundry, replacementLayer = opts.FoundryB, opts.LayerB
+	} else {
+		patternFoundry, patternLayer = opts.FoundryB, opts.LayerB
+		replacementFoundry, replacementLayer = opts.FoundryA, opts.LayerA
+	}
+
+	// Create a pattern cache key for memoization
+	type patternCacheKey struct {
+		ruleIndex     int
+		foundry       string
+		layer         string
+		isReplacement bool
+	}
+	patternCache := make(map[patternCacheKey]ast.Node)
+
 	// Apply each rule to the AST
-	for _, rule := range rules {
+	for i, rule := range rules {
 		// Create pattern and replacement based on direction
 		var pattern, replacement ast.Node
 		if opts.Direction { // true means AtoB
@@ -178,40 +190,55 @@ func (m *Mapper) ApplyQueryMappings(mappingID string, opts MappingOptions, jsonD
 			replacement = token.Wrap
 		}
 
-		// Create deep copies of pattern and replacement to avoid modifying the original parsed rules
-		patternBytes, err := parser.SerializeToJSON(pattern)
-		if err != nil {
-			return nil, fmt.Errorf("failed to serialize pattern for copying: %w", err)
-		}
-		patternCopy, err := parser.ParseJSON(patternBytes)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse pattern copy: %w", err)
+		// First, quickly check if the pattern could match without creating a full matcher
+		// This is a lightweight pre-check to avoid expensive operations
+		if !m.couldPatternMatch(node, pattern) {
+			continue
 		}
 
-		replacementBytes, err := parser.SerializeToJSON(replacement)
-		if err != nil {
-			return nil, fmt.Errorf("failed to serialize replacement for copying: %w", err)
-		}
-		replacementCopy, err := parser.ParseJSON(replacementBytes)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse replacement copy: %w", err)
-		}
-
-		// Apply foundry and layer overrides to the copies
-		if opts.Direction { // true means AtoB
-			applyFoundryAndLayerOverrides(patternCopy, opts.FoundryA, opts.LayerA)
-			applyFoundryAndLayerOverrides(replacementCopy, opts.FoundryB, opts.LayerB)
-		} else {
-			applyFoundryAndLayerOverrides(patternCopy, opts.FoundryB, opts.LayerB)
-			applyFoundryAndLayerOverrides(replacementCopy, opts.FoundryA, opts.LayerA)
+		// Get or create pattern with overrides
+		patternKey := patternCacheKey{ruleIndex: i, foundry: patternFoundry, layer: patternLayer, isReplacement: false}
+		processedPattern, exists := patternCache[patternKey]
+		if !exists {
+			// Clone pattern only when needed
+			processedPattern = pattern.Clone()
+			// Apply foundry and layer overrides only if they're non-empty
+			if patternFoundry != "" || patternLayer != "" {
+				ast.ApplyFoundryAndLayerOverrides(processedPattern, patternFoundry, patternLayer)
+			}
+			patternCache[patternKey] = processedPattern
 		}
 
-		// Create matcher and apply replacement using the copies
-		m, err := matcher.NewMatcher(ast.Pattern{Root: patternCopy}, ast.Replacement{Root: replacementCopy})
+		// Create a temporary matcher to check for actual matches
+		tempMatcher, err := matcher.NewMatcher(ast.Pattern{Root: processedPattern}, ast.Replacement{Root: &ast.Term{}})
+		if err != nil {
+			return nil, fmt.Errorf("failed to create temporary matcher: %w", err)
+		}
+
+		// Only proceed if there's an actual match
+		if !tempMatcher.Match(node) {
+			continue
+		}
+
+		// Get or create replacement with overrides (lazy evaluation)
+		replacementKey := patternCacheKey{ruleIndex: i, foundry: replacementFoundry, layer: replacementLayer, isReplacement: true}
+		processedReplacement, exists := patternCache[replacementKey]
+		if !exists {
+			// Clone replacement only when we have a match
+			processedReplacement = replacement.Clone()
+			// Apply foundry and layer overrides only if they're non-empty
+			if replacementFoundry != "" || replacementLayer != "" {
+				ast.ApplyFoundryAndLayerOverrides(processedReplacement, replacementFoundry, replacementLayer)
+			}
+			patternCache[replacementKey] = processedReplacement
+		}
+
+		// Create the actual matcher and apply replacement
+		actualMatcher, err := matcher.NewMatcher(ast.Pattern{Root: processedPattern}, ast.Replacement{Root: processedReplacement})
 		if err != nil {
 			return nil, fmt.Errorf("failed to create matcher: %w", err)
 		}
-		node = m.Replace(node)
+		node = actualMatcher.Replace(node)
 	}
 
 	// Wrap the result in a token if the input was a token
@@ -374,34 +401,87 @@ func isValidQueryObject(data any) bool {
 	return true
 }
 
-// applyFoundryAndLayerOverrides recursively applies foundry and layer overrides to terms
-func applyFoundryAndLayerOverrides(node ast.Node, foundry, layer string) {
+// couldPatternMatch performs a lightweight check to see if a pattern could potentially match a node
+// This is an optimization to avoid expensive operations when there's clearly no match possible
+func (m *Mapper) couldPatternMatch(node, pattern ast.Node) bool {
+	if pattern == nil {
+		return true
+	}
 	if node == nil {
-		return
+		return false
+	}
+
+	// Handle Token wrappers
+	if token, ok := pattern.(*ast.Token); ok {
+		pattern = token.Wrap
+	}
+	if token, ok := node.(*ast.Token); ok {
+		node = token.Wrap
+	}
+
+	// For simple terms, check basic compatibility
+	if patternTerm, ok := pattern.(*ast.Term); ok {
+		// Check if there's any term in the node structure that could match
+		return m.hasMatchingTerm(node, patternTerm)
+	}
+
+	// For TermGroups, we need to check all possible matches
+	if patternGroup, ok := pattern.(*ast.TermGroup); ok {
+		if patternGroup.Relation == ast.OrRelation {
+			// For OR relations, any operand could match
+			for _, op := range patternGroup.Operands {
+				if m.couldPatternMatch(node, op) {
+					return true
+				}
+			}
+			return false
+		} else {
+			// For AND relations, all operands must have potential matches
+			for _, op := range patternGroup.Operands {
+				if !m.couldPatternMatch(node, op) {
+					return false
+				}
+			}
+			return true
+		}
+	}
+
+	// For other cases, assume they could match (conservative approach)
+	return true
+}
+
+// hasMatchingTerm checks if there's any term in the node structure that could match the pattern term
+func (m *Mapper) hasMatchingTerm(node ast.Node, patternTerm *ast.Term) bool {
+	if node == nil {
+		return false
 	}
 
 	switch n := node.(type) {
 	case *ast.Term:
-		if foundry != "" {
-			n.Foundry = foundry
-		}
-		if layer != "" {
-			n.Layer = layer
-		}
+		// Check if this term could match the pattern
+		// We only check key as that's the most distinctive attribute
+		return n.Key == patternTerm.Key
 	case *ast.TermGroup:
+		// Check all operands
 		for _, op := range n.Operands {
-			applyFoundryAndLayerOverrides(op, foundry, layer)
+			if m.hasMatchingTerm(op, patternTerm) {
+				return true
+			}
 		}
+		return false
 	case *ast.Token:
-		if n.Wrap != nil {
-			applyFoundryAndLayerOverrides(n.Wrap, foundry, layer)
-		}
+		return m.hasMatchingTerm(n.Wrap, patternTerm)
 	case *ast.CatchallNode:
-		if n.Wrap != nil {
-			applyFoundryAndLayerOverrides(n.Wrap, foundry, layer)
+		if n.Wrap != nil && m.hasMatchingTerm(n.Wrap, patternTerm) {
+			return true
 		}
 		for _, op := range n.Operands {
-			applyFoundryAndLayerOverrides(op, foundry, layer)
+			if m.hasMatchingTerm(op, patternTerm) {
+				return true
+			}
 		}
+		return false
+	default:
+		return false
 	}
 }

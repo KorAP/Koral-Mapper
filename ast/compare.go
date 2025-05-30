@@ -21,7 +21,8 @@ func NodesEqual(a, b Node) bool {
 				n1.Key == n2.Key &&
 				n1.Layer == n2.Layer &&
 				n1.Match == n2.Match &&
-				n1.Value == n2.Value
+				n1.Value == n2.Value &&
+				rewritesEqual(n1.Rewrites, n2.Rewrites)
 		}
 	case *TermGroup:
 		if n2, ok := b.(*TermGroup); ok {
@@ -33,20 +34,60 @@ func NodesEqual(a, b Node) bool {
 					return false
 				}
 			}
-			return true
+			return rewritesEqual(n1.Rewrites, n2.Rewrites)
 		}
 	case *Token:
 		if n2, ok := b.(*Token); ok {
-			return NodesEqual(n1.Wrap, n2.Wrap)
+			return NodesEqual(n1.Wrap, n2.Wrap) &&
+				rewritesEqual(n1.Rewrites, n2.Rewrites)
 		}
 	case *CatchallNode:
 		if n2, ok := b.(*CatchallNode); ok {
-			return n1.NodeType == n2.NodeType &&
-				reflect.DeepEqual(n1.RawContent, n2.RawContent) &&
-				NodesEqual(n1.Wrap, n2.Wrap)
+			if n1.NodeType != n2.NodeType ||
+				!reflect.DeepEqual(n1.RawContent, n2.RawContent) ||
+				!NodesEqual(n1.Wrap, n2.Wrap) {
+				return false
+			}
+			// Compare operands
+			if len(n1.Operands) != len(n2.Operands) {
+				return false
+			}
+			for i := range n1.Operands {
+				if !NodesEqual(n1.Operands[i], n2.Operands[i]) {
+					return false
+				}
+			}
+			return true
+		}
+	case *Rewrite:
+		if n2, ok := b.(*Rewrite); ok {
+			return n1.Editor == n2.Editor &&
+				n1.Operation == n2.Operation &&
+				n1.Scope == n2.Scope &&
+				n1.Src == n2.Src &&
+				n1.Comment == n2.Comment &&
+				reflect.DeepEqual(n1.Original, n2.Original)
 		}
 	}
 	return false
+}
+
+// rewritesEqual compares two slices of Rewrite structs for equality
+func rewritesEqual(a, b []Rewrite) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i].Editor != b[i].Editor ||
+			a[i].Operation != b[i].Operation ||
+			a[i].Scope != b[i].Scope ||
+			a[i].Src != b[i].Src ||
+			a[i].Comment != b[i].Comment ||
+			!reflect.DeepEqual(a[i].Original, b[i].Original) {
+			return false
+		}
+	}
+	return true
 }
 
 // IsTermNode checks if a node is a Term node

@@ -29,6 +29,7 @@ const (
 // Node represents a node in the AST
 type Node interface {
 	Type() NodeType
+	Clone() Node
 }
 
 // Rewrite represents a koral:rewrite
@@ -88,6 +89,18 @@ func (r *Rewrite) Type() NodeType {
 	return RewriteNode
 }
 
+// Clone creates a deep copy of the Rewrite node
+func (r *Rewrite) Clone() Node {
+	return &Rewrite{
+		Editor:    r.Editor,
+		Operation: r.Operation,
+		Scope:     r.Scope,
+		Src:       r.Src,
+		Comment:   r.Comment,
+		Original:  r.Original, // Note: this is a shallow copy of the Original field
+	}
+}
+
 // MarshalJSON implements custom JSON marshaling to ensure clean output
 func (r *Rewrite) MarshalJSON() ([]byte, error) {
 	// Create a map with only the modern field names
@@ -128,6 +141,27 @@ func (t *Token) Type() NodeType {
 	return TokenNode
 }
 
+// Clone creates a deep copy of the Token node
+func (t *Token) Clone() Node {
+	var clonedWrap Node
+	if t.Wrap != nil {
+		clonedWrap = t.Wrap.Clone()
+	}
+	tc := &Token{
+		Wrap: clonedWrap,
+	}
+
+	if t.Rewrites != nil {
+		clonedRewrites := make([]Rewrite, len(t.Rewrites))
+		for i, rewrite := range t.Rewrites {
+			clonedRewrites[i] = *rewrite.Clone().(*Rewrite)
+		}
+		tc.Rewrites = clonedRewrites
+	}
+
+	return tc
+}
+
 // TermGroup represents a koral:termGroup
 type TermGroup struct {
 	Operands []Node       `json:"operands"`
@@ -137,6 +171,27 @@ type TermGroup struct {
 
 func (tg *TermGroup) Type() NodeType {
 	return TermGroupNode
+}
+
+// Clone creates a deep copy of the TermGroup node
+func (tg *TermGroup) Clone() Node {
+	clonedOperands := make([]Node, len(tg.Operands))
+	for i, operand := range tg.Operands {
+		clonedOperands[i] = operand.Clone()
+	}
+	tgc := &TermGroup{
+		Operands: clonedOperands,
+		Relation: tg.Relation,
+	}
+	if tg.Rewrites != nil {
+		clonedRewrites := make([]Rewrite, len(tg.Rewrites))
+		for i, rewrite := range tg.Rewrites {
+			clonedRewrites[i] = *rewrite.Clone().(*Rewrite)
+		}
+		tgc.Rewrites = clonedRewrites
+	}
+
+	return tgc
 }
 
 // Term represents a koral:term
@@ -151,6 +206,27 @@ type Term struct {
 
 func (t *Term) Type() NodeType {
 	return TermNode
+}
+
+// Clone creates a deep copy of the Term node
+func (t *Term) Clone() Node {
+
+	tc := &Term{
+		Foundry: t.Foundry,
+		Key:     t.Key,
+		Layer:   t.Layer,
+		Match:   t.Match,
+		Value:   t.Value,
+	}
+
+	if t.Rewrites != nil {
+		clonedRewrites := make([]Rewrite, len(t.Rewrites))
+		for i, rewrite := range t.Rewrites {
+			clonedRewrites[i] = *rewrite.Clone().(*Rewrite)
+		}
+		tc.Rewrites = clonedRewrites
+	}
+	return tc
 }
 
 // Pattern represents a pattern to match in the AST
@@ -173,4 +249,62 @@ type CatchallNode struct {
 
 func (c *CatchallNode) Type() NodeType {
 	return NodeType(c.NodeType)
+}
+
+// Clone creates a deep copy of the CatchallNode
+func (c *CatchallNode) Clone() Node {
+	newNode := &CatchallNode{
+		NodeType: c.NodeType,
+	}
+
+	// Handle RawContent properly - preserve nil if it's nil
+	if c.RawContent != nil {
+		newNode.RawContent = make(json.RawMessage, len(c.RawContent))
+		copy(newNode.RawContent, c.RawContent)
+	}
+
+	if c.Wrap != nil {
+		newNode.Wrap = c.Wrap.Clone()
+	}
+
+	if len(c.Operands) > 0 {
+		newNode.Operands = make([]Node, len(c.Operands))
+		for i, operand := range c.Operands {
+			newNode.Operands[i] = operand.Clone()
+		}
+	}
+
+	return newNode
+}
+
+// ApplyFoundryAndLayerOverrides recursively applies foundry and layer overrides to terms
+func ApplyFoundryAndLayerOverrides(node Node, foundry, layer string) {
+	if node == nil {
+		return
+	}
+
+	switch n := node.(type) {
+	case *Term:
+		if foundry != "" {
+			n.Foundry = foundry
+		}
+		if layer != "" {
+			n.Layer = layer
+		}
+	case *TermGroup:
+		for _, op := range n.Operands {
+			ApplyFoundryAndLayerOverrides(op, foundry, layer)
+		}
+	case *Token:
+		if n.Wrap != nil {
+			ApplyFoundryAndLayerOverrides(n.Wrap, foundry, layer)
+		}
+	case *CatchallNode:
+		if n.Wrap != nil {
+			ApplyFoundryAndLayerOverrides(n.Wrap, foundry, layer)
+		}
+		for _, op := range n.Operands {
+			ApplyFoundryAndLayerOverrides(op, foundry, layer)
+		}
+	}
 }

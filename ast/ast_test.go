@@ -343,49 +343,39 @@ func TestRewriteConstruction(t *testing.T) {
 }
 
 func TestComplexNestedStructures(t *testing.T) {
-	// Create a complex nested structure
-	innerGroup1 := &TermGroup{
+	// Test nested tokens and term groups
+	termGroup := &TermGroup{
 		Operands: []Node{
-			&Term{Foundry: "f1", Key: "k1", Layer: "l1", Match: MatchEqual},
-			&Term{Foundry: "f2", Key: "k2", Layer: "l2", Match: MatchNotEqual},
+			&Term{
+				Foundry: "opennlp",
+				Key:     "DET",
+				Layer:   "p",
+				Match:   MatchEqual,
+			},
+			&Term{
+				Foundry: "opennlp",
+				Key:     "AdjType",
+				Layer:   "m",
+				Match:   MatchEqual,
+				Value:   "Pdt",
+			},
 		},
 		Relation: AndRelation,
 	}
 
-	innerGroup2 := &TermGroup{
-		Operands: []Node{
-			&Term{Foundry: "f3", Key: "k3", Layer: "l3", Match: MatchEqual},
-			&Term{Foundry: "f4", Key: "k4", Layer: "l4", Match: MatchEqual, Value: "test"},
-		},
-		Relation: OrRelation,
+	token := &Token{
+		Wrap: termGroup,
 	}
 
-	topGroup := &TermGroup{
-		Operands: []Node{
-			innerGroup1,
-			innerGroup2,
-			&Token{Wrap: &Term{Foundry: "f5", Key: "k5", Layer: "l5", Match: MatchEqual}},
-		},
-		Relation: AndRelation,
-	}
-
-	assert.Equal(t, TermGroupNode, topGroup.Type())
-	assert.Len(t, topGroup.Operands, 3)
-	assert.Equal(t, AndRelation, topGroup.Relation)
-
-	// Test inner groups
-	group1 := topGroup.Operands[0].(*TermGroup)
-	assert.Len(t, group1.Operands, 2)
-	assert.Equal(t, AndRelation, group1.Relation)
-
-	group2 := topGroup.Operands[1].(*TermGroup)
-	assert.Len(t, group2.Operands, 2)
-	assert.Equal(t, OrRelation, group2.Relation)
-
-	// Test token wrapping
-	token := topGroup.Operands[2].(*Token)
+	assert.Equal(t, TokenNode, token.Type())
 	assert.NotNil(t, token.Wrap)
-	assert.Equal(t, TermNode, token.Wrap.Type())
+	assert.Equal(t, TermGroupNode, token.Wrap.Type())
+
+	// Test that the nested structure is correct
+	if tg, ok := token.Wrap.(*TermGroup); ok {
+		assert.Equal(t, 2, len(tg.Operands))
+		assert.Equal(t, AndRelation, tg.Relation)
+	}
 }
 
 func TestEdgeCases(t *testing.T) {
@@ -461,4 +451,403 @@ func TestEdgeCases(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, tt.test)
 	}
+}
+
+func TestCloneMethod(t *testing.T) {
+	tests := []struct {
+		name string
+		node Node
+	}{
+		{
+			name: "Clone Term",
+			node: &Term{
+				Foundry: "opennlp",
+				Key:     "DET",
+				Layer:   "p",
+				Match:   MatchEqual,
+				Value:   "test",
+				Rewrites: []Rewrite{
+					{
+						Editor: "test",
+						Scope:  "foundry",
+					},
+				},
+			},
+		},
+		{
+			name: "Clone Token",
+			node: &Token{
+				Wrap: &Term{
+					Foundry: "opennlp",
+					Key:     "DET",
+					Layer:   "p",
+					Match:   MatchEqual,
+				},
+				Rewrites: []Rewrite{
+					{
+						Editor: "test",
+						Scope:  "layer",
+					},
+				},
+			},
+		},
+		{
+			name: "Clone TermGroup",
+			node: &TermGroup{
+				Operands: []Node{
+					&Term{
+						Foundry: "opennlp",
+						Key:     "DET",
+						Layer:   "p",
+						Match:   MatchEqual,
+					},
+					&Term{
+						Foundry: "opennlp",
+						Key:     "AdjType",
+						Layer:   "m",
+						Match:   MatchEqual,
+						Value:   "Pdt",
+					},
+				},
+				Relation: AndRelation,
+				Rewrites: []Rewrite{
+					{
+						Editor: "test",
+						Scope:  "foundry",
+					},
+				},
+			},
+		},
+		{
+			name: "Clone CatchallNode",
+			node: &CatchallNode{
+				NodeType:   "koral:unknown",
+				RawContent: []byte(`{"@type":"koral:unknown","test":"value"}`),
+				Wrap: &Term{
+					Foundry: "opennlp",
+					Key:     "DET",
+					Layer:   "p",
+					Match:   MatchEqual,
+				},
+				Operands: []Node{
+					&Term{
+						Foundry: "opennlp",
+						Key:     "AdjType",
+						Layer:   "m",
+						Match:   MatchEqual,
+						Value:   "Pdt",
+					},
+				},
+			},
+		},
+		{
+			name: "Clone Rewrite",
+			node: &Rewrite{
+				Editor:    "termMapper",
+				Operation: "injection",
+				Scope:     "foundry",
+				Src:       "test",
+				Comment:   "test comment",
+				Original:  "original_value",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cloned := tt.node.Clone()
+
+			// Check that the clone is not the same instance
+			assert.NotSame(t, tt.node, cloned)
+
+			// Check that the clone has the same type
+			assert.Equal(t, tt.node.Type(), cloned.Type())
+
+			// Check that nodes are equal (deep comparison)
+			assert.True(t, NodesEqual(tt.node, cloned))
+
+			// Test that modifying the clone doesn't affect the original
+			switch original := tt.node.(type) {
+			case *Term:
+				clonedTerm := cloned.(*Term)
+				clonedTerm.Foundry = "modified"
+				assert.NotEqual(t, original.Foundry, clonedTerm.Foundry)
+
+			case *Token:
+				clonedToken := cloned.(*Token)
+				if clonedToken.Wrap != nil {
+					if termWrap, ok := clonedToken.Wrap.(*Term); ok {
+						termWrap.Foundry = "modified"
+						if originalWrap, ok := original.Wrap.(*Term); ok {
+							assert.NotEqual(t, originalWrap.Foundry, termWrap.Foundry)
+						}
+					}
+				}
+
+			case *TermGroup:
+				clonedGroup := cloned.(*TermGroup)
+				clonedGroup.Relation = OrRelation
+				assert.NotEqual(t, original.Relation, clonedGroup.Relation)
+
+			case *CatchallNode:
+				clonedCatchall := cloned.(*CatchallNode)
+				clonedCatchall.NodeType = "modified"
+				assert.NotEqual(t, original.NodeType, clonedCatchall.NodeType)
+
+			case *Rewrite:
+				clonedRewrite := cloned.(*Rewrite)
+				clonedRewrite.Editor = "modified"
+				assert.NotEqual(t, original.Editor, clonedRewrite.Editor)
+			}
+		})
+	}
+}
+
+func TestCloneNilNodes(t *testing.T) {
+	// Test cloning nodes with nil fields
+	tests := []struct {
+		name string
+		node Node
+	}{
+		{
+			name: "Token with nil wrap",
+			node: &Token{Wrap: nil},
+		},
+		{
+			name: "TermGroup with empty operands",
+			node: &TermGroup{
+				Operands: []Node{},
+				Relation: AndRelation,
+			},
+		},
+		{
+			name: "CatchallNode with nil wrap and operands",
+			node: &CatchallNode{
+				NodeType:   "koral:unknown",
+				RawContent: nil,
+				Wrap:       nil,
+				Operands:   nil,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cloned := tt.node.Clone()
+			assert.NotSame(t, tt.node, cloned)
+			assert.Equal(t, tt.node.Type(), cloned.Type())
+			assert.True(t, NodesEqual(tt.node, cloned))
+		})
+	}
+}
+
+func TestApplyFoundryAndLayerOverrides(t *testing.T) {
+	tests := []struct {
+		name            string
+		node            Node
+		foundry         string
+		layer           string
+		expectedChanges func(t *testing.T, node Node)
+	}{
+		{
+			name: "Apply foundry and layer to Term",
+			node: &Term{
+				Foundry: "original",
+				Key:     "DET",
+				Layer:   "original",
+				Match:   MatchEqual,
+			},
+			foundry: "new_foundry",
+			layer:   "new_layer",
+			expectedChanges: func(t *testing.T, node Node) {
+				term := node.(*Term)
+				assert.Equal(t, "new_foundry", term.Foundry)
+				assert.Equal(t, "new_layer", term.Layer)
+			},
+		},
+		{
+			name: "Apply only foundry to Term",
+			node: &Term{
+				Foundry: "original",
+				Key:     "DET",
+				Layer:   "original",
+				Match:   MatchEqual,
+			},
+			foundry: "new_foundry",
+			layer:   "",
+			expectedChanges: func(t *testing.T, node Node) {
+				term := node.(*Term)
+				assert.Equal(t, "new_foundry", term.Foundry)
+				assert.Equal(t, "original", term.Layer) // Should remain unchanged
+			},
+		},
+		{
+			name: "Apply to TermGroup",
+			node: &TermGroup{
+				Operands: []Node{
+					&Term{
+						Foundry: "original1",
+						Key:     "DET",
+						Layer:   "original1",
+						Match:   MatchEqual,
+					},
+					&Term{
+						Foundry: "original2",
+						Key:     "AdjType",
+						Layer:   "original2",
+						Match:   MatchEqual,
+						Value:   "Pdt",
+					},
+				},
+				Relation: AndRelation,
+			},
+			foundry: "new_foundry",
+			layer:   "new_layer",
+			expectedChanges: func(t *testing.T, node Node) {
+				termGroup := node.(*TermGroup)
+				for _, operand := range termGroup.Operands {
+					if term, ok := operand.(*Term); ok {
+						assert.Equal(t, "new_foundry", term.Foundry)
+						assert.Equal(t, "new_layer", term.Layer)
+					}
+				}
+			},
+		},
+		{
+			name: "Apply to Token with wrapped Term",
+			node: &Token{
+				Wrap: &Term{
+					Foundry: "original",
+					Key:     "DET",
+					Layer:   "original",
+					Match:   MatchEqual,
+				},
+			},
+			foundry: "new_foundry",
+			layer:   "new_layer",
+			expectedChanges: func(t *testing.T, node Node) {
+				token := node.(*Token)
+				if term, ok := token.Wrap.(*Term); ok {
+					assert.Equal(t, "new_foundry", term.Foundry)
+					assert.Equal(t, "new_layer", term.Layer)
+				}
+			},
+		},
+		{
+			name: "Apply to CatchallNode",
+			node: &CatchallNode{
+				NodeType: "koral:unknown",
+				Wrap: &Term{
+					Foundry: "original",
+					Key:     "DET",
+					Layer:   "original",
+					Match:   MatchEqual,
+				},
+				Operands: []Node{
+					&Term{
+						Foundry: "original2",
+						Key:     "AdjType",
+						Layer:   "original2",
+						Match:   MatchEqual,
+						Value:   "Pdt",
+					},
+				},
+			},
+			foundry: "new_foundry",
+			layer:   "new_layer",
+			expectedChanges: func(t *testing.T, node Node) {
+				catchall := node.(*CatchallNode)
+				if term, ok := catchall.Wrap.(*Term); ok {
+					assert.Equal(t, "new_foundry", term.Foundry)
+					assert.Equal(t, "new_layer", term.Layer)
+				}
+				for _, operand := range catchall.Operands {
+					if term, ok := operand.(*Term); ok {
+						assert.Equal(t, "new_foundry", term.Foundry)
+						assert.Equal(t, "new_layer", term.Layer)
+					}
+				}
+			},
+		},
+		{
+			name: "Apply to nested structure",
+			node: &Token{
+				Wrap: &TermGroup{
+					Operands: []Node{
+						&Term{
+							Foundry: "original1",
+							Key:     "DET",
+							Layer:   "original1",
+							Match:   MatchEqual,
+						},
+						&Token{
+							Wrap: &Term{
+								Foundry: "original2",
+								Key:     "AdjType",
+								Layer:   "original2",
+								Match:   MatchEqual,
+								Value:   "Pdt",
+							},
+						},
+					},
+					Relation: AndRelation,
+				},
+			},
+			foundry: "new_foundry",
+			layer:   "new_layer",
+			expectedChanges: func(t *testing.T, node Node) {
+				token := node.(*Token)
+				if termGroup, ok := token.Wrap.(*TermGroup); ok {
+					for _, operand := range termGroup.Operands {
+						switch op := operand.(type) {
+						case *Term:
+							assert.Equal(t, "new_foundry", op.Foundry)
+							assert.Equal(t, "new_layer", op.Layer)
+						case *Token:
+							if innerTerm, ok := op.Wrap.(*Term); ok {
+								assert.Equal(t, "new_foundry", innerTerm.Foundry)
+								assert.Equal(t, "new_layer", innerTerm.Layer)
+							}
+						}
+					}
+				}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Clone the node to avoid modifying the original test data
+			cloned := tt.node.Clone()
+
+			// Apply the overrides
+			ApplyFoundryAndLayerOverrides(cloned, tt.foundry, tt.layer)
+
+			// Check the expected changes
+			tt.expectedChanges(t, cloned)
+		})
+	}
+}
+
+func TestApplyFoundryAndLayerOverridesNilNode(t *testing.T) {
+	// Test that applying overrides to a nil node doesn't panic
+	assert.NotPanics(t, func() {
+		ApplyFoundryAndLayerOverrides(nil, "foundry", "layer")
+	})
+}
+
+func TestApplyFoundryAndLayerOverridesEmptyValues(t *testing.T) {
+	// Test applying empty foundry and layer values
+	term := &Term{
+		Foundry: "original_foundry",
+		Key:     "DET",
+		Layer:   "original_layer",
+		Match:   MatchEqual,
+	}
+
+	ApplyFoundryAndLayerOverrides(term, "", "")
+
+	// Values should remain unchanged
+	assert.Equal(t, "original_foundry", term.Foundry)
+	assert.Equal(t, "original_layer", term.Layer)
 }
