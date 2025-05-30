@@ -1,69 +1,57 @@
-# KoralPipe-TermMapper2
+# KoralPipe-TermMapper
 
-A web service for transforming JSON objects using term mapping rules.
+A KorAP service using the KoralPipe mechanism to rewrite terms in queries and responses between different annotations.
 
 ## Overview
 
-This service provides a REST API for transforming JSON objects according to mapping rules defined in a YAML configuration file. The mappings can be applied in both directions (A to B or B to A) and support foundry and layer overrides.
+KoralPipe-TermMapper is a tool for transforming linguistic annotations between different annotation schemes. It allows you to define mapping rules in YAML configuration files and apply these mappings to JSON-encoded linguistic annotations.
 
 ## Installation
 
 ```bash
-go get github.com/KorAP/KoralPipe-TermMapper2
+go get github.com/KorAP/KoralPipe-TermMapper
 ```
 
 ## Usage
 
-### Starting the Server
-
 ```bash
 termmapper -c config.yaml -p 8080 -l info
 ```
-
 Command line options:
 - `--config` or `-c`: YAML configuration file containing mapping directives (required)
 - `--port` or `-p`: Port to listen on (default: 8080)
 - `--log-level` or `-l`: Log level (debug, info, warn, error) (default: info)
 - `--help` or `-h`: Show help message
 
-### Configuration File Format
+## Configuration File Format
 
-The configuration file should be in YAML format and contain a list of mapping definitions:
+Mapping rules are defined in YAML files with the following structure:
 
 ```yaml
-- id: opennlp-mapper
-  foundryA: opennlp
-  layerA: p
-  foundryB: upos
-  layerB: p
+- id: mapping-list-id
+  foundryA: source-foundry
+  layerA: source-layer
+  foundryB: target-foundry
+  layerB: target-layer
   mappings:
-    - "[PIDAT] <> [opennlp/p=PIDAT & opennlp/p=AdjType:Pdt]"
-    - "[DET] <> [opennlp/p=DET]"
-
-- id: simple-mapper
-  mappings:
-    - "[A] <> [B]"
+    - "[pattern1] <> [replacement1]"
+    - "[pattern2] <> [replacement2]"
 ```
 
-Each mapping list has:
-- `id`: Unique identifier for the mapping list
-- `foundryA`, `layerA`: Default foundry and layer for the left side of mappings
-- `foundryB`, `layerB`: Default foundry and layer for the right side of mappings
-- `mappings`: List of mapping rules in the format `[pattern] <> [replacement]`
+Each mapping rule consists of two patterns separated by `<>`. The patterns can be:
+- Simple terms: `[key]` or `[foundry/layer=key]` or `[foundry/layer=key:value]`
+- Complex terms with AND/OR relations: `[term1 & term2]` or `[term1 | term2]` or `[term1 | (term2 & term3)]`
 
-### API Endpoints
+## API Endpoints
 
-#### Transform JSON Object
-
-```http
-POST /:map/query
-```
+### POST /:map/query
 
 Transform a JSON object using the specified mapping list.
 
 Parameters:
+
 - `:map`: ID of the mapping list to use
-- `dir` (query): Direction of transformation (`atob` or `btoa`, default: `atob`)
+- `dir` (query): Direction of transformation (atob or `btoa`, default: `atob`)
 - `foundryA` (query): Override default foundryA from mapping list
 - `foundryB` (query): Override default foundryB from mapping list
 - `layerA` (query): Override default layerA from mapping list
@@ -72,6 +60,7 @@ Parameters:
 Request body: JSON object to transform
 
 Example request:
+
 ```http
 POST /opennlp-mapper/query?dir=atob&foundryB=custom HTTP/1.1
 Content-Type: application/json
@@ -89,6 +78,7 @@ Content-Type: application/json
 ```
 
 Example response:
+
 ```json
 {
   "@type": "koral:token",
@@ -116,24 +106,22 @@ Example response:
 }
 ```
 
-#### Health Check
+## Progress
 
-```http
-GET /health
-```
+- [x] Mapping functionality
+- [x] Support for rewrites
+- [x] Web service
+- [ ] Support for negation
+- [ ] JSON script for Kalamar integration
+- [ ] Response rewriting
+- [ ] Integration of mapping files
 
-Returns "OK" if the service is running.
+## COPYRIGHT AND LICENSE
 
-## Development
+Copyright (C) 2025, [IDS Mannheim](https://www.ids-mannheim.de/)<br>
+Author: [Nils Diewald](https://www.nils-diewald.de/)
 
-### Running Tests
+TermMapper is free software published under the
+[BSD-2 License](https://opensource.org/licenses/BSD-2-Clause).
 
-```bash
-go test ./...
-```
-
-### Building
-
-```bash
-go build -o termmapper ./cmd/termmapper
-``` 
+*Disclaimer*: This software was developed (as an experiment) with major assistance by AI (mainly Claude 3.5-sonnet and Claude 4-sonnet).
