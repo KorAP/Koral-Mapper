@@ -38,10 +38,84 @@ type Rewrite struct {
 	Scope     string `json:"scope,omitempty"`
 	Src       string `json:"src,omitempty"`
 	Comment   string `json:"_comment,omitempty"`
+	Original  any    `json:"original,omitempty"`
+}
+
+// UnmarshalJSON implements custom JSON unmarshaling for backward compatibility
+func (r *Rewrite) UnmarshalJSON(data []byte) error {
+	// Create a temporary struct to hold all possible fields
+	var temp struct {
+		Type      string `json:"@type,omitempty"`
+		Editor    string `json:"editor,omitempty"`
+		Source    string `json:"source,omitempty"`    // legacy field
+		Operation string `json:"operation,omitempty"` // legacy field
+		Scope     string `json:"scope,omitempty"`
+		Src       string `json:"src,omitempty"`
+		Origin    string `json:"origin,omitempty"` // legacy field
+		Original  any    `json:"original,omitempty"`
+		Comment   string `json:"_comment,omitempty"`
+	}
+
+	if err := json.Unmarshal(data, &temp); err != nil {
+		return err
+	}
+
+	// Apply precedence for editor field: editor >> source
+	if temp.Editor != "" {
+		r.Editor = temp.Editor
+	} else if temp.Source != "" {
+		r.Editor = temp.Source
+	}
+
+	// Apply precedence for original/src/origin: original >> src >> origin
+	if temp.Original != nil {
+		r.Original = temp.Original
+	} else if temp.Src != "" {
+		r.Src = temp.Src
+	} else if temp.Origin != "" {
+		r.Src = temp.Origin
+	}
+
+	// Copy other fields
+	r.Operation = temp.Operation
+	r.Scope = temp.Scope
+	r.Comment = temp.Comment
+
+	return nil
 }
 
 func (r *Rewrite) Type() NodeType {
 	return RewriteNode
+}
+
+// MarshalJSON implements custom JSON marshaling to ensure clean output
+func (r *Rewrite) MarshalJSON() ([]byte, error) {
+	// Create a map with only the modern field names
+	result := make(map[string]any)
+
+	// Always include @type if this is a rewrite
+	result["@type"] = "koral:rewrite"
+
+	if r.Editor != "" {
+		result["editor"] = r.Editor
+	}
+	if r.Operation != "" {
+		result["operation"] = r.Operation
+	}
+	if r.Scope != "" {
+		result["scope"] = r.Scope
+	}
+	if r.Src != "" {
+		result["src"] = r.Src
+	}
+	if r.Comment != "" {
+		result["_comment"] = r.Comment
+	}
+	if r.Original != nil {
+		result["original"] = r.Original
+	}
+
+	return json.Marshal(result)
 }
 
 // Token represents a koral:token

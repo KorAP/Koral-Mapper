@@ -178,17 +178,36 @@ func (m *Mapper) ApplyQueryMappings(mappingID string, opts MappingOptions, jsonD
 			replacement = token.Wrap
 		}
 
-		// Apply foundry and layer overrides
-		if opts.Direction { // true means AtoB
-			applyFoundryAndLayerOverrides(pattern, opts.FoundryA, opts.LayerA)
-			applyFoundryAndLayerOverrides(replacement, opts.FoundryB, opts.LayerB)
-		} else {
-			applyFoundryAndLayerOverrides(pattern, opts.FoundryB, opts.LayerB)
-			applyFoundryAndLayerOverrides(replacement, opts.FoundryA, opts.LayerA)
+		// Create deep copies of pattern and replacement to avoid modifying the original parsed rules
+		patternBytes, err := parser.SerializeToJSON(pattern)
+		if err != nil {
+			return nil, fmt.Errorf("failed to serialize pattern for copying: %w", err)
+		}
+		patternCopy, err := parser.ParseJSON(patternBytes)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse pattern copy: %w", err)
 		}
 
-		// Create matcher and apply replacement
-		m, err := matcher.NewMatcher(ast.Pattern{Root: pattern}, ast.Replacement{Root: replacement})
+		replacementBytes, err := parser.SerializeToJSON(replacement)
+		if err != nil {
+			return nil, fmt.Errorf("failed to serialize replacement for copying: %w", err)
+		}
+		replacementCopy, err := parser.ParseJSON(replacementBytes)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse replacement copy: %w", err)
+		}
+
+		// Apply foundry and layer overrides to the copies
+		if opts.Direction { // true means AtoB
+			applyFoundryAndLayerOverrides(patternCopy, opts.FoundryA, opts.LayerA)
+			applyFoundryAndLayerOverrides(replacementCopy, opts.FoundryB, opts.LayerB)
+		} else {
+			applyFoundryAndLayerOverrides(patternCopy, opts.FoundryB, opts.LayerB)
+			applyFoundryAndLayerOverrides(replacementCopy, opts.FoundryA, opts.LayerA)
+		}
+
+		// Create matcher and apply replacement using the copies
+		m, err := matcher.NewMatcher(ast.Pattern{Root: patternCopy}, ast.Replacement{Root: replacementCopy})
 		if err != nil {
 			return nil, fmt.Errorf("failed to create matcher: %w", err)
 		}
@@ -293,8 +312,38 @@ func (m *Mapper) ApplyQueryMappings(mappingID string, opts MappingOptions, jsonD
 
 	// Restore rewrites if they existed
 	if oldRewrites != nil {
-		if resultMap, ok := resultData.(map[string]any); ok {
-			resultMap["rewrites"] = oldRewrites
+		// Process old rewrites through AST to ensure backward compatibility
+		if rewritesList, ok := oldRewrites.([]any); ok {
+			processedRewrites := make([]any, len(rewritesList))
+			for i, rewriteData := range rewritesList {
+				// Marshal and unmarshal each rewrite to apply backward compatibility
+				rewriteBytes, err := json.Marshal(rewriteData)
+				if err != nil {
+					return nil, fmt.Errorf("failed to marshal old rewrite %d: %w", i, err)
+				}
+				var rewrite ast.Rewrite
+				if err := json.Unmarshal(rewriteBytes, &rewrite); err != nil {
+					return nil, fmt.Errorf("failed to unmarshal old rewrite %d: %w", i, err)
+				}
+				// Marshal back to get the transformed version
+				transformedBytes, err := json.Marshal(&rewrite)
+				if err != nil {
+					return nil, fmt.Errorf("failed to marshal transformed rewrite %d: %w", i, err)
+				}
+				var transformedRewrite any
+				if err := json.Unmarshal(transformedBytes, &transformedRewrite); err != nil {
+					return nil, fmt.Errorf("failed to unmarshal transformed rewrite %d: %w", i, err)
+				}
+				processedRewrites[i] = transformedRewrite
+			}
+			if resultMap, ok := resultData.(map[string]any); ok {
+				resultMap["rewrites"] = processedRewrites
+			}
+		} else {
+			// If it's not a list, restore as-is
+			if resultMap, ok := resultData.(map[string]any); ok {
+				resultMap["rewrites"] = oldRewrites
+			}
 		}
 	}
 

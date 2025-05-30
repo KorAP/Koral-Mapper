@@ -263,6 +263,149 @@ func TestMapper(t *testing.T) {
 			}`,
 			expectError: false,
 		},
+		{
+			name:      "Query with legacy rewrite field names",
+			mappingID: "test-mapper",
+			opts: MappingOptions{
+				Direction: AtoB,
+			},
+			input: `{
+				"@type": "koral:token",
+				"rewrites": [
+					{
+						"@type": "koral:rewrite",
+						"_comment": "Legacy rewrite with source instead of editor",
+						"source": "LegacyEditor",
+						"operation": "operation:legacy",
+						"origin": "LegacySource"
+					}
+				],
+				"wrap": {
+					"@type": "koral:term",
+					"foundry": "opennlp",
+					"key": "PIDAT",
+					"layer": "p",
+					"match": "match:eq"
+				}
+			}`,
+			expected: `{
+				"@type": "koral:token",
+				"rewrites": [
+					{
+						"@type": "koral:rewrite",
+						"_comment": "Legacy rewrite with source instead of editor",
+						"editor": "LegacyEditor",
+						"operation": "operation:legacy",
+						"src": "LegacySource"
+					}
+				],
+				"wrap": {
+					"@type": "koral:termGroup",
+					"operands": [
+						{
+							"@type": "koral:term",
+							"foundry": "opennlp",
+							"key": "PIDAT",
+							"layer": "p",
+							"match": "match:eq"
+						},
+						{
+							"@type": "koral:term",
+							"foundry": "opennlp",
+							"key": "AdjType",
+							"layer": "p",
+							"match": "match:eq",
+							"value": "Pdt"
+						}
+					],
+					"relation": "relation:and"
+				}
+			}`,
+		},
+		{
+			name:      "Query with mixed legacy and modern rewrite fields",
+			mappingID: "test-mapper",
+			opts: MappingOptions{
+				Direction: AtoB,
+			},
+			input: `{
+				"@type": "koral:token",
+				"rewrites": [
+					{
+						"@type": "koral:rewrite",
+						"_comment": "Modern rewrite",
+						"editor": "ModernEditor",
+						"operation": "operation:modern",
+						"original": {
+							"@type": "koral:term",
+							"foundry": "original",
+							"key": "original-key"
+						}
+					},
+					{
+						"@type": "koral:rewrite",
+						"_comment": "Legacy rewrite with precedence test",
+						"editor": "PreferredEditor",
+						"source": "IgnoredSource",
+						"operation": "operation:precedence",
+						"original": "PreferredOriginal",
+						"src": "IgnoredSrc",
+						"origin": "IgnoredOrigin"
+					}
+				],
+				"wrap": {
+					"@type": "koral:term",
+					"foundry": "opennlp",
+					"key": "PIDAT",
+					"layer": "p",
+					"match": "match:eq"
+				}
+			}`,
+			expected: `{
+				"@type": "koral:token",
+				"rewrites": [
+					{
+						"@type": "koral:rewrite",
+						"_comment": "Modern rewrite",
+						"editor": "ModernEditor",
+						"operation": "operation:modern",
+						"original": {
+							"@type": "koral:term",
+							"foundry": "original",
+							"key": "original-key"
+						}
+					},
+					{
+						"@type": "koral:rewrite",
+						"_comment": "Legacy rewrite with precedence test",
+						"editor": "PreferredEditor",
+						"operation": "operation:precedence",
+						"original": "PreferredOriginal"
+					}
+				],
+				"wrap": {
+					"@type": "koral:termGroup",
+					"operands": [
+						{
+							"@type": "koral:term",
+							"foundry": "opennlp",
+							"key": "PIDAT",
+							"layer": "p",
+							"match": "match:eq"
+						},
+						{
+							"@type": "koral:term",
+							"foundry": "opennlp",
+							"key": "AdjType",
+							"layer": "p",
+							"match": "match:eq",
+							"value": "Pdt"
+						}
+					],
+					"relation": "relation:and"
+				}
+			}`,
+		},
 	}
 
 	for _, tt := range tests {

@@ -24,7 +24,7 @@ type rawNode struct {
 	Layer    string          `json:"layer,omitempty"`
 	Match    string          `json:"match,omitempty"`
 	Value    string          `json:"value,omitempty"`
-	Rewrites []ast.Rewrite   `json:"rewrites,omitempty"`
+	Rewrites []ast.Rewrite   `json:"-"` // Handle manually
 	// Store any additional fields
 	Extra map[string]any `json:"-"`
 }
@@ -37,13 +37,52 @@ func (r *rawNode) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
-	// Create a temporary struct to unmarshal known fields
-	type tempNode rawNode
+	// Create a temporary struct without the problematic fields
+	type tempNode struct {
+		Type     string          `json:"@type"`
+		Wrap     json.RawMessage `json:"wrap,omitempty"`
+		Operands []rawNode       `json:"operands,omitempty"`
+		Relation string          `json:"relation,omitempty"`
+		Foundry  string          `json:"foundry,omitempty"`
+		Key      string          `json:"key,omitempty"`
+		Layer    string          `json:"layer,omitempty"`
+		Match    string          `json:"match,omitempty"`
+		Value    string          `json:"value,omitempty"`
+	}
+
 	var temp tempNode
 	if err := json.Unmarshal(data, &temp); err != nil {
 		return err
 	}
-	*r = rawNode(temp)
+
+	// Copy the fields
+	r.Type = temp.Type
+	r.Wrap = temp.Wrap
+	r.Operands = temp.Operands
+	r.Relation = temp.Relation
+	r.Foundry = temp.Foundry
+	r.Key = temp.Key
+	r.Layer = temp.Layer
+	r.Match = temp.Match
+	r.Value = temp.Value
+
+	// Handle rewrites manually
+	if rewritesData, exists := raw["rewrites"]; exists && rewritesData != nil {
+		if rewritesList, ok := rewritesData.([]any); ok {
+			r.Rewrites = make([]ast.Rewrite, len(rewritesList))
+			for i, rewriteData := range rewritesList {
+				rewriteBytes, err := json.Marshal(rewriteData)
+				if err != nil {
+					return fmt.Errorf("failed to marshal rewrite %d: %w", i, err)
+				}
+				var rewrite ast.Rewrite
+				if err := json.Unmarshal(rewriteBytes, &rewrite); err != nil {
+					return fmt.Errorf("failed to unmarshal rewrite %d: %w", i, err)
+				}
+				r.Rewrites[i] = rewrite
+			}
+		}
+	}
 
 	// Store any fields not in the struct in Extra
 	r.Extra = make(map[string]any)
