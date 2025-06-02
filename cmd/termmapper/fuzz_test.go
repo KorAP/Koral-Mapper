@@ -120,15 +120,20 @@ func FuzzTransformEndpoint(f *testing.F) {
 		}
 
 		// Verify that the response is valid JSON
-		var result map[string]any
+		var result any
 		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 			t.Errorf("invalid JSON response: %v", err)
 		}
 
 		// For error responses, verify that we have an error message
 		if resp.StatusCode != http.StatusOK {
-			if errMsg, ok := result["error"].(string); !ok || errMsg == "" {
-				t.Error("error response missing error message")
+			// For error responses, we expect a JSON object with an error field
+			if resultMap, ok := result.(map[string]any); ok {
+				if errMsg, ok := resultMap["error"].(string); !ok || errMsg == "" {
+					t.Error("error response missing error message")
+				}
+			} else {
+				t.Error("error response should be a JSON object")
 			}
 		}
 	})
