@@ -362,3 +362,215 @@ func TestParseMappingsEdgeCases(t *testing.T) {
 		})
 	}
 }
+
+func TestUserProvidedMappingRules(t *testing.T) {
+	// Test the exact YAML mapping rules provided by the user
+	content := `
+- id: stts-ud
+  foundryA: opennlp
+  layerA: p
+  foundryB: upos
+  layerB: p
+  mappings:
+    - "[$\\(] <> [PUNCT & PunctType=Brck]"
+    - "[$,] <> [PUNCT & PunctType=Comm]"
+    - "[$.] <> [PUNCT & PunctType=Peri]"
+    - "[ADJA] <> [ADJ]"
+    - "[ADJD] <> [ADJ & Variant=Short]"
+    - "[ADV] <> [ADV]"
+`
+	tmpfile, err := os.CreateTemp("", "user-config-*.yaml")
+	require.NoError(t, err)
+	defer os.Remove(tmpfile.Name())
+
+	_, err = tmpfile.WriteString(content)
+	require.NoError(t, err)
+	err = tmpfile.Close()
+	require.NoError(t, err)
+
+	// Test loading the configuration
+	config, err := LoadConfig(tmpfile.Name())
+	require.NoError(t, err)
+
+	// Verify the configuration loaded correctly
+	require.Len(t, config.Lists, 1)
+	list := config.Lists[0]
+	assert.Equal(t, "stts-ud", list.ID)
+	assert.Equal(t, "opennlp", list.FoundryA)
+	assert.Equal(t, "p", list.LayerA)
+	assert.Equal(t, "upos", list.FoundryB)
+	assert.Equal(t, "p", list.LayerB)
+	require.Len(t, list.Mappings, 6)
+
+	// First, test individual mappings to isolate the issue
+	t.Run("parenthesis mapping", func(t *testing.T) {
+		singleRule := &MappingList{
+			ID:       "test-paren",
+			FoundryA: "opennlp",
+			LayerA:   "p",
+			FoundryB: "upos",
+			LayerB:   "p",
+			Mappings: []MappingRule{"[$\\(] <> [PUNCT & PunctType=Brck]"},
+		}
+		results, err := singleRule.ParseMappings()
+		require.NoError(t, err)
+		require.Len(t, results, 1)
+
+		upperTerm := results[0].Upper.Wrap.(*ast.Term)
+		assert.Equal(t, "$(", upperTerm.Key)
+	})
+
+	t.Run("comma mapping", func(t *testing.T) {
+		singleRule := &MappingList{
+			ID:       "test-comma",
+			FoundryA: "opennlp",
+			LayerA:   "p",
+			FoundryB: "upos",
+			LayerB:   "p",
+			Mappings: []MappingRule{"[$,] <> [PUNCT & PunctType=Comm]"},
+		}
+		results, err := singleRule.ParseMappings()
+		require.NoError(t, err)
+		require.Len(t, results, 1)
+
+		upperTerm := results[0].Upper.Wrap.(*ast.Term)
+		assert.Equal(t, "$,", upperTerm.Key)
+	})
+
+	t.Run("period mapping", func(t *testing.T) {
+		singleRule := &MappingList{
+			ID:       "test-period",
+			FoundryA: "opennlp",
+			LayerA:   "p",
+			FoundryB: "upos",
+			LayerB:   "p",
+			Mappings: []MappingRule{"[$.] <> [PUNCT & PunctType=Peri]"},
+		}
+		results, err := singleRule.ParseMappings()
+		require.NoError(t, err)
+		require.Len(t, results, 1)
+
+		upperTerm := results[0].Upper.Wrap.(*ast.Term)
+		assert.Equal(t, "$.", upperTerm.Key)
+	})
+
+	// Test that all mapping rules can be parsed successfully
+	results, err := list.ParseMappings()
+	require.NoError(t, err)
+	require.Len(t, results, 6)
+
+	// Verify specific parsing of the special character mapping
+	// The first mapping "[$\\(] <> [PUNCT & PunctType=Brck]" should parse correctly
+	firstMapping := results[0]
+	require.NotNil(t, firstMapping.Upper)
+	upperTerm := firstMapping.Upper.Wrap.(*ast.Term)
+	assert.Equal(t, "$(", upperTerm.Key) // The actual parsed key should be "$("
+	assert.Equal(t, "opennlp", upperTerm.Foundry)
+	assert.Equal(t, "p", upperTerm.Layer)
+
+	require.NotNil(t, firstMapping.Lower)
+	lowerGroup := firstMapping.Lower.Wrap.(*ast.TermGroup)
+	require.Len(t, lowerGroup.Operands, 2)
+	assert.Equal(t, ast.AndRelation, lowerGroup.Relation)
+
+	// Check the PUNCT term
+	punctTerm := lowerGroup.Operands[0].(*ast.Term)
+	assert.Equal(t, "PUNCT", punctTerm.Key)
+	assert.Equal(t, "upos", punctTerm.Foundry)
+	assert.Equal(t, "p", punctTerm.Layer)
+
+	// Check the PunctType term
+	punctTypeTerm := lowerGroup.Operands[1].(*ast.Term)
+	assert.Equal(t, "PunctType", punctTypeTerm.Layer)
+	assert.Equal(t, "Brck", punctTypeTerm.Key)
+	assert.Equal(t, "upos", punctTypeTerm.Foundry)
+
+	// Verify the comma mapping as well
+	secondMapping := results[1]
+	upperTerm2 := secondMapping.Upper.Wrap.(*ast.Term)
+	assert.Equal(t, "$,", upperTerm2.Key)
+
+	// Verify the period mapping
+	thirdMapping := results[2]
+	upperTerm3 := thirdMapping.Upper.Wrap.(*ast.Term)
+	assert.Equal(t, "$.", upperTerm3.Key)
+
+	// Verify basic mappings without special characters
+	fourthMapping := results[3]
+	upperTerm4 := fourthMapping.Upper.Wrap.(*ast.Term)
+	assert.Equal(t, "ADJA", upperTerm4.Key)
+	lowerTerm4 := fourthMapping.Lower.Wrap.(*ast.Term)
+	assert.Equal(t, "ADJ", lowerTerm4.Key)
+}
+
+func TestExistingUposYaml(t *testing.T) {
+	// Test that the existing upos.yaml file can be parsed correctly
+	config, err := LoadConfig("../upos.yaml")
+	require.NoError(t, err)
+
+	// Verify the configuration loaded correctly
+	require.Len(t, config.Lists, 1)
+	list := config.Lists[0]
+	assert.Equal(t, "stts-ud", list.ID)
+	assert.Equal(t, "opennlp", list.FoundryA)
+	assert.Equal(t, "p", list.LayerA)
+	assert.Equal(t, "upos", list.FoundryB)
+	assert.Equal(t, "p", list.LayerB)
+	require.Len(t, list.Mappings, 54) // Should have 54 mapping rules
+
+	// Test that all mapping rules can be parsed successfully
+	results, err := list.ParseMappings()
+	require.NoError(t, err)
+	require.Len(t, results, 54)
+
+	// Test a few specific mappings to ensure they parse correctly
+
+	// Test the special character mappings
+	firstMapping := results[0] // "[$\\(] <> [PUNCT & PunctType=Brck]"
+	upperTerm := firstMapping.Upper.Wrap.(*ast.Term)
+	assert.Equal(t, "$(", upperTerm.Key)
+	assert.Equal(t, "opennlp", upperTerm.Foundry)
+	assert.Equal(t, "p", upperTerm.Layer)
+
+	lowerGroup := firstMapping.Lower.Wrap.(*ast.TermGroup)
+	require.Len(t, lowerGroup.Operands, 2)
+	assert.Equal(t, ast.AndRelation, lowerGroup.Relation)
+
+	punctTerm := lowerGroup.Operands[0].(*ast.Term)
+	assert.Equal(t, "PUNCT", punctTerm.Key)
+	assert.Equal(t, "upos", punctTerm.Foundry)
+	assert.Equal(t, "p", punctTerm.Layer)
+
+	punctTypeTerm := lowerGroup.Operands[1].(*ast.Term)
+	assert.Equal(t, "PunctType", punctTypeTerm.Layer)
+	assert.Equal(t, "Brck", punctTypeTerm.Key)
+	assert.Equal(t, "upos", punctTypeTerm.Foundry)
+
+	// Test a complex mapping with multiple attributes
+	// "[PIDAT] <> [DET & AdjType=Pdt & (PronType=Ind | PronType=Neg | PronType=Tot)]"
+	pidatMapping := results[24] // This should be the PIDAT mapping
+	pidatUpper := pidatMapping.Upper.Wrap.(*ast.Term)
+	assert.Equal(t, "PIDAT", pidatUpper.Key)
+
+	pidatLower := pidatMapping.Lower.Wrap.(*ast.TermGroup)
+	assert.Equal(t, ast.AndRelation, pidatLower.Relation)
+	require.Len(t, pidatLower.Operands, 3) // DET, AdjType=Pdt, and the parenthesized group
+
+	detTerm := pidatLower.Operands[0].(*ast.Term)
+	assert.Equal(t, "DET", detTerm.Key)
+
+	adjTypeTerm := pidatLower.Operands[1].(*ast.Term)
+	assert.Equal(t, "AdjType", adjTypeTerm.Layer)
+	assert.Equal(t, "Pdt", adjTypeTerm.Key)
+
+	// The third operand should be a nested TermGroup with OR relation
+	nestedGroup := pidatLower.Operands[2].(*ast.TermGroup)
+	assert.Equal(t, ast.OrRelation, nestedGroup.Relation)
+	require.Len(t, nestedGroup.Operands, 3) // PronType=Ind, PronType=Neg, PronType=Tot
+
+	for i, expectedValue := range []string{"Ind", "Neg", "Tot"} {
+		pronTypeTerm := nestedGroup.Operands[i].(*ast.Term)
+		assert.Equal(t, "PronType", pronTypeTerm.Layer)
+		assert.Equal(t, expectedValue, pronTypeTerm.Key)
+	}
+}

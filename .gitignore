@@ -7,3 +7,5 @@ examples/
 todo.txt
 /vendor
 /termmapper
+*.yaml
+\#*

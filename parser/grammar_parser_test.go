@@ -89,6 +89,18 @@ func TestGrammarParserSimpleTerm(t *testing.T) {
 				},
 			},
 		},
+		{
+			name:           "Foundry wildcard key",
+			input:          "[opennlp/*=PIDAT]",
+			defaultFoundry: "opennlp",
+			defaultLayer:   "p",
+			expected: &SimpleTerm{
+				WithFoundryWildcard: &FoundryWildcardTerm{
+					Foundry: "opennlp",
+					Key:     "PIDAT",
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -228,6 +240,20 @@ func TestGrammarParser(t *testing.T) {
 				},
 			},
 		},
+		{
+			name:           "Wildcard pattern",
+			input:          "[opennlp/*=PIDAT]",
+			defaultFoundry: "opennlp",
+			defaultLayer:   "p",
+			expected: &ast.Token{
+				Wrap: &ast.Term{
+					Foundry: "opennlp",
+					Key:     "PIDAT",
+					Layer:   "p",
+					Match:   ast.MatchEqual,
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -363,7 +389,7 @@ func TestMappingRules(t *testing.T) {
 				assert.Error(t, err)
 				return
 			}
-			assert.NoError(t, err)
+			assert.NoError(t, err, "Input: %s", tt.input)
 			assert.Equal(t, tt.expected, result)
 		})
 	}

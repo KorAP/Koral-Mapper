@@ -61,10 +61,11 @@ type ParenExpr struct {
 
 // SimpleTerm represents any valid term form
 type SimpleTerm struct {
-	WithFoundryLayer *FoundryLayerTerm `parser:"@@"`
-	WithFoundryKey   *FoundryKeyTerm   `parser:"| @@"`
-	WithLayer        *LayerTerm        `parser:"| @@"`
-	SimpleKey        *KeyTerm          `parser:"| @@"`
+	WithFoundryLayer    *FoundryLayerTerm    `parser:"@@"`
+	WithFoundryWildcard *FoundryWildcardTerm `parser:"| @@"`
+	WithFoundryKey      *FoundryKeyTerm      `parser:"| @@"`
+	WithLayer           *LayerTerm           `parser:"| @@"`
+	SimpleKey           *KeyTerm             `parser:"| @@"`
 }
 
 // FoundryLayerTerm represents foundry/layer=key:value
@@ -75,30 +76,42 @@ type FoundryLayerTerm struct {
 	Value   string `parser:"(':' @Ident)?"`
 }
 
+// FoundryWildcardTerm represents foundry/*=key (wildcard layer)
+type FoundryWildcardTerm struct {
+	Foundry string `parser:"@Ident '/' '*' '='"`
+	Key     string `parser:"@Ident"`
+}
+
 // FoundryKeyTerm represents foundry/key
 type FoundryKeyTerm struct {
 	Foundry string `parser:"@Ident '/'"`
 	Key     string `parser:"@Ident"`
 }
 
-// LayerTerm represents layer=key:value
+// LayerTerm represents layer=key:value (only when no foundry is present)
 type LayerTerm struct {
 	Layer string `parser:"@Ident '='"`
 	Key   string `parser:"@Ident"`
 	Value string `parser:"(':' @Ident)?"`
 }
 
-// KeyTerm represents key:value
+// KeyTerm represents key:value or key=value
 type KeyTerm struct {
 	Key   string `parser:"@Ident"`
-	Value string `parser:"(':' @Ident)?"`
+	Value string `parser:"((':' | '=') @Ident)?"`
+}
+
+// EscapedPunct represents an escaped punctuation character like \(
+type EscapedPunct struct {
+	Prefix string `parser:"@Ident"`
+	Punct  string `parser:"@Punct"`
 }
 
 // NewGrammarParser creates a new grammar parser with optional default foundry and layer
 func NewGrammarParser(defaultFoundry, defaultLayer string) (*GrammarParser, error) {
 	lex := lexer.MustSimple([]lexer.SimpleRule{
-		{Name: "Ident", Pattern: `(?:[a-zA-Z$]|\\.)(?:[a-zA-Z0-9_$]|\\.)*`},
-		{Name: "Punct", Pattern: `[\[\]()&\|=:/]|<>`},
+		{Name: "Ident", Pattern: `(?:[a-zA-Z$,.]|\\.)(?:[a-zA-Z0-9_$,.]|\\.)*`},
+		{Name: "Punct", Pattern: `[\[\]()&\|=:/\*]|<>`},
 		{Name: "Whitespace", Pattern: `\s+`},
 	})
 
@@ -140,8 +153,24 @@ func (p *GrammarParser) Parse(input string) (ast.Node, error) {
 	runes := []rune(input)
 	for i, r := range runes {
 		if (r == '(' || r == ')') && (i == 0 || runes[i-1] != '\\') {
-			// Only add spaces if the parenthesis is not escaped
-			result = append(result, ' ', r, ' ')
+			// Only add spaces if the parenthesis is not escaped and not part of an identifier
+			// Check if this parenthesis is inside brackets (part of an identifier)
+			insideBrackets := false
+			bracketDepth := 0
+			for j := 0; j < i; j++ {
+				if runes[j] == '[' {
+					bracketDepth++
+				} else if runes[j] == ']' {
+					bracketDepth--
+				}
+			}
+			insideBrackets = bracketDepth > 0
+
+			if !insideBrackets {
+				result = append(result, ' ', r, ' ')
+			} else {
+				result = append(result, r)
+			}
 		} else {
 			result = append(result, r)
 		}
@@ -180,8 +209,24 @@ func (p *GrammarParser) ParseMapping(input string) (*MappingResult, error) {
 	runes := []rune(input)
 	for i, r := range runes {
 		if (r == '(' || r == ')') && (i == 0 || runes[i-1] != '\\') {
-			// Only add spaces if the parenthesis is not escaped
-			result = append(result, ' ', r, ' ')
+			// Only add spaces if the parenthesis is not escaped and not part of an identifier
+			// Check if this parenthesis is inside brackets (part of an identifier)
+			insideBrackets := false
+			bracketDepth := 0
+			for j := 0; j < i; j++ {
+				if runes[j] == '[' {
+					bracketDepth++
+				} else if runes[j] == ']' {
+					bracketDepth--
+				}
+			}
+			insideBrackets = bracketDepth > 0
+
+			if !insideBrackets {
+				result = append(result, ' ', r, ' ')
+			} else {
+				result = append(result, r)
+			}
 		} else {
 			result = append(result, r)
 		}
@@ -340,13 +385,34 @@ func (p *GrammarParser) parseSimpleTerm(term *SimpleTerm) (ast.Node, error) {
 		layer = unescapeString(term.WithFoundryLayer.Layer)
 		key = unescapeString(term.WithFoundryLayer.Key)
 		value = unescapeString(term.WithFoundryLayer.Value)
+	case term.WithFoundryWildcard != nil:
+		foundry = unescapeString(term.WithFoundryWildcard.Foundry)
+		key = unescapeString(term.WithFoundryWildcard.Key)
 	case term.WithFoundryKey != nil:
 		foundry = unescapeString(term.WithFoundryKey.Foundry)
 		key = unescapeString(term.WithFoundryKey.Key)
 	case term.WithLayer != nil:
-		layer = unescapeString(term.WithLayer.Layer)
-		key = unescapeString(term.WithLayer.Key)
-		value = unescapeString(term.WithLayer.Value)
+		// Special case: if LayerTerm was parsed but the layer doesn't match the default layer,
+		// treat it as a key=value pattern instead
+		parsedLayer := unescapeString(term.WithLayer.Layer)
+		parsedKey := unescapeString(term.WithLayer.Key)
+		parsedValue := unescapeString(term.WithLayer.Value)
+
+		if p.defaultLayer != "" && parsedLayer == p.defaultLayer {
+			// This is a genuine layer=key pattern when the layer matches the default
+			layer = parsedLayer
+			key = parsedKey
+			value = parsedValue
+		} else if p.defaultLayer != "" && parsedLayer != p.defaultLayer {
+			// This should be treated as key=value pattern when there's a default layer but it doesn't match
+			key = parsedLayer
+			value = parsedKey
+		} else {
+			// No default layer context, treat as genuine layer=key pattern
+			layer = parsedLayer
+			key = parsedKey
+			value = parsedValue
+		}
 	case term.SimpleKey != nil:
 		key = unescapeString(term.SimpleKey.Key)
 		value = unescapeString(term.SimpleKey.Value)
