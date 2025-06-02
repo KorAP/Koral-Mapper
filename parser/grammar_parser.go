@@ -134,9 +134,19 @@ func (p *GrammarParser) Parse(input string) (ast.Node, error) {
 	input = strings.ReplaceAll(input, " & ", "&")
 	input = strings.ReplaceAll(input, " | ", "|")
 
-	// Add spaces around parentheses to help the parser
-	input = strings.ReplaceAll(input, "(", " ( ")
-	input = strings.ReplaceAll(input, ")", " ) ")
+	// Add spaces around parentheses that are not escaped
+	// We need to be careful not to break escape sequences like \(
+	result := make([]rune, 0, len(input)*2)
+	runes := []rune(input)
+	for i, r := range runes {
+		if (r == '(' || r == ')') && (i == 0 || runes[i-1] != '\\') {
+			// Only add spaces if the parenthesis is not escaped
+			result = append(result, ' ', r, ' ')
+		} else {
+			result = append(result, r)
+		}
+	}
+	input = string(result)
 
 	// Remove any extra spaces
 	input = strings.TrimSpace(input)
@@ -164,9 +174,19 @@ func (p *GrammarParser) ParseMapping(input string) (*MappingResult, error) {
 	input = strings.ReplaceAll(input, " | ", "|")
 	input = strings.ReplaceAll(input, " <> ", "<>")
 
-	// Add spaces around parentheses to help the parser
-	input = strings.ReplaceAll(input, "(", " ( ")
-	input = strings.ReplaceAll(input, ")", " ) ")
+	// Add spaces around parentheses that are not escaped
+	// We need to be careful not to break escape sequences like \(
+	result := make([]rune, 0, len(input)*2)
+	runes := []rune(input)
+	for i, r := range runes {
+		if (r == '(' || r == ')') && (i == 0 || runes[i-1] != '\\') {
+			// Only add spaces if the parenthesis is not escaped
+			result = append(result, ' ', r, ' ')
+		} else {
+			result = append(result, r)
+		}
+	}
+	input = string(result)
 
 	// Remove any extra spaces
 	input = strings.TrimSpace(input)

@@ -314,6 +314,34 @@ func TestMappingRules(t *testing.T) {
 			},
 		},
 		{
+			name:  "PAV mapping with special character",
+			input: "[$\\(] <> [ADV & PronType:Dem]",
+			expected: &MappingResult{
+				Upper: &ast.Token{
+					Wrap: &ast.Term{
+						Key:   "$(",
+						Match: ast.MatchEqual,
+					},
+				},
+				Lower: &ast.Token{
+					Wrap: &ast.TermGroup{
+						Relation: ast.AndRelation,
+						Operands: []ast.Node{
+							&ast.Term{
+								Key:   "ADV",
+								Match: ast.MatchEqual,
+							},
+							&ast.Term{
+								Key:   "PronType",
+								Value: "Dem",
+								Match: ast.MatchEqual,
+							},
+						},
+					},
+				},
+			},
+		},
+		{
 			name:    "Invalid mapping syntax",
 			input:   "[PAV] -> [ADV]",
 			wantErr: true,
