@@ -239,7 +239,7 @@ func TestTransformEndpoint(t *testing.T) {
 				assert.Equal(t, tt.expectedError, errResp["error"])
 			} else {
 				// Compare JSON responses
-				var expected, actual interface{}
+				var expected, actual any
 				err = json.Unmarshal([]byte(tt.expectedBody), &expected)
 				require.NoError(t, err)
 				err = json.Unmarshal(body, &actual)

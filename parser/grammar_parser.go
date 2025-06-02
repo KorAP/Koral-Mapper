@@ -97,7 +97,7 @@ type KeyTerm struct {
 // NewGrammarParser creates a new grammar parser with optional default foundry and layer
 func NewGrammarParser(defaultFoundry, defaultLayer string) (*GrammarParser, error) {
 	lex := lexer.MustSimple([]lexer.SimpleRule{
-		{Name: "Ident", Pattern: `[a-zA-Z][a-zA-Z0-9_]*`},
+		{Name: "Ident", Pattern: `(?:[a-zA-Z$]|\\.)(?:[a-zA-Z0-9_$]|\\.)*`},
 		{Name: "Punct", Pattern: `[\[\]()&\|=:/]|<>`},
 		{Name: "Whitespace", Pattern: `\s+`},
 	})
@@ -288,26 +288,48 @@ func toRelation(op string) ast.RelationType {
 	return ast.AndRelation
 }
 
+// unescapeString handles unescaping of backslash-escaped characters
+func unescapeString(s string) string {
+	if s == "" {
+		return s
+	}
+
+	result := make([]byte, 0, len(s))
+	i := 0
+	for i < len(s) {
+		if s[i] == '\\' && i+1 < len(s) {
+			// Escape sequence found, add the escaped character
+			result = append(result, s[i+1])
+			i += 2
+		} else {
+			// Regular character
+			result = append(result, s[i])
+			i++
+		}
+	}
+	return string(result)
+}
+
 // parseSimpleTerm converts a SimpleTerm into an AST Term node
 func (p *GrammarParser) parseSimpleTerm(term *SimpleTerm) (ast.Node, error) {
 	var foundry, layer, key, value string
 
 	switch {
 	case term.WithFoundryLayer != nil:
-		foundry = term.WithFoundryLayer.Foundry
-		layer = term.WithFoundryLayer.Layer
-		key = term.WithFoundryLayer.Key
-		value = term.WithFoundryLayer.Value
+		foundry = unescapeString(term.WithFoundryLayer.Foundry)
+		layer = unescapeString(term.WithFoundryLayer.Layer)
+		key = unescapeString(term.WithFoundryLayer.Key)
+		value = unescapeString(term.WithFoundryLayer.Value)
 	case term.WithFoundryKey != nil:
-		foundry = term.WithFoundryKey.Foundry
-		key = term.WithFoundryKey.Key
+		foundry = unescapeString(term.WithFoundryKey.Foundry)
+		key = unescapeString(term.WithFoundryKey.Key)
 	case term.WithLayer != nil:
-		layer = term.WithLayer.Layer
-		key = term.WithLayer.Key
-		value = term.WithLayer.Value
+		layer = unescapeString(term.WithLayer.Layer)
+		key = unescapeString(term.WithLayer.Key)
+		value = unescapeString(term.WithLayer.Value)
 	case term.SimpleKey != nil:
-		key = term.SimpleKey.Key
-		value = term.SimpleKey.Value
+		key = unescapeString(term.SimpleKey.Key)
+		value = unescapeString(term.SimpleKey.Value)
 	default:
 		return nil, fmt.Errorf("invalid term: no valid form found")
 	}

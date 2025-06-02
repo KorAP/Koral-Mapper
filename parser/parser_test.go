@@ -11,7 +11,7 @@ import (
 
 // normalizeJSON normalizes JSON by parsing and re-marshaling it
 func normalizeJSON(t *testing.T, data json.RawMessage) json.RawMessage {
-	var v interface{}
+	var v any
 	err := json.Unmarshal(data, &v)
 	require.NoError(t, err)
 
@@ -708,7 +708,7 @@ func TestRoundTrip(t *testing.T) {
 	require.NoError(t, err)
 
 	// Compare JSON objects
-	var expected, actual interface{}
+	var expected, actual any
 	err = json.Unmarshal([]byte(input), &expected)
 	require.NoError(t, err)
 	err = json.Unmarshal(output, &actual)
@@ -758,7 +758,7 @@ func TestRoundTripUnknownType(t *testing.T) {
 	require.NoError(t, err)
 
 	// Compare JSON objects
-	var expected, actual interface{}
+	var expected, actual any
 	err = json.Unmarshal([]byte(input), &expected)
 	require.NoError(t, err)
 	err = json.Unmarshal(output, &actual)

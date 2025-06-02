@@ -120,7 +120,7 @@ func FuzzTransformEndpoint(f *testing.F) {
 		}
 
 		// Verify that the response is valid JSON
-		var result map[string]interface{}
+		var result map[string]any
 		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 			t.Errorf("invalid JSON response: %v", err)
 		}
@@ -258,7 +258,7 @@ func TestLargeInput(t *testing.T) {
 			assert.Equal(t, tt.expectedCode, resp.StatusCode)
 
 			// Check error message
-			var result map[string]interface{}
+			var result map[string]any
 			err = json.NewDecoder(resp.Body).Decode(&result)
 			require.NoError(t, err)
 			errMsg, ok := result["error"].(string)
@@ -267,3 +267,14 @@ func TestLargeInput(t *testing.T) {
 		})
 	}
 }
+
+// # Run fuzzing for 1 minute
+// go test -fuzz=FuzzTransformEndpoint -fuzztime=1m ./cmd/termmapper
+//
+// # Run fuzzing until a crash is found or Ctrl+C is pressed
+// go test -fuzz=FuzzTransformEndpoint ./cmd/termmapper
+//
+// # Run fuzzing with verbose output
+// go test -fuzz=FuzzTransformEndpoint -v ./cmd/termmapper
+//
+// go test -run=FuzzTransformEndpoint/testdata/fuzz/FuzzTransformEndpoint/$SEED

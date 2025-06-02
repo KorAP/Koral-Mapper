@@ -67,6 +67,28 @@ func TestGrammarParserSimpleTerm(t *testing.T) {
 				},
 			},
 		},
+		{
+			name:           "Special symbol",
+			input:          "[$\\(]",
+			defaultFoundry: "opennlp",
+			defaultLayer:   "p",
+			expected: &SimpleTerm{
+				SimpleKey: &KeyTerm{
+					Key: "$(",
+				},
+			},
+		},
+		{
+			name:           "Multiple escaped characters",
+			input:          "[\\&\\|\\=]",
+			defaultFoundry: "opennlp",
+			defaultLayer:   "p",
+			expected: &SimpleTerm{
+				SimpleKey: &KeyTerm{
+					Key: "&|=",
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -81,6 +103,12 @@ func TestGrammarParserSimpleTerm(t *testing.T) {
 			}
 			require.NoError(t, err)
 			require.NotNil(t, grammar.Token, "Expected token expression")
+
+			// For testing purposes, unescape the key in the simple term
+			if grammar.Token.Expr.First.Simple.SimpleKey != nil {
+				grammar.Token.Expr.First.Simple.SimpleKey.Key = unescapeString(grammar.Token.Expr.First.Simple.SimpleKey.Key)
+			}
+
 			assert.Equal(t, tt.expected, grammar.Token.Expr.First.Simple)
 		})
 	}

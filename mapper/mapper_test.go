@@ -411,7 +411,7 @@ func TestMapper(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Parse input JSON
-			var inputData interface{}
+			var inputData any
 			err := json.Unmarshal([]byte(tt.input), &inputData)
 			require.NoError(t, err)
 
@@ -424,7 +424,7 @@ func TestMapper(t *testing.T) {
 			require.NoError(t, err)
 
 			// Parse expected JSON
-			var expectedData interface{}
+			var expectedData any
 			err = json.Unmarshal([]byte(tt.expected), &expectedData)
 			require.NoError(t, err)
 
@@ -506,7 +506,7 @@ func TestTokenToTermGroupWithRewrites(t *testing.T) {
 	}`
 
 	// Parse input JSON
-	var inputData interface{}
+	var inputData any
 	err = json.Unmarshal([]byte(input), &inputData)
 	require.NoError(t, err)
 
@@ -515,7 +515,7 @@ func TestTokenToTermGroupWithRewrites(t *testing.T) {
 	require.NoError(t, err)
 
 	// Parse expected JSON
-	var expectedData interface{}
+	var expectedData any
 	err = json.Unmarshal([]byte(expected), &expectedData)
 	require.NoError(t, err)
 
@@ -857,7 +857,7 @@ func TestQueryWrapperMappings(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Parse input JSON
-			var inputData interface{}
+			var inputData any
 			err := json.Unmarshal([]byte(tt.input), &inputData)
 			require.NoError(t, err)
 
@@ -870,7 +870,7 @@ func TestQueryWrapperMappings(t *testing.T) {
 			require.NoError(t, err)
 
 			// Parse expected JSON
-			var expectedData interface{}
+			var expectedData any
 			err = json.Unmarshal([]byte(tt.expected), &expectedData)
 			require.NoError(t, err)
 
