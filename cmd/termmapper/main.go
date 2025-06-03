@@ -26,6 +26,14 @@ type appConfig struct {
 	LogLevel string `kong:"short='l',default='info',help='Log level (debug, info, warn, error)'"`
 }
 
+// TemplateData holds data for the Kalamar plugin template
+type TemplateData struct {
+	Title       string
+	Version     string
+	Description string
+	MappingIDs  []string
+}
+
 func parseConfig() *appConfig {
 	cfg := &appConfig{}
 	ctx := kong.Parse(cfg,
@@ -78,7 +86,7 @@ func main() {
 	})
 
 	// Set up routes
-	setupRoutes(app, m)
+	setupRoutes(app, m, yamlConfig)
 
 	// Start server
 	go func() {
@@ -100,7 +108,7 @@ func main() {
 	}
 }
 
-func setupRoutes(app *fiber.App, m *mapper.Mapper) {
+func setupRoutes(app *fiber.App, m *mapper.Mapper, yamlConfig *config.MappingLists) {
 	// Health check endpoint
 	app.Get("/health", func(c *fiber.Ctx) error {
 		return c.SendString("OK")
@@ -108,6 +116,9 @@ func setupRoutes(app *fiber.App, m *mapper.Mapper) {
 
 	// Transformation endpoint
 	app.Post("/:map/query", handleTransform(m))
+
+	// Kalamar plugin endpoint
+	app.Get("/kalamarplugin", handleKalamarPlugin(yamlConfig))
 }
 
 func handleTransform(m *mapper.Mapper) fiber.Handler {
@@ -205,4 +216,82 @@ func validateInput(mapID, dir, foundryA, foundryB, layerA, layerB string, body [
 	}
 
 	return nil
+}
+
+func handleKalamarPlugin(yamlConfig *config.MappingLists) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		// Get list of available mapping IDs
+		var mappingIDs []string
+		for _, list := range yamlConfig.Lists {
+			mappingIDs = append(mappingIDs, list.ID)
+		}
+
+		// Prepare template data
+		data := TemplateData{
+			Title:       "KoralPipe TermMapper - Kalamar Plugin",
+			Version:     "1.0.0",
+			Description: "A KortalPipe web service for transforming JSON objects using term mapping rules.",
+			MappingIDs:  mappingIDs,
+		}
+
+		// Generate HTML
+		html := generateKalamarPluginHTML(data)
+
+		c.Set("Content-Type", "text/html")
+		return c.SendString(html)
+	}
+}
+
+// generateKalamarPluginHTML creates the HTML template for the Kalamar plugin page
+// This function can be easily modified to change the appearance and content
+func generateKalamarPluginHTML(data TemplateData) string {
+	html := `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>` + data.Title + `</title>
+</head>
+<body>
+    <div class="container">
+        <h1>` + data.Title + `</h1>
+        
+        <div>
+            <h2>Plugin Information</h2>
+            <p><strong>Version:</strong> ` + data.Version + `</p>
+            <p><strong>Description:</strong> ` + data.Description + `</p>
+        </div>
+
+        <div class="plugin-info">
+            <h2>Available API Endpoints</h2>
+            <div class="api-endpoint">
+                <strong>POST</strong> /:map/query?dir=atob&foundryA=&foundryB=&layerA=&layerB=
+                <br><small>Transform JSON objects using term mapping rules</small>
+            </div>
+            <div class="api-endpoint">
+                <strong>GET</strong> /health
+                <br><small>Health check endpoint</small>
+            </div>
+            <div class="api-endpoint">
+                <strong>GET</strong> /kalamarplugin
+                <br><small>This entry point for Kalamar integration</small>
+            </div>
+        </div>
+
+        <div class="plugin-info">
+            <h2>Available Term Mappings</h2>
+			<ul>`
+
+	for _, id := range data.MappingIDs {
+		html += `
+            <li>` + id + `</li>`
+	}
+
+	html += `
+        </ul>
+    </div>
+</body>
+</html>`
+
+	return html
 }

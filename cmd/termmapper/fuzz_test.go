@@ -49,18 +49,29 @@ func FuzzTransformEndpoint(f *testing.F) {
 		f.Fatal(err)
 	}
 
+	// Create mock config for testing
+	mockConfig := &tmconfig.MappingLists{
+		Lists: []tmconfig.MappingList{mappingList},
+	}
+
 	// Create fiber app
 	app := fiber.New(fiber.Config{
 		DisableStartupMessage: true,
 		ErrorHandler: func(c *fiber.Ctx, err error) error {
-			// Ensure we always return a valid JSON response even for panic cases
+			// For body limit errors, return 413 status code
+			if err.Error() == "body size exceeds the given limit" || errors.Is(err, fiber.ErrRequestEntityTooLarge) {
+				return c.Status(fiber.StatusRequestEntityTooLarge).JSON(fiber.Map{
+					"error": fmt.Sprintf("request body too large (max %d bytes)", maxInputLength),
+				})
+			}
+			// For other errors, return 500 status code
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-				"error": "internal server error",
+				"error": err.Error(),
 			})
 		},
 		BodyLimit: maxInputLength,
 	})
-	setupRoutes(app, m)
+	setupRoutes(app, m, mockConfig)
 
 	// Add seed corpus
 	f.Add("test-mapper", "atob", "", "", "", "", []byte(`{"@type": "koral:token"}`))                                  // Valid minimal input
@@ -152,6 +163,11 @@ func TestLargeInput(t *testing.T) {
 	m, err := mapper.NewMapper([]tmconfig.MappingList{mappingList})
 	require.NoError(t, err)
 
+	// Create mock config for testing
+	mockConfig := &tmconfig.MappingLists{
+		Lists: []tmconfig.MappingList{mappingList},
+	}
+
 	// Create fiber app
 	app := fiber.New(fiber.Config{
 		DisableStartupMessage: true,
@@ -169,7 +185,7 @@ func TestLargeInput(t *testing.T) {
 		},
 		BodyLimit: maxInputLength,
 	})
-	setupRoutes(app, m)
+	setupRoutes(app, m, mockConfig)
 
 	tests := []struct {
 		name          string

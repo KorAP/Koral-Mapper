@@ -33,9 +33,14 @@ func TestTransformEndpoint(t *testing.T) {
 	m, err := mapper.NewMapper([]tmconfig.MappingList{mappingList})
 	require.NoError(t, err)
 
+	// Create mock config for testing
+	mockConfig := &tmconfig.MappingLists{
+		Lists: []tmconfig.MappingList{mappingList},
+	}
+
 	// Create fiber app
 	app := fiber.New()
-	setupRoutes(app, m)
+	setupRoutes(app, m, mockConfig)
 
 	tests := []struct {
 		name          string
@@ -263,9 +268,14 @@ func TestHealthEndpoint(t *testing.T) {
 	m, err := mapper.NewMapper([]tmconfig.MappingList{mappingList})
 	require.NoError(t, err)
 
+	// Create mock config for testing
+	mockConfig := &tmconfig.MappingLists{
+		Lists: []tmconfig.MappingList{mappingList},
+	}
+
 	// Create fiber app
 	app := fiber.New()
-	setupRoutes(app, m)
+	setupRoutes(app, m, mockConfig)
 
 	// Test health endpoint
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
@@ -277,4 +287,15 @@ func TestHealthEndpoint(t *testing.T) {
 	body, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 	assert.Equal(t, "OK", string(body))
+
+	req = httptest.NewRequest(http.MethodGet, "/kalamarplugin", nil)
+	resp, err = app.Test(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	body, err = io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	assert.Contains(t, string(body), "KoralPipe TermMapper - Kalamar Plugin")
+
 }

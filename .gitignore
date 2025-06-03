@@ -9,3 +9,4 @@ todo.txt
 /termmapper
 *.yaml
 \#*
+/cmd/termmapper
