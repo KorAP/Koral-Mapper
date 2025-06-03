@@ -359,20 +359,21 @@ func unescapeString(s string) string {
 		return s
 	}
 
-	result := make([]byte, 0, len(s))
-	i := 0
-	for i < len(s) {
-		if s[i] == '\\' && i+1 < len(s) {
-			// Escape sequence found, add the escaped character
-			result = append(result, s[i+1])
-			i += 2
-		} else {
-			// Regular character
-			result = append(result, s[i])
+	// Modify string in-place by overwriting characters
+	bytes := []byte(s)
+	j := 0
+	for i := 0; i < len(bytes); i++ {
+		if bytes[i] == '\\' && i+1 < len(bytes) {
+			// Skip backslash and copy next char
+			bytes[j] = bytes[i+1]
 			i++
+		} else {
+			// Copy current char
+			bytes[j] = bytes[i]
 		}
+		j++
 	}
-	return string(result)
+	return string(bytes[:j])
 }
 
 // parseSimpleTerm converts a SimpleTerm into an AST Term node
