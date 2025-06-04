@@ -33,6 +33,8 @@ type TemplateData struct {
 	Hash        string
 	Date        string
 	Description string
+	Server      string
+	SDK         string
 	MappingIDs  []string
 }
 
@@ -114,7 +116,7 @@ func main() {
 	}
 }
 
-func setupRoutes(app *fiber.App, m *mapper.Mapper, yamlConfig *config.MappingLists) {
+func setupRoutes(app *fiber.App, m *mapper.Mapper, yamlConfig *config.MappingConfig) {
 	// Health check endpoint
 	app.Get("/health", func(c *fiber.Ctx) error {
 		return c.SendString("OK")
@@ -224,13 +226,17 @@ func validateInput(mapID, dir, foundryA, foundryB, layerA, layerB string, body [
 	return nil
 }
 
-func handleKalamarPlugin(yamlConfig *config.MappingLists) fiber.Handler {
+func handleKalamarPlugin(yamlConfig *config.MappingConfig) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		// Get list of available mapping IDs
 		var mappingIDs []string
 		for _, list := range yamlConfig.Lists {
 			mappingIDs = append(mappingIDs, list.ID)
 		}
+
+		// Use values from config (defaults are already applied during parsing)
+		server := yamlConfig.Server
+		sdk := yamlConfig.SDK
 
 		// Prepare template data
 		data := TemplateData{
@@ -239,6 +245,8 @@ func handleKalamarPlugin(yamlConfig *config.MappingLists) fiber.Handler {
 			Hash:        config.Buildhash,
 			Date:        config.Buildtime,
 			Description: config.Description,
+			Server:      server,
+			SDK:         sdk,
 			MappingIDs:  mappingIDs,
 		}
 
@@ -258,6 +266,8 @@ func generateKalamarPluginHTML(data TemplateData) string {
 <head>
     <meta charset="UTF-8">
     <title>` + data.Title + `</title>
+    <script src="` + data.SDK + `"
+            data-server="` + data.Server + `"></script>
 </head>
 <body>
     <div class="container">
@@ -291,6 +301,29 @@ func generateKalamarPluginHTML(data TemplateData) string {
 
 	html += `
     </ul>
+
+    <script>
+  		<!-- activates/deactivates Mapper. -->
+  		  
+       let data = {
+         'action'  : 'pipe',
+         'service' : 'https://korap.ids-mannheim.de/plugin/termmapper/query'
+       };
+
+       function pluginit (p) {
+         p.onMessage = function(msg) {
+           if (msg.key == 'termmapper') {
+             if (msg.value) {
+               data['job'] = 'add';
+             }
+             else {
+               data['job'] = 'del';
+             };
+             KorAPlugin.sendMsg(data);
+           };
+         };
+       };
+    </script>
   </body>
 </html>`
 

@@ -34,7 +34,7 @@ func TestTransformEndpoint(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create mock config for testing
-	mockConfig := &tmconfig.MappingLists{
+	mockConfig := &tmconfig.MappingConfig{
 		Lists: []tmconfig.MappingList{mappingList},
 	}
 
@@ -269,7 +269,7 @@ func TestHealthEndpoint(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create mock config for testing
-	mockConfig := &tmconfig.MappingLists{
+	mockConfig := &tmconfig.MappingConfig{
 		Lists: []tmconfig.MappingList{mappingList},
 	}
 
@@ -298,4 +298,90 @@ func TestHealthEndpoint(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, string(body), "KoralPipe-TermMapper")
 
+}
+
+func TestKalamarPluginWithCustomSdkAndServer(t *testing.T) {
+	// Create test mapping list
+	mappingList := tmconfig.MappingList{
+		ID: "test-mapper",
+		Mappings: []tmconfig.MappingRule{
+			"[A] <> [B]",
+		},
+	}
+
+	// Create mapper
+	m, err := mapper.NewMapper([]tmconfig.MappingList{mappingList})
+	require.NoError(t, err)
+
+	tests := []struct {
+		name           string
+		customSDK      string
+		customServer   string
+		expectedSDK    string
+		expectedServer string
+	}{
+		{
+			name:           "Custom SDK and Server values",
+			customSDK:      "https://custom.example.com/custom-sdk.js",
+			customServer:   "https://custom.example.com/",
+			expectedSDK:    "https://custom.example.com/custom-sdk.js",
+			expectedServer: "https://custom.example.com/",
+		},
+		{
+			name:           "Only custom SDK value",
+			customSDK:      "https://custom.example.com/custom-sdk.js",
+			customServer:   "https://korap.ids-mannheim.de/", // defaults applied during parsing
+			expectedSDK:    "https://custom.example.com/custom-sdk.js",
+			expectedServer: "https://korap.ids-mannheim.de/",
+		},
+		{
+			name:           "Only custom Server value",
+			customSDK:      "https://korap.ids-mannheim.de/js/korap-plugin-latest.js", // defaults applied during parsing
+			customServer:   "https://custom.example.com/",
+			expectedSDK:    "https://korap.ids-mannheim.de/js/korap-plugin-latest.js",
+			expectedServer: "https://custom.example.com/",
+		},
+		{
+			name:           "Defaults applied during parsing",
+			customSDK:      "https://korap.ids-mannheim.de/js/korap-plugin-latest.js", // defaults applied during parsing
+			customServer:   "https://korap.ids-mannheim.de/",                          // defaults applied during parsing
+			expectedSDK:    "https://korap.ids-mannheim.de/js/korap-plugin-latest.js",
+			expectedServer: "https://korap.ids-mannheim.de/",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create mock config with custom values
+			mockConfig := &tmconfig.MappingConfig{
+				SDK:    tt.customSDK,
+				Server: tt.customServer,
+				Lists:  []tmconfig.MappingList{mappingList},
+			}
+
+			// Create fiber app
+			app := fiber.New()
+			setupRoutes(app, m, mockConfig)
+
+			// Test Kalamar plugin endpoint
+			req := httptest.NewRequest(http.MethodGet, "/", nil)
+			resp, err := app.Test(req)
+			require.NoError(t, err)
+			defer resp.Body.Close()
+
+			assert.Equal(t, http.StatusOK, resp.StatusCode)
+			body, err := io.ReadAll(resp.Body)
+			require.NoError(t, err)
+
+			htmlContent := string(body)
+
+			// Check that the HTML contains the expected SDK and Server values
+			assert.Contains(t, htmlContent, `src="`+tt.expectedSDK+`"`)
+			assert.Contains(t, htmlContent, `data-server="`+tt.expectedServer+`"`)
+
+			// Ensure it's still a valid HTML page
+			assert.Contains(t, htmlContent, "KoralPipe-TermMapper")
+			assert.Contains(t, htmlContent, "<!DOCTYPE html>")
+		})
+	}
 }

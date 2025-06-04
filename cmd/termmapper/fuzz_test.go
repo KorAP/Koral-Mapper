@@ -50,7 +50,7 @@ func FuzzTransformEndpoint(f *testing.F) {
 	}
 
 	// Create mock config for testing
-	mockConfig := &tmconfig.MappingLists{
+	mockConfig := &tmconfig.MappingConfig{
 		Lists: []tmconfig.MappingList{mappingList},
 	}
 
@@ -164,7 +164,7 @@ func TestLargeInput(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create mock config for testing
-	mockConfig := &tmconfig.MappingLists{
+	mockConfig := &tmconfig.MappingConfig{
 		Lists: []tmconfig.MappingList{mappingList},
 	}
 

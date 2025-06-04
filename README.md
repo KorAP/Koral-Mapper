@@ -25,18 +25,35 @@ Command line options:
 
 ## Configuration File Format
 
-Mapping rules are defined in YAML files with the following structure:
+Mapping rules are defined in a YAML configuration file.
 
 ```yaml
-- id: mapping-list-id
-  foundryA: source-foundry
-  layerA: source-layer
-  foundryB: target-foundry
-  layerB: target-layer
-  mappings:
-    - "[pattern1] <> [replacement1]"
-    - "[pattern2] <> [replacement2]"
+# Optional: Custom SDK endpoint for Kalamar plugin integration
+sdk: "https://custom.example.com/js/korap-plugin.js"
+
+# Optional: Custom server endpoint for Kalamar plugin integration  
+server: "https://custom.example.com/"
+
+# Mapping lists (same format as standard format)
+lists:
+  - id: mapping-list-id
+    foundryA: source-foundry
+    layerA: source-layer
+    foundryB: target-foundry
+    layerB: target-layer
+    mappings:
+      - "[pattern1] <> [replacement1]"
+      - "[pattern2] <> [replacement2]"
 ```
+
+The `sdk` and `server` fields are optional and override the default endpoints used for Kalamar plugin integration:
+
+- **`sdk`**: Custom SDK JavaScript file URL (default: `https://korap.ids-mannheim.de/js/korap-plugin-latest.js`)
+- **`server`**: Custom server endpoint URL (default: `https://korap.ids-mannheim.de/`)
+
+These values are applied during configuration parsing and affect the HTML plugin page served at the root endpoint (`/`).
+
+### Mapping Rules
 
 Each mapping rule consists of two patterns separated by `<>`. The patterns can be:
 - Simple terms: `[key]` or `[foundry/layer=key]` or `[foundry/layer=key:value]`
@@ -106,13 +123,27 @@ Example response:
 }
 ```
 
+### GET /
+
+Serves the Kalamar plugin integration page. This HTML page includes:
+
+- Plugin information and available mapping lists
+- JavaScript integration code for Kalamar
+- SDK and server endpoints configured via `sdk` and `server` configuration fields
+
+The SDK script and server data-attribute in the HTML are determined by the configuration file's `sdk` and `server` values, with fallback to default endpoints if not specified.
+
+### GET /health
+
+Health check endpoint that returns "OK" with HTTP 200 status.
+
 ## Progress
 
 - [x] Mapping functionality
 - [x] Support for rewrites
 - [x] Web service
 - [ ] Support for negation
-- [ ] JSON script for Kalamar integration
+- [x] JSON script for Kalamar integration
 - [ ] Response rewriting
 - [ ] Integration of mapping files
 

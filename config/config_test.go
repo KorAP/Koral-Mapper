@@ -574,3 +574,120 @@ func TestExistingUposYaml(t *testing.T) {
 		assert.Equal(t, expectedValue, pronTypeTerm.Key)
 	}
 }
+
+func TestConfigWithSdkAndServer(t *testing.T) {
+	tests := []struct {
+		name           string
+		content        string
+		expectedSDK    string
+		expectedServer string
+		wantErr        bool
+	}{
+		{
+			name: "Configuration with SDK and Server values",
+			content: `
+sdk: "https://custom.example.com/sdk.js"
+server: "https://custom.example.com/"
+lists:
+- id: test-mapper
+  foundryA: opennlp
+  layerA: p
+  foundryB: upos
+  layerB: p
+  mappings:
+    - "[A] <> [B]"
+`,
+			expectedSDK:    "https://custom.example.com/sdk.js",
+			expectedServer: "https://custom.example.com/",
+			wantErr:        false,
+		},
+		{
+			name: "Configuration with only SDK value",
+			content: `
+sdk: "https://custom.example.com/sdk.js"
+lists:
+- id: test-mapper
+  mappings:
+    - "[A] <> [B]"
+`,
+			expectedSDK:    "https://custom.example.com/sdk.js",
+			expectedServer: "https://korap.ids-mannheim.de/", // default applied
+			wantErr:        false,
+		},
+		{
+			name: "Configuration with only Server value",
+			content: `
+server: "https://custom.example.com/"
+lists:
+- id: test-mapper
+  mappings:
+    - "[A] <> [B]"
+`,
+			expectedSDK:    "https://korap.ids-mannheim.de/js/korap-plugin-latest.js", // default applied
+			expectedServer: "https://custom.example.com/",
+			wantErr:        false,
+		},
+		{
+			name: "Configuration without SDK and Server (old format with defaults applied)",
+			content: `
+- id: test-mapper
+  mappings:
+    - "[A] <> [B]"
+`,
+			expectedSDK:    "https://korap.ids-mannheim.de/js/korap-plugin-latest.js", // default applied
+			expectedServer: "https://korap.ids-mannheim.de/",                          // default applied
+			wantErr:        false,
+		},
+		{
+			name: "Configuration with lists field explicitly",
+			content: `
+sdk: "https://custom.example.com/sdk.js"
+server: "https://custom.example.com/"
+lists:
+- id: test-mapper-1
+  mappings:
+    - "[A] <> [B]"
+- id: test-mapper-2
+  mappings:
+    - "[C] <> [D]"
+`,
+			expectedSDK:    "https://custom.example.com/sdk.js",
+			expectedServer: "https://custom.example.com/",
+			wantErr:        false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmpfile, err := os.CreateTemp("", "config-*.yaml")
+			require.NoError(t, err)
+			defer os.Remove(tmpfile.Name())
+
+			_, err = tmpfile.WriteString(tt.content)
+			require.NoError(t, err)
+			err = tmpfile.Close()
+			require.NoError(t, err)
+
+			config, err := LoadConfig(tmpfile.Name())
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			require.NotNil(t, config)
+
+			// Check SDK and Server values
+			assert.Equal(t, tt.expectedSDK, config.SDK)
+			assert.Equal(t, tt.expectedServer, config.Server)
+
+			// Ensure lists are still loaded correctly
+			require.Greater(t, len(config.Lists), 0)
+
+			// Verify first mapping list
+			firstList := config.Lists[0]
+			assert.NotEmpty(t, firstList.ID)
+			assert.Greater(t, len(firstList.Mappings), 0)
+		})
+	}
+}

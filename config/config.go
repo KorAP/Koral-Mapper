@@ -9,6 +9,11 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+const (
+	defaultServer = "https://korap.ids-mannheim.de/"
+	defaultSDK    = "https://korap.ids-mannheim.de/js/korap-plugin-latest.js"
+)
+
 // MappingRule represents a single mapping rule in the configuration
 type MappingRule string
 
@@ -22,13 +27,15 @@ type MappingList struct {
 	Mappings []MappingRule `yaml:"mappings"`
 }
 
-// MappingLists represents the root configuration containing multiple mapping lists
-type MappingLists struct {
-	Lists []MappingList
+// MappingConfig represents the root configuration containing multiple mapping lists
+type MappingConfig struct {
+	SDK    string        `yaml:"sdk,omitempty"`
+	Server string        `yaml:"server,omitempty"`
+	Lists  []MappingList `yaml:"lists,omitempty"`
 }
 
 // LoadConfig loads a YAML configuration file and returns a Config object
-func LoadConfig(filename string) (*MappingLists, error) {
+func LoadConfig(filename string) (*MappingConfig, error) {
 	data, err := os.ReadFile(filename)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read config file: %w", err)
@@ -39,37 +46,71 @@ func LoadConfig(filename string) (*MappingLists, error) {
 		return nil, fmt.Errorf("EOF: config file is empty")
 	}
 
+	// Try to unmarshal as new format first (object with optional sdk/server and lists)
+	var config MappingConfig
+	if err := yaml.Unmarshal(data, &config); err == nil && len(config.Lists) > 0 {
+		// Successfully parsed as new format with lists field
+		if err := validateMappingLists(config.Lists); err != nil {
+			return nil, err
+		}
+		// Apply defaults if not specified
+		applyDefaults(&config)
+		return &config, nil
+	}
+
+	// Fall back to old format (direct list)
 	var lists []MappingList
 	if err := yaml.Unmarshal(data, &lists); err != nil {
 		return nil, fmt.Errorf("failed to parse YAML: %w", err)
 	}
 
+	if err := validateMappingLists(lists); err != nil {
+		return nil, err
+	}
+
+	config = MappingConfig{Lists: lists}
+	// Apply defaults if not specified
+	applyDefaults(&config)
+	return &config, nil
+}
+
+// applyDefaults sets default values for SDK and Server if they are empty
+func applyDefaults(config *MappingConfig) {
+	if config.SDK == "" {
+		config.SDK = defaultSDK
+	}
+	if config.Server == "" {
+		config.Server = defaultServer
+	}
+}
+
+// validateMappingLists validates a slice of mapping lists
+func validateMappingLists(lists []MappingList) error {
 	// Validate the configuration
 	seenIDs := make(map[string]bool)
 	for i, list := range lists {
 		if list.ID == "" {
-			return nil, fmt.Errorf("mapping list at index %d is missing an ID", i)
+			return fmt.Errorf("mapping list at index %d is missing an ID", i)
 		}
 
 		// Check for duplicate IDs
 		if seenIDs[list.ID] {
-			return nil, fmt.Errorf("duplicate mapping list ID found: %s", list.ID)
+			return fmt.Errorf("duplicate mapping list ID found: %s", list.ID)
 		}
 		seenIDs[list.ID] = true
 
 		if len(list.Mappings) == 0 {
-			return nil, fmt.Errorf("mapping list '%s' has no mapping rules", list.ID)
+			return fmt.Errorf("mapping list '%s' has no mapping rules", list.ID)
 		}
 
 		// Validate each mapping rule
 		for j, rule := range list.Mappings {
 			if rule == "" {
-				return nil, fmt.Errorf("mapping list '%s' rule at index %d is empty", list.ID, j)
+				return fmt.Errorf("mapping list '%s' rule at index %d is empty", list.ID, j)
 			}
 		}
 	}
-
-	return &MappingLists{Lists: lists}, nil
+	return nil
 }
 
 // ParseMappings parses all mapping rules in a list and returns a slice of parsed rules
