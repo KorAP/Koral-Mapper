@@ -296,6 +296,6 @@ func TestHealthEndpoint(t *testing.T) {
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	body, err = io.ReadAll(resp.Body)
 	require.NoError(t, err)
-	assert.Contains(t, string(body), "KoralPipe TermMapper - Kalamar Plugin")
+	assert.Contains(t, string(body), "KoralPipe-TermMapper")
 
 }

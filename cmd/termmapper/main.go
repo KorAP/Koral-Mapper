@@ -30,14 +30,20 @@ type appConfig struct {
 type TemplateData struct {
 	Title       string
 	Version     string
+	Hash        string
+	Date        string
 	Description string
 	MappingIDs  []string
 }
 
 func parseConfig() *appConfig {
 	cfg := &appConfig{}
+
+	desc := config.Description
+	desc += " [" + config.Version + "]"
+
 	ctx := kong.Parse(cfg,
-		kong.Description("A web service for transforming JSON objects using term mapping rules."),
+		kong.Description(desc),
 		kong.UsageOnError(),
 	)
 	if ctx.Error != nil {
@@ -228,9 +234,11 @@ func handleKalamarPlugin(yamlConfig *config.MappingLists) fiber.Handler {
 
 		// Prepare template data
 		data := TemplateData{
-			Title:       "KoralPipe TermMapper - Kalamar Plugin",
-			Version:     "1.0.0",
-			Description: "A KortalPipe web service for transforming JSON objects using term mapping rules.",
+			Title:       config.Title,
+			Version:     config.Version,
+			Hash:        config.Buildhash,
+			Date:        config.Buildtime,
+			Description: config.Description,
 			MappingIDs:  mappingIDs,
 		}
 
@@ -259,6 +267,8 @@ func generateKalamarPluginHTML(data TemplateData) string {
         <div>
             <h2>Plugin Information</h2>
             <p><strong>Version:</strong> ` + data.Version + `</p>
+			<p><strong>Build Date:</strong> ` + data.Date + `</p>
+			<p><strong>Build Hash:</strong> ` + data.Hash + `</p>
             <p><strong>Description:</strong> ` + data.Description + `</p>
         </div>
 
