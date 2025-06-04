@@ -142,8 +142,9 @@ Health check endpoint that returns "OK" with HTTP 200 status.
 - [x] Mapping functionality
 - [x] Support for rewrites
 - [x] Web service
-- [ ] Support for negation
 - [x] JSON script for Kalamar integration
+- [ ] Support for negation
+- [ ] Support multiple mappings (by having a check list)
 - [ ] Response rewriting
 - [ ] Integration of mapping files
 

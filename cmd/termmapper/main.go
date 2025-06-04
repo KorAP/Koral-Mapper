@@ -35,6 +35,7 @@ type TemplateData struct {
 	Description string
 	Server      string
 	SDK         string
+	MapID       string
 	MappingIDs  []string
 }
 
@@ -127,6 +128,7 @@ func setupRoutes(app *fiber.App, m *mapper.Mapper, yamlConfig *config.MappingCon
 
 	// Kalamar plugin endpoint
 	app.Get("/", handleKalamarPlugin(yamlConfig))
+	app.Get("/:map", handleKalamarPlugin(yamlConfig))
 }
 
 func handleTransform(m *mapper.Mapper) fiber.Handler {
@@ -228,6 +230,8 @@ func validateInput(mapID, dir, foundryA, foundryB, layerA, layerB string, body [
 
 func handleKalamarPlugin(yamlConfig *config.MappingConfig) fiber.Handler {
 	return func(c *fiber.Ctx) error {
+		mapID := c.Params("map")
+
 		// Get list of available mapping IDs
 		var mappingIDs []string
 		for _, list := range yamlConfig.Lists {
@@ -247,6 +251,7 @@ func handleKalamarPlugin(yamlConfig *config.MappingConfig) fiber.Handler {
 			Description: config.Description,
 			Server:      server,
 			SDK:         sdk,
+			MapID:       mapID,
 			MappingIDs:  mappingIDs,
 		}
 
@@ -272,26 +277,29 @@ func generateKalamarPluginHTML(data TemplateData) string {
 <body>
     <div class="container">
         <h1>` + data.Title + `</h1>
-		<p>` + data.Description + `</p>
-        
-        <h2>Plugin Information</h2>
+		<p>` + data.Description + `</p>`
+
+	if data.MapID != "" {
+		html += `<p>Map ID: ` + data.MapID + `</p>`
+	}
+
+	html += `		<h2>Plugin Information</h2>
         <p><strong>Version:</strong> <tt>` + data.Version + `</tt></p>
 		<p><strong>Build Date:</strong> <tt>` + data.Date + `</tt></p>
 		<p><strong>Build Hash:</strong> <tt>` + data.Hash + `</tt></p>
 
         <h2>Available API Endpoints</h2>
         <dl>
-            <dt><tt><strong>POST</strong> /:map/query?dir=atob&foundryA=&foundryB=&layerA=&layerB=</tt></dt>
-            <dd><small>Transform JSON objects using term mapping rules</small></dd>
-            
-			<dt><tt><strong>GET</strong> /health</tt></dt>
-            <dd><small>Health check endpoint</small></dd>
 
-			<dt><tt><strong>GET</strong> /</tt></dt>
-            <dd><small>This entry point for Kalamar integration</small></dd>
+		    <dt><tt><strong>GET</strong> /:map</tt></dt>
+            <dd><small>Kalamar integration</small></dd>
+			
+            <dt><tt><strong>POST</strong> /:map/query</tt></dt>
+            <dd><small>Transform JSON query objects using term mapping rules</small></dd>
+			
         </dl>
-
-        <h2>Available Term Mappings</h2>
+		
+		<h2>Available Term Mappings</h2>
 	    <ul>`
 
 	for _, id := range data.MappingIDs {
@@ -300,14 +308,15 @@ func generateKalamarPluginHTML(data TemplateData) string {
 	}
 
 	html += `
-    </ul>
+    </ul>`
 
-    <script>
+	if data.MapID != "" {
+		html += `   <script>
   		<!-- activates/deactivates Mapper. -->
   		  
        let data = {
          'action'  : 'pipe',
-         'service' : 'https://korap.ids-mannheim.de/plugin/termmapper/query'
+         'service' : 'https://korap.ids-mannheim.de/plugin/termmapper/` + data.MapID + `/query'
        };
 
        function pluginit (p) {
@@ -323,8 +332,10 @@ func generateKalamarPluginHTML(data TemplateData) string {
            };
          };
        };
-    </script>
-  </body>
+    </script>`
+	}
+
+	html += `  </body>
 </html>`
 
 	return html
