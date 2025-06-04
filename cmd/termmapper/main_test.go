@@ -288,7 +288,7 @@ func TestHealthEndpoint(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "OK", string(body))
 
-	req = httptest.NewRequest(http.MethodGet, "/kalamarplugin", nil)
+	req = httptest.NewRequest(http.MethodGet, "/", nil)
 	resp, err = app.Test(req)
 	require.NoError(t, err)
 	defer resp.Body.Close()

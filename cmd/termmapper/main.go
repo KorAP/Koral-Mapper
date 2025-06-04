@@ -124,7 +124,7 @@ func setupRoutes(app *fiber.App, m *mapper.Mapper, yamlConfig *config.MappingLis
 	app.Post("/:map/query", handleTransform(m))
 
 	// Kalamar plugin endpoint
-	app.Get("/kalamarplugin", handleKalamarPlugin(yamlConfig))
+	app.Get("/", handleKalamarPlugin(yamlConfig))
 }
 
 func handleTransform(m *mapper.Mapper) fiber.Handler {
@@ -257,40 +257,32 @@ func generateKalamarPluginHTML(data TemplateData) string {
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>` + data.Title + `</title>
 </head>
 <body>
     <div class="container">
         <h1>` + data.Title + `</h1>
+		<p>` + data.Description + `</p>
         
-        <div>
-            <h2>Plugin Information</h2>
-            <p><strong>Version:</strong> ` + data.Version + `</p>
-			<p><strong>Build Date:</strong> ` + data.Date + `</p>
-			<p><strong>Build Hash:</strong> ` + data.Hash + `</p>
-            <p><strong>Description:</strong> ` + data.Description + `</p>
-        </div>
+        <h2>Plugin Information</h2>
+        <p><strong>Version:</strong> <tt>` + data.Version + `</tt></p>
+		<p><strong>Build Date:</strong> <tt>` + data.Date + `</tt></p>
+		<p><strong>Build Hash:</strong> <tt>` + data.Hash + `</tt></p>
 
-        <div class="plugin-info">
-            <h2>Available API Endpoints</h2>
-            <div class="api-endpoint">
-                <strong>POST</strong> /:map/query?dir=atob&foundryA=&foundryB=&layerA=&layerB=
-                <br><small>Transform JSON objects using term mapping rules</small>
-            </div>
-            <div class="api-endpoint">
-                <strong>GET</strong> /health
-                <br><small>Health check endpoint</small>
-            </div>
-            <div class="api-endpoint">
-                <strong>GET</strong> /kalamarplugin
-                <br><small>This entry point for Kalamar integration</small>
-            </div>
-        </div>
+        <h2>Available API Endpoints</h2>
+        <dl>
+            <dt><tt><strong>POST</strong> /:map/query?dir=atob&foundryA=&foundryB=&layerA=&layerB=</tt></dt>
+            <dd><small>Transform JSON objects using term mapping rules</small></dd>
+            
+			<dt><tt><strong>GET</strong> /health</tt></dt>
+            <dd><small>Health check endpoint</small></dd>
 
-        <div class="plugin-info">
-            <h2>Available Term Mappings</h2>
-			<ul>`
+			<dt><tt><strong>GET</strong> /</tt></dt>
+            <dd><small>This entry point for Kalamar integration</small></dd>
+        </dl>
+
+        <h2>Available Term Mappings</h2>
+	    <ul>`
 
 	for _, id := range data.MappingIDs {
 		html += `
@@ -298,9 +290,8 @@ func generateKalamarPluginHTML(data TemplateData) string {
 	}
 
 	html += `
-        </ul>
-    </div>
-</body>
+    </ul>
+  </body>
 </html>`
 
 	return html
