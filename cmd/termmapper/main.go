@@ -21,9 +21,10 @@ const (
 )
 
 type appConfig struct {
-	Port     int    `kong:"short='p',default='8080',help='Port to listen on'"`
-	Config   string `kong:"short='c',required,help='YAML configuration file containing mapping directives'"`
-	LogLevel string `kong:"short='l',default='info',help='Log level (debug, info, warn, error)'"`
+	Port     int      `kong:"short='p',default='8080',help='Port to listen on'"`
+	Config   string   `kong:"short='c',help='YAML configuration file containing mapping directives and global settings'"`
+	Mappings []string `kong:"short='m',help='Individual YAML mapping files to load'"`
+	LogLevel string   `kong:"short='l',default='info',help='Log level (debug, info, warn, error)'"`
 }
 
 // TemplateData holds data for the Kalamar plugin template
@@ -73,11 +74,16 @@ func main() {
 	// Parse command line flags
 	cfg := parseConfig()
 
+	// Validate command line arguments
+	if cfg.Config == "" && len(cfg.Mappings) == 0 {
+		log.Fatal().Msg("At least one configuration source must be provided: use -c for main config file or -m for mapping files")
+	}
+
 	// Set up logging
 	setupLogger(cfg.LogLevel)
 
-	// Load configuration file
-	yamlConfig, err := config.LoadConfig(cfg.Config)
+	// Load configuration from multiple sources
+	yamlConfig, err := config.LoadFromSources(cfg.Config, cfg.Mappings)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to load configuration")
 	}
@@ -293,8 +299,8 @@ func generateKalamarPluginHTML(data TemplateData) string {
 
 		    <dt><tt><strong>GET</strong> /:map</tt></dt>
             <dd><small>Kalamar integration</small></dd>
-			
-            <dt><tt><strong>POST</strong> /:map/query</tt></dt>
+
+			<dt><tt><strong>POST</strong> /:map/query</tt></dt>
             <dd><small>Transform JSON query objects using term mapping rules</small></dd>
 			
         </dl>

@@ -15,17 +15,29 @@ go get github.com/KorAP/KoralPipe-TermMapper
 ## Usage
 
 ```bash
-termmapper -c config.yaml -p 8080 -l info
+termmapper -c config.yaml -m extra-mapper1.yaml -m extra-mapper2.yaml
 ```
-Command line options:
-- `--config` or `-c`: YAML configuration file containing mapping directives (required)
+
+Command Line Options
+
+- `--config` or `-c`: YAML configuration file containing mapping directives and global settings (optional)
+- `--mappings` or `-m`: Individual YAML mapping files to load (can be used multiple times, optional)
 - `--port` or `-p`: Port to listen on (default: 8080)
 - `--log-level` or `-l`: Log level (debug, info, warn, error) (default: info)
 - `--help` or `-h`: Show help message
 
-## Configuration File Format
+**Note**: At least one mapping source must be provided
 
-Mapping rules are defined in a YAML configuration file.
+## Configuration
+
+KoralPipe-TermMapper supports loading configuration from multiple sources:
+
+1. **Main Configuration File** (`-c`): Contains global settings (SDK, server endpoints) and optional mapping lists
+2. **Individual Mapping Files** (`-m`): Contains single mapping lists, can be specified multiple times
+
+The main configuration provides global settings, and all mapping lists from both sources are combined. Duplicate mapping IDs across all sources will result in an error.
+
+Configurations can contain global settings and mapping lists (used with the `-c` flag):
 
 ```yaml
 # Optional: Custom SDK endpoint for Kalamar plugin integration
@@ -34,7 +46,7 @@ sdk: "https://custom.example.com/js/korap-plugin.js"
 # Optional: Custom server endpoint for Kalamar plugin integration  
 server: "https://custom.example.com/"
 
-# Mapping lists (same format as standard format)
+# Optional: Mapping lists (same format as individual mapping files)
 lists:
   - id: mapping-list-id
     foundryA: source-foundry
@@ -46,12 +58,25 @@ lists:
       - "[pattern2] <> [replacement2]"
 ```
 
-The `sdk` and `server` fields are optional and override the default endpoints used for Kalamar plugin integration:
+Map files contain a single mapping list (used with the `-m` flag):
+
+```yaml
+id: mapping-list-id
+foundryA: source-foundry
+layerA: source-layer
+foundryB: target-foundry
+layerB: target-layer
+mappings:
+  - "[pattern1] <> [replacement1]"
+  - "[pattern2] <> [replacement2]"
+```
+
+The `sdk` and `server` fields in the main configuration file are optional and override the default endpoints used for Kalamar plugin integration:
 
 - **`sdk`**: Custom SDK JavaScript file URL (default: `https://korap.ids-mannheim.de/js/korap-plugin-latest.js`)
 - **`server`**: Custom server endpoint URL (default: `https://korap.ids-mannheim.de/`)
 
-These values are applied during configuration parsing and affect the HTML plugin page served at the root endpoint (`/`).
+These values are applied during configuration parsing and affect the HTML plugin page served at the root endpoint (`/`). When using only individual mapping files (`-m` flags), default values are used.
 
 ### Mapping Rules
 
@@ -143,10 +168,10 @@ Health check endpoint that returns "OK" with HTTP 200 status.
 - [x] Support for rewrites
 - [x] Web service
 - [x] JSON script for Kalamar integration
+- [x] Integration of multiple mapping files
 - [ ] Support for negation
 - [ ] Support multiple mappings (by having a check list)
 - [ ] Response rewriting
-- [ ] Integration of mapping files
 
 ## COPYRIGHT AND LICENSE
 

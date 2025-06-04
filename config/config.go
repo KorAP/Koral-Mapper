@@ -34,44 +34,107 @@ type MappingConfig struct {
 	Lists  []MappingList `yaml:"lists,omitempty"`
 }
 
-// LoadConfig loads a YAML configuration file and returns a Config object
-func LoadConfig(filename string) (*MappingConfig, error) {
-	data, err := os.ReadFile(filename)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read config file: %w", err)
-	}
+// LoadFromSources loads configuration from multiple sources and merges them:
+// - A main configuration file (optional) containing global settings and lists
+// - Individual mapping files (optional) containing single mapping lists each
+// At least one source must be provided
+func LoadFromSources(configFile string, mappingFiles []string) (*MappingConfig, error) {
+	var allLists []MappingList
+	var globalConfig MappingConfig
 
-	// Check for empty file
-	if len(data) == 0 {
-		return nil, fmt.Errorf("EOF: config file is empty")
-	}
+	// Track seen IDs across all sources to detect duplicates
+	seenIDs := make(map[string]bool)
 
-	// Try to unmarshal as new format first (object with optional sdk/server and lists)
-	var config MappingConfig
-	if err := yaml.Unmarshal(data, &config); err == nil && len(config.Lists) > 0 {
-		// Successfully parsed as new format with lists field
-		if err := validateMappingLists(config.Lists); err != nil {
-			return nil, err
+	// Load main configuration file if provided
+	if configFile != "" {
+		data, err := os.ReadFile(configFile)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read config file '%s': %w", configFile, err)
 		}
-		// Apply defaults if not specified
-		applyDefaults(&config)
-		return &config, nil
+
+		if len(data) == 0 {
+			return nil, fmt.Errorf("EOF: config file '%s' is empty", configFile)
+		}
+
+		// Try to unmarshal as new format first (object with optional sdk/server and lists)
+		if err := yaml.Unmarshal(data, &globalConfig); err == nil && len(globalConfig.Lists) > 0 {
+			// Successfully parsed as new format with lists field
+			for _, list := range globalConfig.Lists {
+				if seenIDs[list.ID] {
+					return nil, fmt.Errorf("duplicate mapping list ID found: %s", list.ID)
+				}
+				seenIDs[list.ID] = true
+			}
+			allLists = append(allLists, globalConfig.Lists...)
+		} else {
+			// Fall back to old format (direct list)
+			var lists []MappingList
+			if err := yaml.Unmarshal(data, &lists); err != nil {
+				return nil, fmt.Errorf("failed to parse YAML config file '%s': %w", configFile, err)
+			}
+
+			for _, list := range lists {
+				if seenIDs[list.ID] {
+					return nil, fmt.Errorf("duplicate mapping list ID found: %s", list.ID)
+				}
+				seenIDs[list.ID] = true
+			}
+			allLists = append(allLists, lists...)
+			// Clear the lists from globalConfig since we got them from the old format
+			globalConfig.Lists = nil
+		}
 	}
 
-	// Fall back to old format (direct list)
-	var lists []MappingList
-	if err := yaml.Unmarshal(data, &lists); err != nil {
-		return nil, fmt.Errorf("failed to parse YAML: %w", err)
+	// Load individual mapping files
+	for _, file := range mappingFiles {
+		data, err := os.ReadFile(file)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read mapping file '%s': %w", file, err)
+		}
+
+		if len(data) == 0 {
+			return nil, fmt.Errorf("EOF: mapping file '%s' is empty", file)
+		}
+
+		var list MappingList
+		if err := yaml.Unmarshal(data, &list); err != nil {
+			return nil, fmt.Errorf("failed to parse YAML mapping file '%s': %w", file, err)
+		}
+
+		if seenIDs[list.ID] {
+			return nil, fmt.Errorf("duplicate mapping list ID found: %s", list.ID)
+		}
+		seenIDs[list.ID] = true
+		allLists = append(allLists, list)
 	}
 
-	if err := validateMappingLists(lists); err != nil {
+	// Ensure we have at least some configuration
+	if len(allLists) == 0 {
+		return nil, fmt.Errorf("no mapping lists found: provide either a config file (-c) with lists or mapping files (-m)")
+	}
+
+	// Validate all mapping lists
+	if err := validateMappingLists(allLists); err != nil {
 		return nil, err
 	}
 
-	config = MappingConfig{Lists: lists}
+	// Create final configuration
+	result := &MappingConfig{
+		SDK:    globalConfig.SDK,
+		Server: globalConfig.Server,
+		Lists:  allLists,
+	}
+
 	// Apply defaults if not specified
-	applyDefaults(&config)
-	return &config, nil
+	applyDefaults(result)
+
+	return result, nil
+}
+
+// LoadConfig loads a YAML configuration file and returns a Config object
+// Deprecated: Use LoadFromSources for new code
+func LoadConfig(filename string) (*MappingConfig, error) {
+	return LoadFromSources(filename, nil)
 }
 
 // applyDefaults sets default values for SDK and Server if they are empty

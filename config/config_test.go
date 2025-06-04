@@ -691,3 +691,181 @@ lists:
 		})
 	}
 }
+
+func TestLoadFromSources(t *testing.T) {
+	// Create main config file
+	mainConfigContent := `
+sdk: "https://custom.example.com/sdk.js"
+server: "https://custom.example.com/"
+lists:
+- id: main-mapper
+  mappings:
+    - "[A] <> [B]"
+`
+	mainConfigFile, err := os.CreateTemp("", "main-config-*.yaml")
+	require.NoError(t, err)
+	defer os.Remove(mainConfigFile.Name())
+
+	_, err = mainConfigFile.WriteString(mainConfigContent)
+	require.NoError(t, err)
+	err = mainConfigFile.Close()
+	require.NoError(t, err)
+
+	// Create individual mapping files
+	mappingFile1Content := `
+id: mapper-1
+foundryA: opennlp
+layerA: p
+mappings:
+  - "[C] <> [D]"
+`
+	mappingFile1, err := os.CreateTemp("", "mapping1-*.yaml")
+	require.NoError(t, err)
+	defer os.Remove(mappingFile1.Name())
+
+	_, err = mappingFile1.WriteString(mappingFile1Content)
+	require.NoError(t, err)
+	err = mappingFile1.Close()
+	require.NoError(t, err)
+
+	mappingFile2Content := `
+id: mapper-2
+foundryB: upos
+layerB: p
+mappings:
+  - "[E] <> [F]"
+`
+	mappingFile2, err := os.CreateTemp("", "mapping2-*.yaml")
+	require.NoError(t, err)
+	defer os.Remove(mappingFile2.Name())
+
+	_, err = mappingFile2.WriteString(mappingFile2Content)
+	require.NoError(t, err)
+	err = mappingFile2.Close()
+	require.NoError(t, err)
+
+	tests := []struct {
+		name         string
+		configFile   string
+		mappingFiles []string
+		wantErr      bool
+		expectedIDs  []string
+	}{
+		{
+			name:         "Main config only",
+			configFile:   mainConfigFile.Name(),
+			mappingFiles: []string{},
+			wantErr:      false,
+			expectedIDs:  []string{"main-mapper"},
+		},
+		{
+			name:         "Mapping files only",
+			configFile:   "",
+			mappingFiles: []string{mappingFile1.Name(), mappingFile2.Name()},
+			wantErr:      false,
+			expectedIDs:  []string{"mapper-1", "mapper-2"},
+		},
+		{
+			name:         "Main config and mapping files",
+			configFile:   mainConfigFile.Name(),
+			mappingFiles: []string{mappingFile1.Name(), mappingFile2.Name()},
+			wantErr:      false,
+			expectedIDs:  []string{"main-mapper", "mapper-1", "mapper-2"},
+		},
+		{
+			name:         "No configuration sources",
+			configFile:   "",
+			mappingFiles: []string{},
+			wantErr:      true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config, err := LoadFromSources(tt.configFile, tt.mappingFiles)
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			require.NotNil(t, config)
+
+			// Check that all expected mapping IDs are present
+			require.Len(t, config.Lists, len(tt.expectedIDs))
+			actualIDs := make([]string, len(config.Lists))
+			for i, list := range config.Lists {
+				actualIDs[i] = list.ID
+			}
+			for _, expectedID := range tt.expectedIDs {
+				assert.Contains(t, actualIDs, expectedID)
+			}
+
+			// Check that SDK and Server are set (either from config or defaults)
+			assert.NotEmpty(t, config.SDK)
+			assert.NotEmpty(t, config.Server)
+		})
+	}
+}
+
+func TestLoadFromSourcesWithDefaults(t *testing.T) {
+	// Test that defaults are applied when loading only mapping files
+	mappingFileContent := `
+id: test-mapper
+mappings:
+  - "[A] <> [B]"
+`
+	mappingFile, err := os.CreateTemp("", "mapping-*.yaml")
+	require.NoError(t, err)
+	defer os.Remove(mappingFile.Name())
+
+	_, err = mappingFile.WriteString(mappingFileContent)
+	require.NoError(t, err)
+	err = mappingFile.Close()
+	require.NoError(t, err)
+
+	config, err := LoadFromSources("", []string{mappingFile.Name()})
+	require.NoError(t, err)
+
+	// Check that defaults are applied
+	assert.Equal(t, defaultSDK, config.SDK)
+	assert.Equal(t, defaultServer, config.Server)
+	require.Len(t, config.Lists, 1)
+	assert.Equal(t, "test-mapper", config.Lists[0].ID)
+}
+
+func TestLoadFromSourcesDuplicateIDs(t *testing.T) {
+	// Create config with duplicate IDs across sources
+	configContent := `
+lists:
+- id: duplicate-id
+  mappings:
+    - "[A] <> [B]"
+`
+	configFile, err := os.CreateTemp("", "config-*.yaml")
+	require.NoError(t, err)
+	defer os.Remove(configFile.Name())
+
+	_, err = configFile.WriteString(configContent)
+	require.NoError(t, err)
+	err = configFile.Close()
+	require.NoError(t, err)
+
+	mappingContent := `
+id: duplicate-id
+mappings:
+  - "[C] <> [D]"
+`
+	mappingFile, err := os.CreateTemp("", "mapping-*.yaml")
+	require.NoError(t, err)
+	defer os.Remove(mappingFile.Name())
+
+	_, err = mappingFile.WriteString(mappingContent)
+	require.NoError(t, err)
+	err = mappingFile.Close()
+	require.NoError(t, err)
+
+	_, err = LoadFromSources(configFile.Name(), []string{mappingFile.Name()})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "duplicate mapping list ID found: duplicate-id")
+}
