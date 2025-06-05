@@ -9,5 +9,6 @@ todo.txt
 /termmapper
 /cmd/termmapper/termmapper
 *.yaml
+!/mappings/*.yaml
 \#*
 !/cmd/termmapper/

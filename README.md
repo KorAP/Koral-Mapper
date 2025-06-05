@@ -170,9 +170,11 @@ Serves the Kalamar plugin integration page. This HTML page includes:
 
 The SDK script and server data-attribute in the HTML are determined by the configuration file's `sdk` and `server` values, with fallback to default endpoints if not specified.
 
-### GET /health
+## Supported mappings
 
-Health check endpoint that returns "OK" with HTTP 200 status.
+### `mappings/stts-upos.yaml`
+
+Mapping between STTS and UD part-of-spech tags.
 
 ## Progress
 
