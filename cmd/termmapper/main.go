@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 
@@ -23,7 +24,7 @@ const (
 type appConfig struct {
 	Port     *int     `kong:"short='p',help='Port to listen on'"`
 	Config   string   `kong:"short='c',help='YAML configuration file containing mapping directives and global settings'"`
-	Mappings []string `kong:"short='m',help='Individual YAML mapping files to load'"`
+	Mappings []string `kong:"short='m',help='Individual YAML mapping files to load (supports glob patterns like dir/*.yaml)'"`
 	LogLevel *string  `kong:"short='l',help='Log level (debug, info, warn, error)'"`
 }
 
@@ -79,8 +80,14 @@ func main() {
 		log.Fatal().Msg("At least one configuration source must be provided: use -c for main config file or -m for mapping files")
 	}
 
+	// Expand glob patterns in mapping files
+	expandedMappings, err := expandGlobs(cfg.Mappings)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to expand glob patterns in mapping files")
+	}
+
 	// Load configuration from multiple sources
-	yamlConfig, err := config.LoadFromSources(cfg.Config, cfg.Mappings)
+	yamlConfig, err := config.LoadFromSources(cfg.Config, expandedMappings)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to load configuration")
 	}
@@ -356,4 +363,28 @@ func generateKalamarPluginHTML(data TemplateData) string {
 </html>`
 
 	return html
+}
+
+// expandGlobs expands glob patterns in the slice of file paths
+// Returns the expanded list of files or an error if glob expansion fails
+func expandGlobs(patterns []string) ([]string, error) {
+	var expanded []string
+
+	for _, pattern := range patterns {
+		// Use filepath.Glob which works cross-platform
+		matches, err := filepath.Glob(pattern)
+		if err != nil {
+			return nil, fmt.Errorf("failed to expand glob pattern '%s': %w", pattern, err)
+		}
+
+		// If no matches found, treat as literal filename (consistent with shell behavior)
+		if len(matches) == 0 {
+			log.Warn().Str("pattern", pattern).Msg("Glob pattern matched no files, treating as literal filename")
+			expanded = append(expanded, pattern)
+		} else {
+			expanded = append(expanded, matches...)
+		}
+	}
+
+	return expanded, nil
 }

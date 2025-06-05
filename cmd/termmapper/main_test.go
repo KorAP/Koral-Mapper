@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
+	"sort"
 	"testing"
 
 	tmconfig "github.com/KorAP/KoralPipe-TermMapper/config"
@@ -574,4 +576,344 @@ mappings:
 	m, err := mapper.NewMapper(config.Lists)
 	require.NoError(t, err)
 	require.NotNil(t, m)
+}
+
+func TestExpandGlobs(t *testing.T) {
+	// Create a temporary directory for test files
+	tempDir, err := os.MkdirTemp("", "glob_test_*")
+	require.NoError(t, err)
+	defer os.RemoveAll(tempDir)
+
+	// Create test files with .yaml and .yml extensions
+	testFiles := []struct {
+		name    string
+		content string
+	}{
+		{
+			name: "mapper1.yaml",
+			content: `
+id: test-mapper-1
+mappings:
+  - "[A] <> [B]"
+`,
+		},
+		{
+			name: "mapper2.yml",
+			content: `
+id: test-mapper-2
+mappings:
+  - "[C] <> [D]"
+`,
+		},
+		{
+			name: "mapper3.yaml",
+			content: `
+id: test-mapper-3
+mappings:
+  - "[E] <> [F]"
+`,
+		},
+		{
+			name:    "other.txt",
+			content: "not a yaml file",
+		},
+	}
+
+	for _, file := range testFiles {
+		filePath := filepath.Join(tempDir, file.name)
+		err := os.WriteFile(filePath, []byte(file.content), 0644)
+		require.NoError(t, err)
+	}
+
+	tests := []struct {
+		name      string
+		patterns  []string
+		expected  []string
+		expectErr bool
+	}{
+		{
+			name:     "Single literal file",
+			patterns: []string{filepath.Join(tempDir, "mapper1.yaml")},
+			expected: []string{filepath.Join(tempDir, "mapper1.yaml")},
+		},
+		{
+			name:     "Multiple literal files",
+			patterns: []string{filepath.Join(tempDir, "mapper1.yaml"), filepath.Join(tempDir, "mapper2.yml")},
+			expected: []string{filepath.Join(tempDir, "mapper1.yaml"), filepath.Join(tempDir, "mapper2.yml")},
+		},
+		{
+			name:     "Glob pattern for yaml files",
+			patterns: []string{filepath.Join(tempDir, "*.yaml")},
+			expected: []string{filepath.Join(tempDir, "mapper1.yaml"), filepath.Join(tempDir, "mapper3.yaml")},
+		},
+		{
+			name:     "Glob pattern for yml files",
+			patterns: []string{filepath.Join(tempDir, "*.yml")},
+			expected: []string{filepath.Join(tempDir, "mapper2.yml")},
+		},
+		{
+			name:     "Glob pattern for all yaml/yml files",
+			patterns: []string{filepath.Join(tempDir, "*.y*ml")},
+			expected: []string{
+				filepath.Join(tempDir, "mapper1.yaml"),
+				filepath.Join(tempDir, "mapper2.yml"),
+				filepath.Join(tempDir, "mapper3.yaml"),
+			},
+		},
+		{
+			name:     "Mixed literal and glob",
+			patterns: []string{filepath.Join(tempDir, "mapper1.yaml"), filepath.Join(tempDir, "*.yml")},
+			expected: []string{filepath.Join(tempDir, "mapper1.yaml"), filepath.Join(tempDir, "mapper2.yml")},
+		},
+		{
+			name:     "No matches - treats as literal",
+			patterns: []string{filepath.Join(tempDir, "nonexistent*.yaml")},
+			expected: []string{filepath.Join(tempDir, "nonexistent*.yaml")},
+		},
+		{
+			name:      "Invalid glob pattern",
+			patterns:  []string{filepath.Join(tempDir, "[")},
+			expectErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := expandGlobs(tt.patterns)
+
+			if tt.expectErr {
+				assert.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+
+			// Sort both slices for comparison since glob results may not be in consistent order
+			sort.Strings(result)
+			sort.Strings(tt.expected)
+
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestGlobMappingFileLoading(t *testing.T) {
+	// Create a temporary directory for test files
+	tempDir, err := os.MkdirTemp("", "glob_mapping_test_*")
+	require.NoError(t, err)
+	defer os.RemoveAll(tempDir)
+
+	// Create test mapping files
+	testFiles := []struct {
+		name    string
+		content string
+	}{
+		{
+			name: "pos-mapper.yaml",
+			content: `
+id: pos-mapper
+foundryA: opennlp
+layerA: p
+foundryB: upos
+layerB: p
+mappings:
+  - "[PIDAT] <> [DET]"
+  - "[ADJA] <> [ADJ]"
+`,
+		},
+		{
+			name: "ner-mapper.yml",
+			content: `
+id: ner-mapper
+foundryA: opennlp
+layerA: ner
+foundryB: upos
+layerB: ner
+mappings:
+  - "[PER] <> [PERSON]"
+  - "[LOC] <> [LOCATION]"
+`,
+		},
+		{
+			name: "special-mapper.yaml",
+			content: `
+id: special-mapper
+mappings:
+  - "[X] <> [Y]"
+`,
+		},
+	}
+
+	for _, file := range testFiles {
+		filePath := filepath.Join(tempDir, file.name)
+		err := os.WriteFile(filePath, []byte(file.content), 0644)
+		require.NoError(t, err)
+	}
+
+	tests := []struct {
+		name           string
+		configFile     string
+		mappingPattern string
+		expectedIDs    []string
+	}{
+		{
+			name:           "Load all yaml files",
+			mappingPattern: filepath.Join(tempDir, "*.yaml"),
+			expectedIDs:    []string{"pos-mapper", "special-mapper"},
+		},
+		{
+			name:           "Load all yml files",
+			mappingPattern: filepath.Join(tempDir, "*.yml"),
+			expectedIDs:    []string{"ner-mapper"},
+		},
+		{
+			name:           "Load all yaml/yml files",
+			mappingPattern: filepath.Join(tempDir, "*-mapper.y*ml"),
+			expectedIDs:    []string{"pos-mapper", "ner-mapper", "special-mapper"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Expand the glob pattern
+			expanded, err := expandGlobs([]string{tt.mappingPattern})
+			require.NoError(t, err)
+
+			// Load configuration using the expanded file list
+			config, err := tmconfig.LoadFromSources(tt.configFile, expanded)
+			require.NoError(t, err)
+
+			// Verify that the expected mappers are loaded
+			require.Len(t, config.Lists, len(tt.expectedIDs))
+
+			actualIDs := make([]string, len(config.Lists))
+			for i, list := range config.Lists {
+				actualIDs[i] = list.ID
+			}
+
+			// Sort both slices for comparison
+			sort.Strings(actualIDs)
+			sort.Strings(tt.expectedIDs)
+			assert.Equal(t, tt.expectedIDs, actualIDs)
+
+			// Create mapper to ensure all loaded configs are valid
+			m, err := mapper.NewMapper(config.Lists)
+			require.NoError(t, err)
+			require.NotNil(t, m)
+		})
+	}
+}
+
+func TestGlobErrorHandling(t *testing.T) {
+	tests := []struct {
+		name      string
+		patterns  []string
+		expectErr bool
+	}{
+		{
+			name:      "Empty patterns",
+			patterns:  []string{},
+			expectErr: false, // Should return empty slice, no error
+		},
+		{
+			name:      "Invalid glob pattern",
+			patterns:  []string{"["},
+			expectErr: true,
+		},
+		{
+			name:      "Valid and invalid mixed",
+			patterns:  []string{"valid.yaml", "["},
+			expectErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := expandGlobs(tt.patterns)
+
+			if tt.expectErr {
+				assert.Error(t, err)
+				assert.Nil(t, result)
+			} else {
+				assert.NoError(t, err)
+				if len(tt.patterns) == 0 {
+					assert.Empty(t, result)
+				}
+			}
+		})
+	}
+}
+
+func TestGlobIntegrationWithTestData(t *testing.T) {
+	// Test that our glob functionality works with the actual testdata files
+	// This ensures the feature works end-to-end in a realistic scenario
+
+	// Expand glob pattern for the example mapper files
+	expanded, err := expandGlobs([]string{"../../testdata/example-mapper*.yaml"})
+	require.NoError(t, err)
+
+	// Should match exactly the two mapper files
+	sort.Strings(expanded)
+	assert.Len(t, expanded, 2)
+	assert.Contains(t, expanded[0], "example-mapper1.yaml")
+	assert.Contains(t, expanded[1], "example-mapper2.yaml")
+
+	// Load configuration using the expanded files
+	config, err := tmconfig.LoadFromSources("", expanded)
+	require.NoError(t, err)
+
+	// Verify that both mappers are loaded correctly
+	require.Len(t, config.Lists, 2)
+
+	// Get the IDs to verify they match the expected ones
+	actualIDs := make([]string, len(config.Lists))
+	for i, list := range config.Lists {
+		actualIDs[i] = list.ID
+	}
+	sort.Strings(actualIDs)
+
+	expectedIDs := []string{"example-mapper-1", "example-mapper-2"}
+	assert.Equal(t, expectedIDs, actualIDs)
+
+	// Create mapper to ensure everything works
+	m, err := mapper.NewMapper(config.Lists)
+	require.NoError(t, err)
+	require.NotNil(t, m)
+
+	// Test that the mapper actually works with a real transformation
+	app := fiber.New()
+	setupRoutes(app, m, config)
+
+	// Test a transformation from example-mapper-1
+	testInput := `{
+		"@type": "koral:token",
+		"wrap": {
+			"@type": "koral:term",
+			"foundry": "opennlp",
+			"key": "PIDAT",
+			"layer": "p",
+			"match": "match:eq"
+		}
+	}`
+
+	req := httptest.NewRequest(http.MethodPost, "/example-mapper-1/query?dir=atob", bytes.NewBufferString(testInput))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := app.Test(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var result map[string]interface{}
+	err = json.NewDecoder(resp.Body).Decode(&result)
+	require.NoError(t, err)
+
+	// Verify the transformation was applied
+	wrap := result["wrap"].(map[string]interface{})
+	assert.Equal(t, "koral:termGroup", wrap["@type"])
+	operands := wrap["operands"].([]interface{})
+	require.Greater(t, len(operands), 0)
+	firstOperand := operands[0].(map[string]interface{})
+	assert.Equal(t, "DET", firstOperand["key"])
 }
