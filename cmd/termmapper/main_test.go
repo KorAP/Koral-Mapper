@@ -917,3 +917,191 @@ func TestGlobIntegrationWithTestData(t *testing.T) {
 	firstOperand := operands[0].(map[string]interface{})
 	assert.Equal(t, "DET", firstOperand["key"])
 }
+
+func TestConfigurableServiceURL(t *testing.T) {
+	// Create test mapping list
+	mappingList := tmconfig.MappingList{
+		ID: "test-mapper",
+		Mappings: []tmconfig.MappingRule{
+			"[A] <> [B]",
+		},
+	}
+
+	tests := []struct {
+		name               string
+		customServiceURL   string
+		expectedServiceURL string
+	}{
+		{
+			name:               "Custom service URL",
+			customServiceURL:   "https://custom.example.com/plugin/termmapper",
+			expectedServiceURL: "https://custom.example.com/plugin/termmapper",
+		},
+		{
+			name:               "Default service URL when not specified",
+			customServiceURL:   "", // Will use default
+			expectedServiceURL: "https://korap.ids-mannheim.de/plugin/termmapper",
+		},
+		{
+			name:               "Custom service URL with different path",
+			customServiceURL:   "https://my-server.org/api/v1/termmapper",
+			expectedServiceURL: "https://my-server.org/api/v1/termmapper",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create mapper
+			m, err := mapper.NewMapper([]tmconfig.MappingList{mappingList})
+			require.NoError(t, err)
+
+			// Create mock config with custom service URL
+			mockConfig := &tmconfig.MappingConfig{
+				ServiceURL: tt.customServiceURL,
+				Lists:      []tmconfig.MappingList{mappingList},
+			}
+
+			// Apply defaults to simulate the real loading process
+			tmconfig.ApplyDefaults(mockConfig)
+
+			// Create fiber app
+			app := fiber.New()
+			setupRoutes(app, m, mockConfig)
+
+			// Test Kalamar plugin endpoint with a specific mapID
+			req := httptest.NewRequest(http.MethodGet, "/test-mapper", nil)
+			resp, err := app.Test(req)
+			require.NoError(t, err)
+			defer resp.Body.Close()
+
+			assert.Equal(t, http.StatusOK, resp.StatusCode)
+			body, err := io.ReadAll(resp.Body)
+			require.NoError(t, err)
+
+			htmlContent := string(body)
+
+			// Check that the HTML contains the expected service URL in the JavaScript
+			expectedJSURL := tt.expectedServiceURL + "/test-mapper/query"
+			assert.Contains(t, htmlContent, "'service' : '"+expectedJSURL+"'")
+
+			// Ensure it's still a valid HTML page
+			assert.Contains(t, htmlContent, "KoralPipe-TermMapper")
+			assert.Contains(t, htmlContent, "<!DOCTYPE html>")
+		})
+	}
+}
+
+func TestServiceURLConfigFileLoading(t *testing.T) {
+	// Create a temporary config file with custom service URL
+	configContent := `
+sdk: "https://custom.example.com/sdk.js"
+server: "https://custom.example.com/"
+serviceURL: "https://custom.example.com/api/termmapper"
+lists:
+- id: config-mapper
+  mappings:
+    - "[X] <> [Y]"
+`
+	configFile, err := os.CreateTemp("", "service-url-config-*.yaml")
+	require.NoError(t, err)
+	defer os.Remove(configFile.Name())
+
+	_, err = configFile.WriteString(configContent)
+	require.NoError(t, err)
+	err = configFile.Close()
+	require.NoError(t, err)
+
+	// Load configuration from file
+	config, err := tmconfig.LoadFromSources(configFile.Name(), nil)
+	require.NoError(t, err)
+
+	// Verify that the service URL was loaded correctly
+	assert.Equal(t, "https://custom.example.com/api/termmapper", config.ServiceURL)
+
+	// Verify other fields are also preserved
+	assert.Equal(t, "https://custom.example.com/sdk.js", config.SDK)
+	assert.Equal(t, "https://custom.example.com/", config.Server)
+
+	// Create mapper and test the service URL is used in the HTML
+	m, err := mapper.NewMapper(config.Lists)
+	require.NoError(t, err)
+
+	app := fiber.New()
+	setupRoutes(app, m, config)
+
+	req := httptest.NewRequest(http.MethodGet, "/config-mapper", nil)
+	resp, err := app.Test(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+
+	htmlContent := string(body)
+	expectedJSURL := "https://custom.example.com/api/termmapper/config-mapper/query"
+	assert.Contains(t, htmlContent, "'service' : '"+expectedJSURL+"'")
+}
+
+func TestServiceURLDefaults(t *testing.T) {
+	// Test that defaults are applied correctly when creating a config
+	config := &tmconfig.MappingConfig{
+		Lists: []tmconfig.MappingList{
+			{
+				ID:       "test",
+				Mappings: []tmconfig.MappingRule{"[A] <> [B]"},
+			},
+		},
+	}
+
+	// Apply defaults (simulating what happens during loading)
+	tmconfig.ApplyDefaults(config)
+
+	// Check that the default service URL was applied
+	assert.Equal(t, "https://korap.ids-mannheim.de/plugin/termmapper", config.ServiceURL)
+
+	// Check that other defaults were also applied
+	assert.Equal(t, "https://korap.ids-mannheim.de/", config.Server)
+	assert.Equal(t, "https://korap.ids-mannheim.de/js/korap-plugin-latest.js", config.SDK)
+	assert.Equal(t, 3000, config.Port)
+	assert.Equal(t, "warn", config.LogLevel)
+}
+
+func TestServiceURLWithExampleConfig(t *testing.T) {
+	// Test that the actual example config file works with the new serviceURL functionality
+	// and that defaults are properly applied when serviceURL is not specified
+
+	config, err := tmconfig.LoadFromSources("../../testdata/example-config.yaml", nil)
+	require.NoError(t, err)
+
+	// Verify that the default service URL was applied since it's not in the example config
+	assert.Equal(t, "https://korap.ids-mannheim.de/plugin/termmapper", config.ServiceURL)
+
+	// Verify other values from the example config are preserved
+	assert.Equal(t, "https://korap.ids-mannheim.de/js/korap-plugin-latest.js", config.SDK)
+	assert.Equal(t, "https://korap.ids-mannheim.de/", config.Server)
+
+	// Verify the mapper was loaded correctly
+	require.Len(t, config.Lists, 1)
+	assert.Equal(t, "main-config-mapper", config.Lists[0].ID)
+
+	// Create mapper and test that the service URL is used correctly in the HTML
+	m, err := mapper.NewMapper(config.Lists)
+	require.NoError(t, err)
+
+	app := fiber.New()
+	setupRoutes(app, m, config)
+
+	req := httptest.NewRequest(http.MethodGet, "/main-config-mapper", nil)
+	resp, err := app.Test(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+
+	htmlContent := string(body)
+	expectedJSURL := "https://korap.ids-mannheim.de/plugin/termmapper/main-config-mapper/query"
+	assert.Contains(t, htmlContent, "'service' : '"+expectedJSURL+"'")
+}

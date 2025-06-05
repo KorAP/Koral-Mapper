@@ -10,10 +10,11 @@ import (
 )
 
 const (
-	defaultServer   = "https://korap.ids-mannheim.de/"
-	defaultSDK      = "https://korap.ids-mannheim.de/js/korap-plugin-latest.js"
-	defaultPort     = 3000
-	defaultLogLevel = "warn"
+	defaultServer     = "https://korap.ids-mannheim.de/"
+	defaultSDK        = "https://korap.ids-mannheim.de/js/korap-plugin-latest.js"
+	defaultServiceURL = "https://korap.ids-mannheim.de/plugin/termmapper"
+	defaultPort       = 3000
+	defaultLogLevel   = "warn"
 )
 
 // MappingRule represents a single mapping rule in the configuration
@@ -32,11 +33,12 @@ type MappingList struct {
 
 // MappingConfig represents the root configuration containing multiple mapping lists
 type MappingConfig struct {
-	SDK      string        `yaml:"sdk,omitempty"`
-	Server   string        `yaml:"server,omitempty"`
-	Port     int           `yaml:"port,omitempty"`
-	LogLevel string        `yaml:"loglevel,omitempty"`
-	Lists    []MappingList `yaml:"lists,omitempty"`
+	SDK        string        `yaml:"sdk,omitempty"`
+	Server     string        `yaml:"server,omitempty"`
+	ServiceURL string        `yaml:"serviceURL,omitempty"`
+	Port       int           `yaml:"port,omitempty"`
+	LogLevel   string        `yaml:"loglevel,omitempty"`
+	Lists      []MappingList `yaml:"lists,omitempty"`
 }
 
 // LoadFromSources loads configuration from multiple sources and merges them:
@@ -125,13 +127,16 @@ func LoadFromSources(configFile string, mappingFiles []string) (*MappingConfig, 
 
 	// Create final configuration
 	result := &MappingConfig{
-		SDK:    globalConfig.SDK,
-		Server: globalConfig.Server,
-		Lists:  allLists,
+		SDK:        globalConfig.SDK,
+		Server:     globalConfig.Server,
+		ServiceURL: globalConfig.ServiceURL,
+		Port:       globalConfig.Port,
+		LogLevel:   globalConfig.LogLevel,
+		Lists:      allLists,
 	}
 
 	// Apply defaults if not specified
-	applyDefaults(result)
+	ApplyDefaults(result)
 
 	return result, nil
 }
@@ -142,13 +147,16 @@ func LoadConfig(filename string) (*MappingConfig, error) {
 	return LoadFromSources(filename, nil)
 }
 
-// applyDefaults sets default values for SDK and Server if they are empty
-func applyDefaults(config *MappingConfig) {
+// ApplyDefaults sets default values for SDK and Server if they are empty
+func ApplyDefaults(config *MappingConfig) {
 	if config.SDK == "" {
 		config.SDK = defaultSDK
 	}
 	if config.Server == "" {
 		config.Server = defaultServer
+	}
+	if config.ServiceURL == "" {
+		config.ServiceURL = defaultServiceURL
 	}
 	if config.Port == 0 {
 		config.Port = defaultPort

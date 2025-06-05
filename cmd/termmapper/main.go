@@ -42,6 +42,7 @@ type TemplateData struct {
 	Description string
 	Server      string
 	SDK         string
+	ServiceURL  string
 	MapID       string
 	Mappings    []TemplateMapping
 }
@@ -288,6 +289,7 @@ func handleKalamarPlugin(yamlConfig *config.MappingConfig) fiber.Handler {
 			Description: config.Description,
 			Server:      server,
 			SDK:         sdk,
+			ServiceURL:  yamlConfig.ServiceURL,
 			MapID:       mapID,
 			Mappings:    mappings,
 		}
@@ -353,7 +355,7 @@ func generateKalamarPluginHTML(data TemplateData) string {
   		  
        let data = {
          'action'  : 'pipe',
-         'service' : 'https://korap.ids-mannheim.de/plugin/termmapper/` + data.MapID + `/query'
+         'service' : '` + data.ServiceURL + `/` + data.MapID + `/query'
        };
 
        function pluginit (p) {
