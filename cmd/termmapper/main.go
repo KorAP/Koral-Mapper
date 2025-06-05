@@ -28,6 +28,11 @@ type appConfig struct {
 	LogLevel *string  `kong:"short='l',help='Log level (debug, info, warn, error)'"`
 }
 
+type TemplateMapping struct {
+	ID          string
+	Description string
+}
+
 // TemplateData holds data for the Kalamar plugin template
 type TemplateData struct {
 	Title       string
@@ -38,7 +43,7 @@ type TemplateData struct {
 	Server      string
 	SDK         string
 	MapID       string
-	MappingIDs  []string
+	Mappings    []TemplateMapping
 }
 
 func parseConfig() *appConfig {
@@ -256,10 +261,13 @@ func handleKalamarPlugin(yamlConfig *config.MappingConfig) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		mapID := c.Params("map")
 
-		// Get list of available mapping IDs
-		var mappingIDs []string
+		// Get list of available mappings
+		var mappings []TemplateMapping
 		for _, list := range yamlConfig.Lists {
-			mappingIDs = append(mappingIDs, list.ID)
+			mappings = append(mappings, TemplateMapping{
+				ID:          list.ID,
+				Description: list.Description,
+			})
 		}
 
 		// Use values from config (defaults are already applied during parsing)
@@ -276,7 +284,7 @@ func handleKalamarPlugin(yamlConfig *config.MappingConfig) fiber.Handler {
 			Server:      server,
 			SDK:         sdk,
 			MapID:       mapID,
-			MappingIDs:  mappingIDs,
+			Mappings:    mappings,
 		}
 
 		// Generate HTML
@@ -324,15 +332,15 @@ func generateKalamarPluginHTML(data TemplateData) string {
         </dl>
 		
 		<h2>Available Term Mappings</h2>
-	    <ul>`
+	    <dl>`
 
-	for _, id := range data.MappingIDs {
-		html += `
-            <li>` + id + `</li>`
+	for _, m := range data.Mappings {
+		html += `<dt><tt>` + m.ID + `</tt></dt>`
+		html += `<dd>` + m.Description + `</dd>`
 	}
 
 	html += `
-    </ul>`
+    </dl>`
 
 	if data.MapID != "" {
 		html += `   <script>

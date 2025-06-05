@@ -21,12 +21,13 @@ type MappingRule string
 
 // MappingList represents a list of mapping rules with metadata
 type MappingList struct {
-	ID       string        `yaml:"id"`
-	FoundryA string        `yaml:"foundryA,omitempty"`
-	LayerA   string        `yaml:"layerA,omitempty"`
-	FoundryB string        `yaml:"foundryB,omitempty"`
-	LayerB   string        `yaml:"layerB,omitempty"`
-	Mappings []MappingRule `yaml:"mappings"`
+	ID          string        `yaml:"id"`
+	Description string        `yaml:"desc,omitempty"`
+	FoundryA    string        `yaml:"foundryA,omitempty"`
+	LayerA      string        `yaml:"layerA,omitempty"`
+	FoundryB    string        `yaml:"foundryB,omitempty"`
+	LayerB      string        `yaml:"layerB,omitempty"`
+	Mappings    []MappingRule `yaml:"mappings"`
 }
 
 // MappingConfig represents the root configuration containing multiple mapping lists
