@@ -64,8 +64,8 @@ func LoadFromSources(configFile string, mappingFiles []string) (*MappingConfig, 
 		}
 
 		// Try to unmarshal as new format first (object with optional sdk/server and lists)
-		if err := yaml.Unmarshal(data, &globalConfig); err == nil && len(globalConfig.Lists) > 0 {
-			// Successfully parsed as new format with lists field
+		if err := yaml.Unmarshal(data, &globalConfig); err == nil {
+			// Successfully parsed as new format - accept it regardless of whether it has lists
 			for _, list := range globalConfig.Lists {
 				if seenIDs[list.ID] {
 					return nil, fmt.Errorf("duplicate mapping list ID found: %s", list.ID)

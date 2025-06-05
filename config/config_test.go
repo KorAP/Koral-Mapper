@@ -200,7 +200,7 @@ func TestLoadConfigEdgeCases(t *testing.T) {
 id: test
 mappings:
   - "[A] <> [B]"`,
-			wantErr: "cannot unmarshal",
+			wantErr: "no mapping lists found",
 		},
 		{
 			name: "Missing required fields",
@@ -796,4 +796,53 @@ mappings:
 	_, err = LoadFromSources(configFile.Name(), []string{mappingFile.Name()})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "duplicate mapping list ID found: duplicate-id")
+}
+
+func TestLoadFromSourcesConfigWithOnlyPort(t *testing.T) {
+	// Create config file with only port (no lists)
+	configContent := `
+port: 8080
+loglevel: debug
+`
+	configFile, err := os.CreateTemp("", "config-*.yaml")
+	require.NoError(t, err)
+	defer os.Remove(configFile.Name())
+
+	_, err = configFile.WriteString(configContent)
+	require.NoError(t, err)
+	err = configFile.Close()
+	require.NoError(t, err)
+
+	// Create mapping file
+	mappingContent := `
+id: test-mapper
+mappings:
+  - "[A] <> [B]"
+`
+	mappingFile, err := os.CreateTemp("", "mapping-*.yaml")
+	require.NoError(t, err)
+	defer os.Remove(mappingFile.Name())
+
+	_, err = mappingFile.WriteString(mappingContent)
+	require.NoError(t, err)
+	err = mappingFile.Close()
+	require.NoError(t, err)
+
+	// This should work: config file has only port, mapping file provides the mapping list
+	config, err := LoadFromSources(configFile.Name(), []string{mappingFile.Name()})
+	require.NoError(t, err)
+	require.NotNil(t, config)
+
+	// Check that port and log level from config file are preserved
+	assert.Equal(t, 8080, config.Port)
+	assert.Equal(t, "debug", config.LogLevel)
+
+	// Check that mapping from mapping file is loaded
+	require.Len(t, config.Lists, 1)
+	assert.Equal(t, "test-mapper", config.Lists[0].ID)
+
+	// Check that defaults are applied for other fields
+	assert.Equal(t, defaultSDK, config.SDK)
+	assert.Equal(t, defaultServer, config.Server)
+	assert.Equal(t, defaultServiceURL, config.ServiceURL)
 }
