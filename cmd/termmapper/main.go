@@ -129,6 +129,11 @@ func main() {
 	// Start server
 	go func() {
 		log.Info().Int("port", finalPort).Msg("Starting server")
+
+		for _, list := range yamlConfig.Lists {
+			log.Info().Str("id", list.ID).Str("desc", list.Description).Msg("Loaded mapping")
+		}
+
 		if err := app.Listen(fmt.Sprintf(":%d", finalPort)); err != nil {
 			log.Fatal().Err(err).Msg("Server error")
 		}
