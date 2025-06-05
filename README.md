@@ -22,8 +22,8 @@ Command Line Options
 
 - `--config` or `-c`: YAML configuration file containing mapping directives and global settings (optional)
 - `--mappings` or `-m`: Individual YAML mapping files to load (can be used multiple times, optional)
-- `--port` or `-p`: Port to listen on (default: 8080)
-- `--log-level` or `-l`: Log level (debug, info, warn, error) (default: info)
+- `--port` or `-p`: Port to listen on (overrides config file, defaults to 3000 if not specified)
+- `--log-level` or `-l`: Log level (debug, info, warn, error) (overrides config file, defaults to warn if not specified)
 - `--help` or `-h`: Show help message
 
 **Note**: At least one mapping source must be provided
@@ -32,10 +32,12 @@ Command Line Options
 
 KoralPipe-TermMapper supports loading configuration from multiple sources:
 
-1. **Main Configuration File** (`-c`): Contains global settings (SDK, server endpoints) and optional mapping lists
+1. **Main Configuration File** (`-c`): Contains global settings (SDK, server endpoints, port, log level) and optional mapping lists
 2. **Individual Mapping Files** (`-m`): Contains single mapping lists, can be specified multiple times
 
 The main configuration provides global settings, and all mapping lists from both sources are combined. Duplicate mapping IDs across all sources will result in an error.
+
+### Configuration File Format
 
 Configurations can contain global settings and mapping lists (used with the `-c` flag):
 
@@ -45,6 +47,12 @@ sdk: "https://custom.example.com/js/korap-plugin.js"
 
 # Optional: Custom server endpoint for Kalamar plugin integration  
 server: "https://custom.example.com/"
+
+# Optional: Port to listen on (default: 3000)
+port: 8080
+
+# Optional: Log level - debug, info, warn, error (default: warn)
+loglevel: info
 
 # Optional: Mapping lists (same format as individual mapping files)
 lists:
@@ -71,12 +79,16 @@ mappings:
   - "[pattern2] <> [replacement2]"
 ```
 
-The `sdk` and `server` fields in the main configuration file are optional and override the default endpoints used for Kalamar plugin integration:
+Command line arguments take precedence over configuration file values:
+
+The `sdk`, `server`, `port`, and `loglevel` fields in the main configuration file are optional and override the following default values:
 
 - **`sdk`**: Custom SDK JavaScript file URL (default: `https://korap.ids-mannheim.de/js/korap-plugin-latest.js`)
 - **`server`**: Custom server endpoint URL (default: `https://korap.ids-mannheim.de/`)
+- **`port`**: Server port (default: `3000`)
+- **`loglevel`**: Log level (default: `warn`)
 
-These values are applied during configuration parsing and affect the HTML plugin page served at the root endpoint (`/`). When using only individual mapping files (`-m` flags), default values are used.
+These values are applied during configuration parsing. When using only individual mapping files (`-m` flags), default values are used unless overridden by command line arguments.
 
 ### Mapping Rules
 

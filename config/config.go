@@ -10,8 +10,10 @@ import (
 )
 
 const (
-	defaultServer = "https://korap.ids-mannheim.de/"
-	defaultSDK    = "https://korap.ids-mannheim.de/js/korap-plugin-latest.js"
+	defaultServer   = "https://korap.ids-mannheim.de/"
+	defaultSDK      = "https://korap.ids-mannheim.de/js/korap-plugin-latest.js"
+	defaultPort     = 3000
+	defaultLogLevel = "warn"
 )
 
 // MappingRule represents a single mapping rule in the configuration
@@ -29,9 +31,11 @@ type MappingList struct {
 
 // MappingConfig represents the root configuration containing multiple mapping lists
 type MappingConfig struct {
-	SDK    string        `yaml:"sdk,omitempty"`
-	Server string        `yaml:"server,omitempty"`
-	Lists  []MappingList `yaml:"lists,omitempty"`
+	SDK      string        `yaml:"sdk,omitempty"`
+	Server   string        `yaml:"server,omitempty"`
+	Port     int           `yaml:"port,omitempty"`
+	LogLevel string        `yaml:"loglevel,omitempty"`
+	Lists    []MappingList `yaml:"lists,omitempty"`
 }
 
 // LoadFromSources loads configuration from multiple sources and merges them:
@@ -144,6 +148,12 @@ func applyDefaults(config *MappingConfig) {
 	}
 	if config.Server == "" {
 		config.Server = defaultServer
+	}
+	if config.Port == 0 {
+		config.Port = defaultPort
+	}
+	if config.LogLevel == "" {
+		config.LogLevel = defaultLogLevel
 	}
 }
 

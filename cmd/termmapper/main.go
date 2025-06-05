@@ -21,10 +21,10 @@ const (
 )
 
 type appConfig struct {
-	Port     int      `kong:"short='p',default='8080',help='Port to listen on'"`
+	Port     *int     `kong:"short='p',help='Port to listen on'"`
 	Config   string   `kong:"short='c',help='YAML configuration file containing mapping directives and global settings'"`
 	Mappings []string `kong:"short='m',help='Individual YAML mapping files to load'"`
-	LogLevel string   `kong:"short='l',default='info',help='Log level (debug, info, warn, error)'"`
+	LogLevel *string  `kong:"short='l',help='Log level (debug, info, warn, error)'"`
 }
 
 // TemplateData holds data for the Kalamar plugin template
@@ -79,14 +79,25 @@ func main() {
 		log.Fatal().Msg("At least one configuration source must be provided: use -c for main config file or -m for mapping files")
 	}
 
-	// Set up logging
-	setupLogger(cfg.LogLevel)
-
 	// Load configuration from multiple sources
 	yamlConfig, err := config.LoadFromSources(cfg.Config, cfg.Mappings)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to load configuration")
 	}
+
+	finalPort := yamlConfig.Port
+	finalLogLevel := yamlConfig.LogLevel
+
+	// Use command line values if provided (they override config file)
+	if cfg.Port != nil {
+		finalPort = *cfg.Port
+	}
+	if cfg.LogLevel != nil {
+		finalLogLevel = *cfg.LogLevel
+	}
+
+	// Set up logging with the final log level
+	setupLogger(finalLogLevel)
 
 	// Create a new mapper instance
 	m, err := mapper.NewMapper(yamlConfig.Lists)
@@ -105,8 +116,8 @@ func main() {
 
 	// Start server
 	go func() {
-		log.Info().Int("port", cfg.Port).Msg("Starting server")
-		if err := app.Listen(fmt.Sprintf(":%d", cfg.Port)); err != nil {
+		log.Info().Int("port", finalPort).Msg("Starting server")
+		if err := app.Listen(fmt.Sprintf(":%d", finalPort)); err != nil {
 			log.Fatal().Err(err).Msg("Server error")
 		}
 	}()
