@@ -1,0 +1,17 @@
+termmapper
+.git
+*.tmp
+*.log
+# Include all Go source files and directories
+!*.go
+!cmd/
+!config/
+!parser/
+!ast/
+!mapper/
+!matcher/
+!mappings/
+!/LICENSE
+!.dockerignore
+!go.mod
+!go.sum

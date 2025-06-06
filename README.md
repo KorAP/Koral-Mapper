@@ -48,7 +48,7 @@ sdk: "https://custom.example.com/js/korap-plugin.js"
 # Optional: Custom server endpoint for Kalamar plugin integration  
 server: "https://custom.example.com/"
 
-# Optional: Port to listen on (default: 3000)
+# Optional: Port to listen on (default: 5725)
 port: 8080
 
 # Optional: Log level - debug, info, warn, error (default: warn)

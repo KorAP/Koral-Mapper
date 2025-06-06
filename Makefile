@@ -40,3 +40,6 @@ vet: 	## Run `go vet` on the code.
 
 fuzz:
 	go test -fuzz=FuzzTransformEndpoint -fuzztime=1m ./cmd/termmapper
+
+docker:
+	docker build -f Dockerfile -t korap/koralpipe-termmapper:latest .
