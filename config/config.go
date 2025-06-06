@@ -13,7 +13,7 @@ const (
 	defaultServer     = "https://korap.ids-mannheim.de/"
 	defaultSDK        = "https://korap.ids-mannheim.de/js/korap-plugin-latest.js"
 	defaultServiceURL = "https://korap.ids-mannheim.de/plugin/termmapper"
-	defaultPort       = 3000
+	defaultPort       = 5725
 	defaultLogLevel   = "warn"
 )
 
