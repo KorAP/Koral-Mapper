@@ -54,6 +54,9 @@ port: 8080
 # Optional: Log level - debug, info, warn, error (default: warn)
 loglevel: info
 
+# Optional: ServiceURL for the termmapper
+serviceURL: "https://korap.ids-mannheim.de/plugin/termmapper"
+
 # Optional: Mapping lists (same format as individual mapping files)
 lists:
   - id: mapping-list-id
@@ -85,8 +88,9 @@ The `sdk`, `server`, `port`, and `loglevel` fields in the main configuration fil
 
 - **`sdk`**: Custom SDK JavaScript file URL (default: `https://korap.ids-mannheim.de/js/korap-plugin-latest.js`)
 - **`server`**: Custom server endpoint URL (default: `https://korap.ids-mannheim.de/`)
-- **`port`**: Server port (default: `3000`)
+- **`port`**: Server port (default: `5725`)
 - **`loglevel`**: Log level (default: `warn`)
+- **`serviceURL`**: Service URL of the TermMapper (default: `https://korap.ids-mannheim.de/plugin/termmapper`)
 
 These values are applied during configuration parsing. When using only individual mapping files (`-m` flags), default values are used unless overridden by command line arguments.
 
