@@ -2,8 +2,10 @@ package main
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"os/signal"
+	"path"
 	"path/filepath"
 	"strings"
 	"syscall"
@@ -350,12 +352,21 @@ func generateKalamarPluginHTML(data TemplateData) string {
     </dl>`
 
 	if data.MapID != "" {
+
+		serviceURL, err := url.Parse(data.ServiceURL)
+		if err != nil {
+			log.Warn().Err(err).Msg("Failed to join URL path")
+		}
+
+		// Use path.Join to normalize the path part
+		serviceURL.Path = path.Join(serviceURL.Path, data.MapID+"/query")
+
 		html += `   <script>
   		<!-- activates/deactivates Mapper. -->
   		  
        let data = {
          'action'  : 'pipe',
-         'service' : '` + data.ServiceURL + `/` + data.MapID + `/query'
+         'service' : '` + serviceURL.String() + `'
        };
 
        function pluginit (p) {

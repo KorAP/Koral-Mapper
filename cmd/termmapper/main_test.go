@@ -1105,3 +1105,63 @@ func TestServiceURLWithExampleConfig(t *testing.T) {
 	expectedJSURL := "https://korap.ids-mannheim.de/plugin/termmapper/main-config-mapper/query"
 	assert.Contains(t, htmlContent, "'service' : '"+expectedJSURL+"'")
 }
+
+func TestGenerateKalamarPluginHTMLWithURLJoining(t *testing.T) {
+	tests := []struct {
+		name       string
+		serviceURL string
+		mapID      string
+		expected   string
+	}{
+		{
+			name:       "Service URL without trailing slash",
+			serviceURL: "https://example.com/plugin/termmapper",
+			mapID:      "test-mapper",
+			expected:   "'service' : 'https://example.com/plugin/termmapper/test-mapper/query'",
+		},
+		{
+			name:       "Service URL with trailing slash",
+			serviceURL: "https://example.com/plugin/termmapper/",
+			mapID:      "test-mapper",
+			expected:   "'service' : 'https://example.com/plugin/termmapper/test-mapper/query'",
+		},
+		{
+			name:       "Map ID with leading slash",
+			serviceURL: "https://example.com/plugin/termmapper",
+			mapID:      "/test-mapper",
+			expected:   "'service' : 'https://example.com/plugin/termmapper/test-mapper/query'",
+		},
+		{
+			name:       "Both with slashes",
+			serviceURL: "https://example.com/plugin/termmapper/",
+			mapID:      "/test-mapper",
+			expected:   "'service' : 'https://example.com/plugin/termmapper/test-mapper/query'",
+		},
+		{
+			name:       "Complex map ID",
+			serviceURL: "https://example.com/api/v1/",
+			mapID:      "complex-mapper-name_123",
+			expected:   "'service' : 'https://example.com/api/v1/complex-mapper-name_123/query'",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			data := TemplateData{
+				Title:       "Test Mapper",
+				Version:     "1.0.0",
+				Hash:        "abcd1234",
+				Date:        "2024-01-01",
+				Description: "Test description",
+				Server:      "https://example.com/",
+				SDK:         "https://example.com/js/sdk.js",
+				ServiceURL:  tt.serviceURL,
+				MapID:       tt.mapID,
+				Mappings:    []TemplateMapping{},
+			}
+
+			html := generateKalamarPluginHTML(data)
+			assert.Contains(t, html, tt.expected)
+		})
+	}
+}

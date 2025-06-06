@@ -1,7 +1,6 @@
 .*
 !.gitignore
 !.dockerignore
-testdata
 testdata/sandbox
 examples/
 todo.txt
