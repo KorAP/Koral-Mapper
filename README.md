@@ -186,6 +186,8 @@ Mapping between STTS and UD part-of-spech tags.
 - [ ] Support for negation
 - [ ] Support multiple mappings (by having a check list)
 - [ ] Response rewriting
+- [ ] Support corpus mappings
+- [ ] Support chaining of mappings
 
 ## COPYRIGHT AND LICENSE
 
