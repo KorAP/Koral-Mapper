@@ -851,3 +851,324 @@ func TestApplyFoundryAndLayerOverridesEmptyValues(t *testing.T) {
 	assert.Equal(t, "original_foundry", term.Foundry)
 	assert.Equal(t, "original_layer", term.Layer)
 }
+
+func TestRestrictToObligatory(t *testing.T) {
+	tests := []struct {
+		name     string
+		node     Node
+		foundry  string
+		layer    string
+		expected Node
+	}{
+		{
+			name: "Simple term - kept as is",
+			node: &Term{
+				Foundry: "old_foundry",
+				Key:     "DET",
+				Layer:   "old_layer",
+				Match:   MatchEqual,
+			},
+			foundry: "new_foundry",
+			layer:   "new_layer",
+			expected: &Term{
+				Foundry: "new_foundry",
+				Key:     "DET",
+				Layer:   "new_layer",
+				Match:   MatchEqual,
+			},
+		},
+		{
+			name: "AND group - kept as is",
+			node: &TermGroup{
+				Operands: []Node{
+					&Term{
+						Foundry: "old_foundry",
+						Key:     "A",
+						Layer:   "old_layer",
+						Match:   MatchEqual,
+					},
+					&Term{
+						Foundry: "old_foundry",
+						Key:     "B",
+						Layer:   "old_layer",
+						Match:   MatchEqual,
+					},
+					&Term{
+						Foundry: "old_foundry",
+						Key:     "C",
+						Layer:   "old_layer",
+						Match:   MatchEqual,
+					},
+				},
+				Relation: AndRelation,
+			},
+			foundry: "new_foundry",
+			layer:   "new_layer",
+			expected: &TermGroup{
+				Operands: []Node{
+					&Term{
+						Foundry: "new_foundry",
+						Key:     "A",
+						Layer:   "new_layer",
+						Match:   MatchEqual,
+					},
+					&Term{
+						Foundry: "new_foundry",
+						Key:     "B",
+						Layer:   "new_layer",
+						Match:   MatchEqual,
+					},
+					&Term{
+						Foundry: "new_foundry",
+						Key:     "C",
+						Layer:   "new_layer",
+						Match:   MatchEqual,
+					},
+				},
+				Relation: AndRelation,
+			},
+		},
+		{
+			name: "OR group - becomes nil",
+			node: &TermGroup{
+				Operands: []Node{
+					&Term{
+						Foundry: "old_foundry",
+						Key:     "A",
+						Layer:   "old_layer",
+						Match:   MatchEqual,
+					},
+					&Term{
+						Foundry: "old_foundry",
+						Key:     "B",
+						Layer:   "old_layer",
+						Match:   MatchEqual,
+					},
+				},
+				Relation: OrRelation,
+			},
+			foundry:  "new_foundry",
+			layer:    "new_layer",
+			expected: nil,
+		},
+		{
+			name: "Mixed AND with nested OR - OR removed",
+			node: &TermGroup{
+				Operands: []Node{
+					&Term{
+						Foundry: "old_foundry",
+						Key:     "A",
+						Layer:   "old_layer",
+						Match:   MatchEqual,
+					},
+					&Term{
+						Foundry: "old_foundry",
+						Key:     "B",
+						Layer:   "old_layer",
+						Match:   MatchEqual,
+					},
+					&TermGroup{
+						Operands: []Node{
+							&Term{
+								Foundry: "old_foundry",
+								Key:     "C",
+								Layer:   "old_layer",
+								Match:   MatchEqual,
+							},
+							&Term{
+								Foundry: "old_foundry",
+								Key:     "D",
+								Layer:   "old_layer",
+								Match:   MatchEqual,
+							},
+						},
+						Relation: OrRelation,
+					},
+					&Term{
+						Foundry: "old_foundry",
+						Key:     "E",
+						Layer:   "old_layer",
+						Match:   MatchEqual,
+					},
+				},
+				Relation: AndRelation,
+			},
+			foundry: "new_foundry",
+			layer:   "new_layer",
+			expected: &TermGroup{
+				Operands: []Node{
+					&Term{
+						Foundry: "new_foundry",
+						Key:     "A",
+						Layer:   "new_layer",
+						Match:   MatchEqual,
+					},
+					&Term{
+						Foundry: "new_foundry",
+						Key:     "B",
+						Layer:   "new_layer",
+						Match:   MatchEqual,
+					},
+					&Term{
+						Foundry: "new_foundry",
+						Key:     "E",
+						Layer:   "new_layer",
+						Match:   MatchEqual,
+					},
+				},
+				Relation: AndRelation,
+			},
+		},
+		{
+			name: "AND group with all OR operands - becomes nil",
+			node: &TermGroup{
+				Operands: []Node{
+					&TermGroup{
+						Operands: []Node{
+							&Term{Key: "A", Match: MatchEqual},
+							&Term{Key: "B", Match: MatchEqual},
+						},
+						Relation: OrRelation,
+					},
+					&TermGroup{
+						Operands: []Node{
+							&Term{Key: "C", Match: MatchEqual},
+							&Term{Key: "D", Match: MatchEqual},
+						},
+						Relation: OrRelation,
+					},
+				},
+				Relation: AndRelation,
+			},
+			foundry:  "",
+			layer:    "",
+			expected: nil,
+		},
+		{
+			name: "AND group with one operand after restriction - returns single operand",
+			node: &TermGroup{
+				Operands: []Node{
+					&Term{
+						Foundry: "old_foundry",
+						Key:     "A",
+						Layer:   "old_layer",
+						Match:   MatchEqual,
+					},
+					&TermGroup{
+						Operands: []Node{
+							&Term{Key: "B", Match: MatchEqual},
+							&Term{Key: "C", Match: MatchEqual},
+						},
+						Relation: OrRelation,
+					},
+				},
+				Relation: AndRelation,
+			},
+			foundry: "new_foundry",
+			layer:   "new_layer",
+			expected: &Term{
+				Foundry: "new_foundry",
+				Key:     "A",
+				Layer:   "new_layer",
+				Match:   MatchEqual,
+			},
+		},
+		{
+			name: "Token with wrapped term",
+			node: &Token{
+				Wrap: &Term{
+					Foundry: "old_foundry",
+					Key:     "DET",
+					Layer:   "old_layer",
+					Match:   MatchEqual,
+				},
+				Rewrites: []Rewrite{
+					{Editor: "test"},
+				},
+			},
+			foundry: "new_foundry",
+			layer:   "new_layer",
+			expected: &Token{
+				Wrap: &Term{
+					Foundry: "new_foundry",
+					Key:     "DET",
+					Layer:   "new_layer",
+					Match:   MatchEqual,
+				},
+				Rewrites: []Rewrite{
+					{Editor: "test"},
+				},
+			},
+		},
+		{
+			name: "Token with wrapped OR group - becomes nil",
+			node: &Token{
+				Wrap: &TermGroup{
+					Operands: []Node{
+						&Term{Key: "A", Match: MatchEqual},
+						&Term{Key: "B", Match: MatchEqual},
+					},
+					Relation: OrRelation,
+				},
+			},
+			foundry:  "",
+			layer:    "",
+			expected: nil,
+		},
+		{
+			name:     "Nil node",
+			node:     nil,
+			foundry:  "foundry",
+			layer:    "layer",
+			expected: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := RestrictToObligatory(tt.node, tt.foundry, tt.layer)
+			assert.True(t, NodesEqual(tt.expected, result),
+				"Expected: %+v\nGot: %+v", tt.expected, result)
+		})
+	}
+}
+
+func TestRestrictToObligatoryDoesNotModifyOriginal(t *testing.T) {
+	// Test that the original node is not modified
+	original := &TermGroup{
+		Operands: []Node{
+			&Term{
+				Foundry: "original",
+				Key:     "A",
+				Layer:   "original",
+				Match:   MatchEqual,
+			},
+			&TermGroup{
+				Operands: []Node{
+					&Term{Key: "B", Match: MatchEqual},
+					&Term{Key: "C", Match: MatchEqual},
+				},
+				Relation: OrRelation,
+			},
+		},
+		Relation: AndRelation,
+	}
+
+	// Clone to check that original remains unchanged
+	originalClone := original.Clone()
+
+	// Apply restriction
+	result := RestrictToObligatory(original, "new_foundry", "new_layer")
+
+	// Original should be unchanged
+	assert.True(t, NodesEqual(originalClone, original))
+
+	// Result should be different
+	expected := &Term{
+		Foundry: "new_foundry",
+		Key:     "A",
+		Layer:   "new_layer",
+		Match:   MatchEqual,
+	}
+	assert.True(t, NodesEqual(expected, result))
+}
