@@ -1063,7 +1063,7 @@ func TestServiceURLDefaults(t *testing.T) {
 	// Check that other defaults were also applied
 	assert.Equal(t, "https://korap.ids-mannheim.de/", config.Server)
 	assert.Equal(t, "https://korap.ids-mannheim.de/js/korap-plugin-latest.js", config.SDK)
-	assert.Equal(t, 3000, config.Port)
+	assert.Equal(t, 5725, config.Port)
 	assert.Equal(t, "warn", config.LogLevel)
 }
 
