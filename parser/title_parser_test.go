@@ -30,7 +30,7 @@ func TestTitleAttributeParser_ParseTitleAttribute(t *testing.T) {
 		},
 		{
 			name:  "Parse title with key and value",
-			input: "marmot/m:case=nom",
+			input: "marmot/m:case:nom",
 			expected: &TitleAttribute{
 				Foundry: "marmot",
 				Layer:   "m",
@@ -52,7 +52,7 @@ func TestTitleAttributeParser_ParseTitleAttribute(t *testing.T) {
 		},
 		{
 			name:  "Parse title with equals separator for value",
-			input: "marmot/m:degree=pos",
+			input: "marmot/m:degree:pos",
 			expected: &TitleAttribute{
 				Foundry: "marmot",
 				Layer:   "m",
@@ -140,7 +140,7 @@ func TestTitleAttributeParser_ParseTitleAttributesToTerms(t *testing.T) {
 	}{
 		{
 			name:  "Parse multiple title attributes",
-			input: []string{"corenlp/p:ART", "marmot/m:case=nom", "tt/l:die"},
+			input: []string{"corenlp/p:ART", "marmot/m:case:nom", "tt/l:die"},
 			expected: []ast.Node{
 				&ast.Term{
 					Foundry: "corenlp",

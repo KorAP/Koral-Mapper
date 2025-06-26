@@ -24,7 +24,7 @@ type TitleAttributeParser struct {
 func NewTitleAttributeParser() *TitleAttributeParser {
 	// Single regex that captures: foundry/layer:key or foundry/layer:key[:=]value
 	// Groups: 1=foundry, 2=layer, 3=key, 4=value (optional)
-	regex := regexp.MustCompile(`^([^/]+)/([^:]+):([^:=]+)(?:[:=](.+))?$`)
+	regex := regexp.MustCompile(`^([^/]+)/([^:]+):([^:]+)(?::(.+))?$`)
 	return &TitleAttributeParser{
 		regex: regex,
 	}
