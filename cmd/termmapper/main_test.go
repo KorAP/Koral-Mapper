@@ -1167,7 +1167,7 @@ func TestConfigurableServiceURL(t *testing.T) {
 
 			// Check that the HTML contains the expected service URL in the JavaScript
 			expectedJSURL := tt.expectedServiceURL + "/test-mapper/query"
-			assert.Contains(t, htmlContent, "'service' : '"+expectedJSURL+"'")
+			assert.Contains(t, htmlContent, "'service' : '"+expectedJSURL)
 
 			// Ensure it's still a valid HTML page
 			assert.Contains(t, htmlContent, "KoralPipe-TermMapper")
@@ -1225,7 +1225,7 @@ lists:
 
 	htmlContent := string(body)
 	expectedJSURL := "https://custom.example.com/api/termmapper/config-mapper/query"
-	assert.Contains(t, htmlContent, "'service' : '"+expectedJSURL+"'")
+	assert.Contains(t, htmlContent, "'service' : '"+expectedJSURL)
 }
 
 func TestServiceURLDefaults(t *testing.T) {
@@ -1288,7 +1288,7 @@ func TestServiceURLWithExampleConfig(t *testing.T) {
 
 	htmlContent := string(body)
 	expectedJSURL := "https://korap.ids-mannheim.de/plugin/termmapper/main-config-mapper/query"
-	assert.Contains(t, htmlContent, "'service' : '"+expectedJSURL+"'")
+	assert.Contains(t, htmlContent, "'service' : '"+expectedJSURL)
 }
 
 func TestGenerateKalamarPluginHTMLWithURLJoining(t *testing.T) {
@@ -1302,31 +1302,31 @@ func TestGenerateKalamarPluginHTMLWithURLJoining(t *testing.T) {
 			name:       "Service URL without trailing slash",
 			serviceURL: "https://example.com/plugin/termmapper",
 			mapID:      "test-mapper",
-			expected:   "'service' : 'https://example.com/plugin/termmapper/test-mapper/query'",
+			expected:   "'service' : 'https://example.com/plugin/termmapper/test-mapper/query",
 		},
 		{
 			name:       "Service URL with trailing slash",
 			serviceURL: "https://example.com/plugin/termmapper/",
 			mapID:      "test-mapper",
-			expected:   "'service' : 'https://example.com/plugin/termmapper/test-mapper/query'",
+			expected:   "'service' : 'https://example.com/plugin/termmapper/test-mapper/query",
 		},
 		{
 			name:       "Map ID with leading slash",
 			serviceURL: "https://example.com/plugin/termmapper",
 			mapID:      "/test-mapper",
-			expected:   "'service' : 'https://example.com/plugin/termmapper/test-mapper/query'",
+			expected:   "'service' : 'https://example.com/plugin/termmapper/test-mapper/query",
 		},
 		{
 			name:       "Both with slashes",
 			serviceURL: "https://example.com/plugin/termmapper/",
 			mapID:      "/test-mapper",
-			expected:   "'service' : 'https://example.com/plugin/termmapper/test-mapper/query'",
+			expected:   "'service' : 'https://example.com/plugin/termmapper/test-mapper/query",
 		},
 		{
 			name:       "Complex map ID",
 			serviceURL: "https://example.com/api/v1/",
 			mapID:      "complex-mapper-name_123",
-			expected:   "'service' : 'https://example.com/api/v1/complex-mapper-name_123/query'",
+			expected:   "'service' : 'https://example.com/api/v1/complex-mapper-name_123/query",
 		},
 	}
 

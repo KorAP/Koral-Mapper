@@ -423,32 +423,54 @@ func generateKalamarPluginHTML(data TemplateData) string {
 
 	if data.MapID != "" {
 
-		serviceURL, err := url.Parse(data.ServiceURL)
+		queryServiceURL, err := url.Parse(data.ServiceURL)
 		if err != nil {
 			log.Warn().Err(err).Msg("Failed to join URL path")
 		}
 
 		// Use path.Join to normalize the path part
-		serviceURL.Path = path.Join(serviceURL.Path, data.MapID+"/query")
+		queryServiceURL.Path = path.Join(queryServiceURL.Path, data.MapID+"/query")
+		queryServiceURL.RawQuery = "dir=atob"
+
+		responseServiceURL, err := url.Parse(data.ServiceURL)
+		if err != nil {
+			log.Warn().Err(err).Msg("Failed to join URL path")
+		}
+
+		// Use path.Join to normalize the path part
+		responseServiceURL.Path = path.Join(responseServiceURL.Path, data.MapID+"/response")
 
 		html += `   <script>
   		<!-- activates/deactivates Mapper. -->
   		  
-       let data = {
+       let qdata = {
          'action'  : 'pipe',
-         'service' : '` + serviceURL.String() + `'
+         'service' : '` + queryServiceURL.String() + `'
        };
+
+       let rdata = {
+         'action'  : 'pipe',
+         'service' : '` + responseServiceURL.String() + `'
+       };
+
 
        function pluginit (p) {
          p.onMessage = function(msg) {
            if (msg.key == 'termmapper') {
              if (msg.value) {
-               data['job'] = 'add';
+               qdata['job'] = 'add';
              }
              else {
-               data['job'] = 'del';
+               qdata['job'] = 'del';
              };
-             KorAPlugin.sendMsg(data);
+             KorAPlugin.sendMsg(qdata);
+			 if (msg.value) {
+               rdata['job'] = 'add-after';
+             }
+             else {
+               rdata['job'] = 'del-after';
+             };  
+             KorAPlugin.sendMsg(rdata);
            };
          };
        };
