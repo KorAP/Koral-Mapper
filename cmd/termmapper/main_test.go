@@ -258,6 +258,191 @@ func TestTransformEndpoint(t *testing.T) {
 	}
 }
 
+func TestResponseTransformEndpoint(t *testing.T) {
+	// Create test mapping list
+	mappingList := tmconfig.MappingList{
+		ID:       "test-response-mapper",
+		FoundryA: "marmot",
+		LayerA:   "m",
+		FoundryB: "opennlp",
+		LayerB:   "p",
+		Mappings: []tmconfig.MappingRule{
+			"[gender=masc] <> [p=M & m=M]",
+		},
+	}
+
+	// Create mapper
+	m, err := mapper.NewMapper([]tmconfig.MappingList{mappingList})
+	require.NoError(t, err)
+
+	// Create mock config for testing
+	mockConfig := &tmconfig.MappingConfig{
+		Lists: []tmconfig.MappingList{mappingList},
+	}
+
+	// Create fiber app
+	app := fiber.New()
+	setupRoutes(app, m, mockConfig)
+
+	tests := []struct {
+		name          string
+		mapID         string
+		direction     string
+		foundryA      string
+		foundryB      string
+		layerA        string
+		layerB        string
+		input         string
+		expectedCode  int
+		expectedBody  string
+		expectedError string
+	}{
+		{
+			name:      "Simple response mapping with snippet transformation",
+			mapID:     "test-response-mapper",
+			direction: "atob",
+			input: `{
+				"snippet": "<span title=\"marmot/m:gender:masc\">Der</span>"
+			}`,
+			expectedCode: http.StatusOK,
+			expectedBody: `{
+				"snippet": "<span title=\"marmot/m:gender:masc\"><span title=\"opennlp/p:M\" class=\"notinindex\"><span title=\"opennlp/m:M\" class=\"notinindex\">Der</span></span></span>"
+			}`,
+		},
+		{
+			name:      "Response with no snippet field",
+			mapID:     "test-response-mapper",
+			direction: "atob",
+			input: `{
+				"@type": "koral:response",
+				"meta": {
+					"version": "Krill-0.64.1"
+				}
+			}`,
+			expectedCode: http.StatusOK,
+			expectedBody: `{
+				"@type": "koral:response",
+				"meta": {
+					"version": "Krill-0.64.1"
+				}
+			}`,
+		},
+		{
+			name:      "Response with null snippet",
+			mapID:     "test-response-mapper",
+			direction: "atob",
+			input: `{
+				"snippet": null
+			}`,
+			expectedCode: http.StatusOK,
+			expectedBody: `{
+				"snippet": null
+			}`,
+		},
+		{
+			name:      "Response with non-string snippet",
+			mapID:     "test-response-mapper",
+			direction: "atob",
+			input: `{
+				"snippet": 123
+			}`,
+			expectedCode: http.StatusOK,
+			expectedBody: `{
+				"snippet": 123
+			}`,
+		},
+		{
+			name:      "Response mapping with foundry override",
+			mapID:     "test-response-mapper",
+			direction: "atob",
+			foundryB:  "custom",
+			input: `{
+				"snippet": "<span title=\"marmot/m:gender:masc\">Der</span>"
+			}`,
+			expectedCode: http.StatusOK,
+			expectedBody: `{
+				"snippet": "<span title=\"marmot/m:gender:masc\"><span title=\"custom/p:M\" class=\"notinindex\"><span title=\"custom/m:M\" class=\"notinindex\">Der</span></span></span>"
+			}`,
+		},
+		{
+			name:          "Invalid mapping ID for response",
+			mapID:         "nonexistent",
+			direction:     "atob",
+			input:         `{"snippet": "<span>test</span>"}`,
+			expectedCode:  http.StatusInternalServerError,
+			expectedError: "mapping list with ID nonexistent not found",
+		},
+		{
+			name:          "Invalid direction for response",
+			mapID:         "test-response-mapper",
+			direction:     "invalid",
+			input:         `{"snippet": "<span>test</span>"}`,
+			expectedCode:  http.StatusBadRequest,
+			expectedError: "invalid direction, must be 'atob' or 'btoa'",
+		},
+		{
+			name:          "Invalid JSON for response",
+			mapID:         "test-response-mapper",
+			direction:     "atob",
+			input:         `{invalid json}`,
+			expectedCode:  http.StatusBadRequest,
+			expectedError: "invalid JSON in request body",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Build URL with query parameters
+			url := "/" + tt.mapID + "/response"
+			if tt.direction != "" {
+				url += "?dir=" + tt.direction
+			}
+			if tt.foundryA != "" {
+				url += "&foundryA=" + tt.foundryA
+			}
+			if tt.foundryB != "" {
+				url += "&foundryB=" + tt.foundryB
+			}
+			if tt.layerA != "" {
+				url += "&layerA=" + tt.layerA
+			}
+			if tt.layerB != "" {
+				url += "&layerB=" + tt.layerB
+			}
+
+			// Make request
+			req := httptest.NewRequest(http.MethodPost, url, bytes.NewBufferString(tt.input))
+			req.Header.Set("Content-Type", "application/json")
+			resp, err := app.Test(req)
+			require.NoError(t, err)
+			defer resp.Body.Close()
+
+			// Check status code
+			assert.Equal(t, tt.expectedCode, resp.StatusCode)
+
+			// Read response body
+			body, err := io.ReadAll(resp.Body)
+			require.NoError(t, err)
+
+			if tt.expectedError != "" {
+				// Check error message
+				var errResp fiber.Map
+				err = json.Unmarshal(body, &errResp)
+				require.NoError(t, err)
+				assert.Equal(t, tt.expectedError, errResp["error"])
+			} else {
+				// Compare JSON responses
+				var expected, actual any
+				err = json.Unmarshal([]byte(tt.expectedBody), &expected)
+				require.NoError(t, err)
+				err = json.Unmarshal(body, &actual)
+				require.NoError(t, err)
+				assert.Equal(t, expected, actual)
+			}
+		})
+	}
+}
+
 func TestHealthEndpoint(t *testing.T) {
 	// Create test mapping list
 	mappingList := tmconfig.MappingList{

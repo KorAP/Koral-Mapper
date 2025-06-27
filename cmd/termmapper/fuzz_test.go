@@ -150,6 +150,125 @@ func FuzzTransformEndpoint(f *testing.F) {
 	})
 }
 
+func FuzzResponseTransformEndpoint(f *testing.F) {
+	// Create test mapping list
+	mappingList := tmconfig.MappingList{
+		ID:       "test-mapper",
+		FoundryA: "marmot",
+		LayerA:   "m",
+		FoundryB: "opennlp",
+		LayerB:   "p",
+		Mappings: []tmconfig.MappingRule{
+			"[gender=masc] <> [p=M & m=M]",
+		},
+	}
+
+	// Create mapper
+	m, err := mapper.NewMapper([]tmconfig.MappingList{mappingList})
+	if err != nil {
+		f.Fatal(err)
+	}
+
+	// Create mock config for testing
+	mockConfig := &tmconfig.MappingConfig{
+		Lists: []tmconfig.MappingList{mappingList},
+	}
+
+	// Create fiber app
+	app := fiber.New(fiber.Config{
+		DisableStartupMessage: true,
+		ErrorHandler: func(c *fiber.Ctx, err error) error {
+			// For body limit errors, return 413 status code
+			if err.Error() == "body size exceeds the given limit" || errors.Is(err, fiber.ErrRequestEntityTooLarge) {
+				return c.Status(fiber.StatusRequestEntityTooLarge).JSON(fiber.Map{
+					"error": fmt.Sprintf("request body too large (max %d bytes)", maxInputLength),
+				})
+			}
+			// For other errors, return 500 status code
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": err.Error(),
+			})
+		},
+		BodyLimit: maxInputLength,
+	})
+	setupRoutes(app, m, mockConfig)
+
+	// Add seed corpus
+	f.Add("test-mapper", "atob", "", "", "", "", []byte(`{"snippet": "<span>test</span>"}`))                               // Valid minimal input
+	f.Add("test-mapper", "btoa", "custom", "", "", "", []byte(`{"snippet": "<span title=\"test\">word</span>"}`))          // Valid with foundry override
+	f.Add("", "", "", "", "", "", []byte(`{}`))                                                                            // Empty parameters
+	f.Add("nonexistent", "invalid", "!@#$", "%^&*", "()", "[]", []byte(`invalid json`))                                    // Invalid everything
+	f.Add("test-mapper", "atob", "", "", "", "", []byte(`{"snippet": null}`))                                              // Valid JSON with null snippet
+	f.Add("test-mapper", "atob", "", "", "", "", []byte(`{"snippet": 123}`))                                               // Valid JSON with non-string snippet
+	f.Add("test-mapper", "atob", "", "", "", "", []byte(`{"snippet": "<span title=\"marmot/m:gender:masc\">Der</span>"}`)) // Valid response snippet
+
+	f.Fuzz(func(t *testing.T, mapID, dir, foundryA, foundryB, layerA, layerB string, body []byte) {
+
+		// Validate input first
+		if err := validateInput(mapID, dir, foundryA, foundryB, layerA, layerB, body); err != nil {
+			// Skip this test case as it's invalid
+			t.Skip(err)
+		}
+
+		// Build URL with query parameters
+		params := url.Values{}
+		if dir != "" {
+			params.Set("dir", dir)
+		}
+		if foundryA != "" {
+			params.Set("foundryA", foundryA)
+		}
+		if foundryB != "" {
+			params.Set("foundryB", foundryB)
+		}
+		if layerA != "" {
+			params.Set("layerA", layerA)
+		}
+		if layerB != "" {
+			params.Set("layerB", layerB)
+		}
+
+		url := fmt.Sprintf("/%s/response", url.PathEscape(mapID))
+		if len(params) > 0 {
+			url += "?" + params.Encode()
+		}
+
+		// Make request
+		req := httptest.NewRequest(http.MethodPost, url, bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := app.Test(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+
+		// Verify that we always get a valid response
+		if resp.StatusCode != http.StatusOK &&
+			resp.StatusCode != http.StatusBadRequest &&
+			resp.StatusCode != http.StatusInternalServerError {
+			t.Errorf("unexpected status code: %d", resp.StatusCode)
+		}
+
+		// Verify that the response is valid JSON
+		var result any
+		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+			t.Errorf("invalid JSON response: %v", err)
+		}
+
+		// For error responses, verify that we have an error message
+		if resp.StatusCode != http.StatusOK {
+			// For error responses, we expect a JSON object with an error field
+			if resultMap, ok := result.(map[string]any); ok {
+				if errMsg, ok := resultMap["error"].(string); !ok || errMsg == "" {
+					t.Error("error response missing error message")
+				}
+			} else {
+				t.Error("error response should be a JSON object")
+			}
+		}
+	})
+}
+
 func TestLargeInput(t *testing.T) {
 	// Create test mapping list
 	mappingList := tmconfig.MappingList{

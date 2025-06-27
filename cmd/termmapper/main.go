@@ -163,6 +163,9 @@ func setupRoutes(app *fiber.App, m *mapper.Mapper, yamlConfig *config.MappingCon
 	// Transformation endpoint
 	app.Post("/:map/query", handleTransform(m))
 
+	// Response transformation endpoint
+	app.Post("/:map/response", handleResponseTransform(m))
+
 	// Kalamar plugin endpoint
 	app.Get("/", handleKalamarPlugin(yamlConfig))
 	app.Get("/:map", handleKalamarPlugin(yamlConfig))
@@ -222,6 +225,70 @@ func handleTransform(m *mapper.Mapper) fiber.Handler {
 				Str("mapID", mapID).
 				Str("direction", dir).
 				Msg("Failed to apply mappings")
+
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": err.Error(),
+			})
+		}
+
+		return c.JSON(result)
+	}
+}
+
+func handleResponseTransform(m *mapper.Mapper) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		// Get parameters
+		mapID := c.Params("map")
+		dir := c.Query("dir", "atob")
+		foundryA := c.Query("foundryA", "")
+		foundryB := c.Query("foundryB", "")
+		layerA := c.Query("layerA", "")
+		layerB := c.Query("layerB", "")
+
+		// Validate input parameters
+		if err := validateInput(mapID, dir, foundryA, foundryB, layerA, layerB, c.Body()); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": err.Error(),
+			})
+		}
+
+		// Validate direction
+		if dir != "atob" && dir != "btoa" {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "invalid direction, must be 'atob' or 'btoa'",
+			})
+		}
+
+		// Parse request body
+		var jsonData any
+		if err := c.BodyParser(&jsonData); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "invalid JSON in request body",
+			})
+		}
+
+		// Parse direction
+		direction, err := mapper.ParseDirection(dir)
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": err.Error(),
+			})
+		}
+
+		// Apply response mappings
+		result, err := m.ApplyResponseMappings(mapID, mapper.MappingOptions{
+			Direction: direction,
+			FoundryA:  foundryA,
+			FoundryB:  foundryB,
+			LayerA:    layerA,
+			LayerB:    layerB,
+		}, jsonData)
+
+		if err != nil {
+			log.Error().Err(err).
+				Str("mapID", mapID).
+				Str("direction", dir).
+				Msg("Failed to apply response mappings")
 
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 				"error": err.Error(),
@@ -337,6 +404,9 @@ func generateKalamarPluginHTML(data TemplateData) string {
 
 			<dt><tt><strong>POST</strong> /:map/query</tt></dt>
             <dd><small>Transform JSON query objects using term mapping rules</small></dd>
+
+			<dt><tt><strong>POST</strong> /:map/response</tt></dt>
+            <dd><small>Transform JSON response objects using term mapping rules</small></dd>
 			
         </dl>
 		

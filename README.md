@@ -164,6 +164,40 @@ Example response:
 }
 ```
 
+### POST /:map/response
+
+Transform JSON response objects using the specified mapping list. This endpoint processes response snippets by applying term mappings to annotations within HTML snippet markup.
+
+Parameters:
+
+- `:map`: ID of the mapping list to use
+- `dir` (query): Direction of transformation (atob or `btoa`, default: `atob`)
+- `foundryA` (query): Override default foundryA from mapping list
+- `foundryB` (query): Override default foundryB from mapping list
+- `layerA` (query): Override default layerA from mapping list
+- `layerB` (query): Override default layerB from mapping list
+
+Request body: JSON object containing a `snippet` field with HTML markup
+
+Example request:
+
+```http
+POST /opennlp-mapper/response?dir=atob&foundryB=custom HTTP/1.1
+Content-Type: application/json
+
+{
+  "snippet": "<span title=\"marmot/m:gender:masc\">Der</span>"
+}
+```
+
+Example response:
+
+```json
+{
+  "snippet": "<span title=\"marmot/m:gender:masc\"><span title=\"custom/p:M\" class=\"notinindex\"><span title=\"custom/m:M\" class=\"notinindex\">Der</span></span></span>"
+}
+```
+
 ### GET /
 
 Serves the Kalamar plugin integration page. This HTML page includes:

@@ -66,13 +66,18 @@ func (m *Mapper) ApplyResponseMappings(mappingID string, opts MappingOptions, js
 		}
 
 		// If foundry/layer are empty in options, get them from the mapping list
-		if replacementFoundry == "" || replacementLayer == "" {
-			mappingList := m.mappingLists[mappingID]
+		mappingList := m.mappingLists[mappingID]
+		if replacementFoundry == "" {
 			if opts.Direction { // AtoB
 				replacementFoundry = mappingList.FoundryB
-				replacementLayer = mappingList.LayerB
 			} else {
 				replacementFoundry = mappingList.FoundryA
+			}
+		}
+		if replacementLayer == "" {
+			if opts.Direction { // AtoB
+				replacementLayer = mappingList.LayerB
+			} else {
 				replacementLayer = mappingList.LayerA
 			}
 		}

@@ -927,7 +927,8 @@ func TestResponseMappingWithValuePatterns(t *testing.T) {
 func TestResponseMappingNestedSpans(t *testing.T) {
 	// Snippet with deeply nested spans
 	responseSnippet := `{
-		"snippet": "<span title=\"level1/l:outer\"><span title=\"level2/l:middle\"><span title=\"marmot/p:DET\">der</span></span></span>"
+		"snippet": "<span title=\"level1/l:outer\"><span title=\"level2/l:middle\"><span title=\"marmot/p:DET\">der</span></span></span>",
+		"author": "John Doe"
 	}`
 
 	// Create test mapping list
@@ -965,4 +966,7 @@ func TestResponseMappingNestedSpans(t *testing.T) {
 	assert.Contains(t, snippet, `title="level1/l:outer"`)
 	assert.Contains(t, snippet, `title="level2/l:middle"`)
 	assert.Contains(t, snippet, `title="marmot/p:DET"`)
+
+	author := resultMap["author"].(string)
+	assert.Equal(t, "John Doe", author)
 }
