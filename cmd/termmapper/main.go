@@ -49,6 +49,14 @@ type TemplateData struct {
 	Mappings    []TemplateMapping
 }
 
+type QueryParams struct {
+	Dir      string
+	FoundryA string
+	FoundryB string
+	LayerA   string
+	LayerB   string
+}
+
 func parseConfig() *appConfig {
 	cfg := &appConfig{}
 
@@ -336,6 +344,27 @@ func handleKalamarPlugin(yamlConfig *config.MappingConfig) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		mapID := c.Params("map")
 
+		// Get query parameters
+		dir := c.Query("dir", "atob")
+		foundryA := c.Query("foundryA", "")
+		foundryB := c.Query("foundryB", "")
+		layerA := c.Query("layerA", "")
+		layerB := c.Query("layerB", "")
+
+		// Validate input parameters (reuse existing validation)
+		if err := validateInput(mapID, dir, foundryA, foundryB, layerA, layerB, []byte{}); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": err.Error(),
+			})
+		}
+
+		// Validate direction
+		if dir != "atob" && dir != "btoa" {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "invalid direction, must be 'atob' or 'btoa'",
+			})
+		}
+
 		// Get list of available mappings
 		var mappings []TemplateMapping
 		for _, list := range yamlConfig.Lists {
@@ -363,8 +392,17 @@ func handleKalamarPlugin(yamlConfig *config.MappingConfig) fiber.Handler {
 			Mappings:    mappings,
 		}
 
+		// Add query parameters to template data
+		queryParams := QueryParams{
+			Dir:      dir,
+			FoundryA: foundryA,
+			FoundryB: foundryB,
+			LayerA:   layerA,
+			LayerB:   layerB,
+		}
+
 		// Generate HTML
-		html := generateKalamarPluginHTML(data)
+		html := generateKalamarPluginHTML(data, queryParams)
 
 		c.Set("Content-Type", "text/html")
 		return c.SendString(html)
@@ -373,7 +411,7 @@ func handleKalamarPlugin(yamlConfig *config.MappingConfig) fiber.Handler {
 
 // generateKalamarPluginHTML creates the HTML template for the Kalamar plugin page
 // This function can be easily modified to change the appearance and content
-func generateKalamarPluginHTML(data TemplateData) string {
+func generateKalamarPluginHTML(data TemplateData, queryParams QueryParams) string {
 	html := `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -419,7 +457,7 @@ func generateKalamarPluginHTML(data TemplateData) string {
 	}
 
 	html += `
-    </dl>`
+    </dl></div>`
 
 	if data.MapID != "" {
 
@@ -430,7 +468,10 @@ func generateKalamarPluginHTML(data TemplateData) string {
 
 		// Use path.Join to normalize the path part
 		queryServiceURL.Path = path.Join(queryServiceURL.Path, data.MapID+"/query")
-		queryServiceURL.RawQuery = "dir=atob"
+
+		// Build query parameters for query URL
+		queryParamString := buildQueryParams(queryParams.Dir, queryParams.FoundryA, queryParams.FoundryB, queryParams.LayerA, queryParams.LayerB)
+		queryServiceURL.RawQuery = queryParamString
 
 		responseServiceURL, err := url.Parse(data.ServiceURL)
 		if err != nil {
@@ -440,7 +481,16 @@ func generateKalamarPluginHTML(data TemplateData) string {
 		// Use path.Join to normalize the path part
 		responseServiceURL.Path = path.Join(responseServiceURL.Path, data.MapID+"/response")
 
-		html += `   <script>
+		reversedDir := "btoa"
+		if queryParams.Dir == "btoa" {
+			reversedDir = "atob"
+		}
+
+		// Build query parameters for response URL (with reversed direction)
+		responseParamString := buildQueryParams(reversedDir, queryParams.FoundryA, queryParams.FoundryB, queryParams.LayerA, queryParams.LayerB)
+		responseServiceURL.RawQuery = responseParamString
+
+		html += `<script>
   		<!-- activates/deactivates Mapper. -->
   		  
        let qdata = {
@@ -481,6 +531,27 @@ func generateKalamarPluginHTML(data TemplateData) string {
 </html>`
 
 	return html
+}
+
+// buildQueryParams builds a query string from the provided parameters
+func buildQueryParams(dir, foundryA, foundryB, layerA, layerB string) string {
+	params := url.Values{}
+	if dir != "" {
+		params.Add("dir", dir)
+	}
+	if foundryA != "" {
+		params.Add("foundryA", foundryA)
+	}
+	if foundryB != "" {
+		params.Add("foundryB", foundryB)
+	}
+	if layerA != "" {
+		params.Add("layerA", layerA)
+	}
+	if layerB != "" {
+		params.Add("layerB", layerB)
+	}
+	return params.Encode()
 }
 
 // expandGlobs expands glob patterns in the slice of file paths

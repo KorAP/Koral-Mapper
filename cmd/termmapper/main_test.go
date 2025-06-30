@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"testing"
 
 	tmconfig "github.com/KorAP/KoralPipe-TermMapper/config"
@@ -1345,8 +1346,205 @@ func TestGenerateKalamarPluginHTMLWithURLJoining(t *testing.T) {
 				Mappings:    []TemplateMapping{},
 			}
 
-			html := generateKalamarPluginHTML(data)
+			// Use default query parameters for this test
+			queryParams := QueryParams{
+				Dir:      "atob",
+				FoundryA: "",
+				FoundryB: "",
+				LayerA:   "",
+				LayerB:   "",
+			}
+
+			html := generateKalamarPluginHTML(data, queryParams)
 			assert.Contains(t, html, tt.expected)
+		})
+	}
+}
+
+func TestKalamarPluginWithQueryParameters(t *testing.T) {
+	// Create test mapping list
+	mappingList := tmconfig.MappingList{
+		ID: "test-mapper",
+		Mappings: []tmconfig.MappingRule{
+			"[A] <> [B]",
+		},
+	}
+
+	// Create mapper
+	m, err := mapper.NewMapper([]tmconfig.MappingList{mappingList})
+	require.NoError(t, err)
+
+	// Create mock config
+	mockConfig := &tmconfig.MappingConfig{
+		ServiceURL: "https://example.com/plugin/termmapper",
+		Lists:      []tmconfig.MappingList{mappingList},
+	}
+
+	// Apply defaults
+	tmconfig.ApplyDefaults(mockConfig)
+
+	// Create fiber app
+	app := fiber.New()
+	setupRoutes(app, m, mockConfig)
+
+	tests := []struct {
+		name             string
+		url              string
+		expectedQueryURL string
+		expectedRespURL  string
+		expectedStatus   int
+		expectedError    string
+	}{
+		{
+			name:             "Default parameters (no query params)",
+			url:              "/test-mapper",
+			expectedQueryURL: "https://example.com/plugin/termmapper/test-mapper/query?dir=atob",
+			expectedRespURL:  "https://example.com/plugin/termmapper/test-mapper/response?dir=btoa",
+			expectedStatus:   http.StatusOK,
+		},
+		{
+			name:             "Explicit dir=atob",
+			url:              "/test-mapper?dir=atob",
+			expectedQueryURL: "https://example.com/plugin/termmapper/test-mapper/query?dir=atob",
+			expectedRespURL:  "https://example.com/plugin/termmapper/test-mapper/response?dir=btoa",
+			expectedStatus:   http.StatusOK,
+		},
+		{
+			name:             "Explicit dir=btoa",
+			url:              "/test-mapper?dir=btoa",
+			expectedQueryURL: "https://example.com/plugin/termmapper/test-mapper/query?dir=btoa",
+			expectedRespURL:  "https://example.com/plugin/termmapper/test-mapper/response?dir=atob",
+			expectedStatus:   http.StatusOK,
+		},
+		{
+			name:             "With foundry parameters",
+			url:              "/test-mapper?dir=atob&foundryA=opennlp&foundryB=upos",
+			expectedQueryURL: "https://example.com/plugin/termmapper/test-mapper/query?dir=atob&foundryA=opennlp&foundryB=upos",
+			expectedRespURL:  "https://example.com/plugin/termmapper/test-mapper/response?dir=btoa&foundryA=opennlp&foundryB=upos",
+			expectedStatus:   http.StatusOK,
+		},
+		{
+			name:             "With layer parameters",
+			url:              "/test-mapper?dir=btoa&layerA=pos&layerB=upos",
+			expectedQueryURL: "https://example.com/plugin/termmapper/test-mapper/query?dir=btoa&layerA=pos&layerB=upos",
+			expectedRespURL:  "https://example.com/plugin/termmapper/test-mapper/response?dir=atob&layerA=pos&layerB=upos",
+			expectedStatus:   http.StatusOK,
+		},
+		{
+			name:             "All parameters",
+			url:              "/test-mapper?dir=atob&foundryA=opennlp&foundryB=upos&layerA=pos&layerB=upos",
+			expectedQueryURL: "https://example.com/plugin/termmapper/test-mapper/query?dir=atob&foundryA=opennlp&foundryB=upos&layerA=pos&layerB=upos",
+			expectedRespURL:  "https://example.com/plugin/termmapper/test-mapper/response?dir=btoa&foundryA=opennlp&foundryB=upos&layerA=pos&layerB=upos",
+			expectedStatus:   http.StatusOK,
+		},
+		{
+			name:           "Invalid direction",
+			url:            "/test-mapper?dir=invalid",
+			expectedStatus: http.StatusBadRequest,
+			expectedError:  "invalid direction, must be 'atob' or 'btoa'",
+		},
+		{
+			name:           "Parameter too long",
+			url:            "/test-mapper?foundryA=" + strings.Repeat("a", 1025),
+			expectedStatus: http.StatusBadRequest,
+			expectedError:  "foundryA too long (max 1024 bytes)",
+		},
+		{
+			name:           "Invalid characters in parameter",
+			url:            "/test-mapper?foundryA=invalid<>chars",
+			expectedStatus: http.StatusBadRequest,
+			expectedError:  "foundryA contains invalid characters",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, tt.url, nil)
+			resp, err := app.Test(req)
+			require.NoError(t, err)
+			defer resp.Body.Close()
+
+			assert.Equal(t, tt.expectedStatus, resp.StatusCode)
+
+			body, err := io.ReadAll(resp.Body)
+			require.NoError(t, err)
+
+			if tt.expectedError != "" {
+				// Check error message
+				var errResp fiber.Map
+				err = json.Unmarshal(body, &errResp)
+				require.NoError(t, err)
+				assert.Equal(t, tt.expectedError, errResp["error"])
+			} else {
+				htmlContent := string(body)
+
+				// Check that both query and response URLs are present with correct parameters
+				assert.Contains(t, htmlContent, "'service' : '"+tt.expectedQueryURL+"'")
+				assert.Contains(t, htmlContent, "'service' : '"+tt.expectedRespURL+"'")
+
+				// Ensure it's still a valid HTML page
+				assert.Contains(t, htmlContent, "KoralPipe-TermMapper")
+				assert.Contains(t, htmlContent, "<!DOCTYPE html>")
+			}
+		})
+	}
+}
+
+func TestBuildQueryParams(t *testing.T) {
+	tests := []struct {
+		name     string
+		dir      string
+		foundryA string
+		foundryB string
+		layerA   string
+		layerB   string
+		expected string
+	}{
+		{
+			name:     "Only direction parameter",
+			dir:      "atob",
+			expected: "dir=atob",
+		},
+		{
+			name:     "All parameters",
+			dir:      "btoa",
+			foundryA: "opennlp",
+			foundryB: "upos",
+			layerA:   "pos",
+			layerB:   "upos",
+			expected: "dir=btoa&foundryA=opennlp&foundryB=upos&layerA=pos&layerB=upos",
+		},
+		{
+			name:     "Some parameters empty",
+			dir:      "atob",
+			foundryA: "opennlp",
+			foundryB: "",
+			layerA:   "pos",
+			layerB:   "",
+			expected: "dir=atob&foundryA=opennlp&layerA=pos",
+		},
+		{
+			name:     "All parameters empty",
+			dir:      "",
+			foundryA: "",
+			foundryB: "",
+			layerA:   "",
+			layerB:   "",
+			expected: "",
+		},
+		{
+			name:     "URL encoding needed",
+			dir:      "atob",
+			foundryA: "test space",
+			foundryB: "test&special",
+			expected: "dir=atob&foundryA=test+space&foundryB=test%26special",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := buildQueryParams(tt.dir, tt.foundryA, tt.foundryB, tt.layerA, tt.layerB)
+			assert.Equal(t, tt.expected, result)
 		})
 	}
 }
