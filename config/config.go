@@ -6,6 +6,7 @@ import (
 
 	"github.com/KorAP/KoralPipe-TermMapper/ast"
 	"github.com/KorAP/KoralPipe-TermMapper/parser"
+	"github.com/rs/zerolog/log"
 	"gopkg.in/yaml.v3"
 )
 
@@ -96,20 +97,24 @@ func LoadFromSources(configFile string, mappingFiles []string) (*MappingConfig, 
 	for _, file := range mappingFiles {
 		data, err := os.ReadFile(file)
 		if err != nil {
-			return nil, fmt.Errorf("failed to read mapping file '%s': %w", file, err)
+			log.Error().Err(err).Str("file", file).Msg("Failed to read mapping file")
+			continue
 		}
 
 		if len(data) == 0 {
-			return nil, fmt.Errorf("EOF: mapping file '%s' is empty", file)
+			log.Error().Err(err).Str("file", file).Msg("EOF: mapping file is empty")
+			continue
 		}
 
 		var list MappingList
 		if err := yaml.Unmarshal(data, &list); err != nil {
-			return nil, fmt.Errorf("failed to parse YAML mapping file '%s': %w", file, err)
+			log.Error().Err(err).Str("file", file).Msg("Failed to parse YAML mapping file")
+			continue
 		}
 
 		if seenIDs[list.ID] {
-			return nil, fmt.Errorf("duplicate mapping list ID found: %s", list.ID)
+			log.Error().Err(err).Str("file", file).Str("list-id", list.ID).Msg("Duplicate mapping list ID found")
+			continue
 		}
 		seenIDs[list.ID] = true
 		allLists = append(allLists, list)

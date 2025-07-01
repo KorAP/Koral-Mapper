@@ -1,10 +1,12 @@
 package config
 
 import (
+	"bytes"
 	"os"
 	"testing"
 
 	"github.com/KorAP/KoralPipe-TermMapper/ast"
+	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -763,6 +765,14 @@ mappings:
 }
 
 func TestLoadFromSourcesDuplicateIDs(t *testing.T) {
+	// Set up a buffer to capture log output
+	var buf bytes.Buffer
+	originalLogger := log.Logger
+	defer func() {
+		log.Logger = originalLogger
+	}()
+	log.Logger = log.Logger.Output(&buf)
+
 	// Create config with duplicate IDs across sources
 	configContent := `
 lists:
@@ -793,9 +803,21 @@ mappings:
 	err = mappingFile.Close()
 	require.NoError(t, err)
 
-	_, err = LoadFromSources(configFile.Name(), []string{mappingFile.Name()})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "duplicate mapping list ID found: duplicate-id")
+	// The function should now succeed but log the duplicate ID error
+	config, err := LoadFromSources(configFile.Name(), []string{mappingFile.Name()})
+	require.NoError(t, err)
+	require.NotNil(t, config)
+
+	// Check that the duplicate ID error was logged
+	logOutput := buf.String()
+	assert.Contains(t, logOutput, "Duplicate mapping list ID found")
+	assert.Contains(t, logOutput, "duplicate-id")
+
+	// Only the first mapping list (from config file) should be loaded
+	require.Len(t, config.Lists, 1)
+	assert.Equal(t, "duplicate-id", config.Lists[0].ID)
+	// Check that it's the one from the config file (has mapping "[A] <> [B]")
+	assert.Equal(t, "[A] <> [B]", string(config.Lists[0].Mappings[0]))
 }
 
 func TestLoadFromSourcesConfigWithOnlyPort(t *testing.T) {
