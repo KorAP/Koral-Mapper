@@ -88,34 +88,6 @@ func (m *Mapper) ApplyResponseMappings(mappingID string, opts MappingOptions, js
 			ast.ApplyFoundryAndLayerOverrides(processedPattern, patternFoundry, patternLayer)
 		}
 
-		// WORKAROUND: Fix the incorrectly parsed pattern
-		// If the original layer is "gender" and key is "masc", fix it
-		originalTerm, isOriginalTerm := pattern.(*ast.Term)
-		if isOriginalTerm && originalTerm.Layer == "gender" && originalTerm.Key == "masc" {
-			// Create the correct pattern: foundry/layer from opts, key=gender, value=masc
-			// If foundry/layer are empty, get them from the mapping list
-			fixedFoundry := patternFoundry
-			fixedLayer := patternLayer
-			if fixedFoundry == "" {
-				mappingList := m.mappingLists[mappingID]
-				if opts.Direction { // AtoB
-					fixedFoundry = mappingList.FoundryA
-					fixedLayer = mappingList.LayerA
-				} else {
-					fixedFoundry = mappingList.FoundryB
-					fixedLayer = mappingList.LayerB
-				}
-			}
-
-			processedPattern = &ast.Term{
-				Foundry: fixedFoundry,
-				Layer:   fixedLayer,
-				Key:     "gender",
-				Value:   "masc",
-				Match:   ast.MatchEqual,
-			}
-		}
-
 		// Create snippet matcher for this rule
 		snippetMatcher, err := matcher.NewSnippetMatcher(
 			ast.Pattern{Root: processedPattern},

@@ -268,7 +268,7 @@ func TestResponseTransformEndpoint(t *testing.T) {
 		FoundryB: "opennlp",
 		LayerB:   "p",
 		Mappings: []tmconfig.MappingRule{
-			"[gender=masc] <> [p=M & m=M]",
+			"[gender:masc] <> [p=M & m=M]",
 		},
 	}
 

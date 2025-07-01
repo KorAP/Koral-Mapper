@@ -46,3 +46,4 @@ LABEL repository="https://github.com/KorAP/KoralPipe-TermMapper"
 
 # docker build -f Dockerfile -t korap/koralpipe-termmapper:latest .
 # docker run --rm --network host korap/koralpipe-termmapper:latest -m /mappings/*.yaml
+# docker save -o korap-koralpipe-termmapper-latest.tar korap/koralpipe-termmapper:latest

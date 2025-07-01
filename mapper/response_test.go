@@ -502,7 +502,7 @@ func TestResponseMappingAnnotationCreation(t *testing.T) {
 		FoundryB: "opennlp",
 		LayerB:   "p",
 		Mappings: []config.MappingRule{
-			"[gender=masc] <> [p=M & m=M]",
+			"[gender:masc] <> [p=M & m=M]",
 		},
 	}
 
