@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/KorAP/KoralPipe-TermMapper/config"
 	"github.com/KorAP/KoralPipe-TermMapper/mapper"
@@ -87,6 +88,51 @@ func setupLogger(level string) {
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 }
 
+// setupFiberLogger configures fiber's logger middleware to integrate with zerolog
+func setupFiberLogger() fiber.Handler {
+	// Check if HTTP request logging should be enabled based on current log level
+	currentLevel := zerolog.GlobalLevel()
+
+	// Only enable HTTP request logging if log level is debug or info
+	if currentLevel > zerolog.InfoLevel {
+		return func(c *fiber.Ctx) error {
+			return c.Next()
+		}
+	}
+
+	return func(c *fiber.Ctx) error {
+		// Record start time
+		start := time.Now()
+
+		// Process request
+		err := c.Next()
+
+		// Calculate latency
+		latency := time.Since(start)
+		status := c.Response().StatusCode()
+
+		// Determine log level based on status code
+		logEvent := log.Info()
+		if status >= 400 && status < 500 {
+			logEvent = log.Warn()
+		} else if status >= 500 {
+			logEvent = log.Error()
+		}
+
+		// Log the request
+		logEvent.
+			Int("status", status).
+			Dur("latency", latency).
+			Str("method", c.Method()).
+			Str("path", c.Path()).
+			Str("ip", c.IP()).
+			Str("user_agent", c.Get("User-Agent")).
+			Msg("HTTP request")
+
+		return err
+	}
+}
+
 func main() {
 	// Parse command line flags
 	cfg := parseConfig()
@@ -135,6 +181,9 @@ func main() {
 		ReadBufferSize:        64 * 1024, // 64KB - increase header size limit
 		WriteBufferSize:       64 * 1024, // 64KB - increase response buffer size
 	})
+
+	// Add zerolog-integrated logger middleware
+	app.Use(setupFiberLogger())
 
 	// Set up routes
 	setupRoutes(app, m, yamlConfig)
@@ -495,38 +544,38 @@ func generateKalamarPluginHTML(data TemplateData, queryParams QueryParams) strin
 		html += `<script>
   		<!-- activates/deactivates Mapper. -->
   		  
-       let qdata = {
-         'action'  : 'pipe',
-         'service' : '` + queryServiceURL.String() + `'
-       };
+        let qdata = {
+          'action'  : 'pipe',
+          'service' : '` + queryServiceURL.String() + `'
+        };
 
-       let rdata = {
-         'action'  : 'pipe',
-         'service' : '` + responseServiceURL.String() + `'
-       };
+        let rdata = {
+          'action'  : 'pipe',
+          'service' : '` + responseServiceURL.String() + `'
+        };
 
 
-       function pluginit (p) {
-         p.onMessage = function(msg) {
-           if (msg.key == 'termmapper') {
-             if (msg.value) {
-               qdata['job'] = 'add';
-             }
-             else {
-               qdata['job'] = 'del';
-             };
-             KorAPlugin.sendMsg(qdata);
+        function pluginit (p) {
+          p.onMessage = function(msg) {
+            if (msg.key == 'termmapper') {
+              if (msg.value) {
+                qdata['job'] = 'add';
+              }
+              else {
+                qdata['job'] = 'del';
+              };
+              KorAPlugin.sendMsg(qdata);
 			 if (msg.value) {
-               rdata['job'] = 'add-after';
-             }
-             else {
-               rdata['job'] = 'del-after';
-             };  
-             KorAPlugin.sendMsg(rdata);
-           };
-         };
-       };
-    </script>`
+                rdata['job'] = 'add-after';
+              }
+              else {
+                rdata['job'] = 'del-after';
+              };  
+              KorAPlugin.sendMsg(rdata);
+            };
+          };
+        };
+     </script>`
 	}
 
 	html += `  </body>

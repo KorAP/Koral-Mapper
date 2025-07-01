@@ -484,7 +484,7 @@ func XTestResponseMapping(t *testing.T) {
 	err = json.Unmarshal([]byte(expectedOutput), &expectedData)
 
 	assert.Equal(t, expectedData, result)
-
+	assert.Nil(t, err)
 }
 
 // TestResponseMappingAnnotationCreation tests creating new annotations based on RestrictToObligatory
