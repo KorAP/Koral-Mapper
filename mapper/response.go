@@ -6,6 +6,7 @@ import (
 
 	"github.com/KorAP/KoralPipe-TermMapper/ast"
 	"github.com/KorAP/KoralPipe-TermMapper/matcher"
+	"github.com/rs/zerolog/log"
 )
 
 // ApplyResponseMappings applies the specified mapping rules to a JSON object
@@ -130,6 +131,8 @@ func (m *Mapper) ApplyResponseMappings(mappingID string, opts MappingOptions, js
 			continue // Skip if we can't apply annotations
 		}
 	}
+
+	log.Debug().Str("snippet", processedSnippet).Msg("Processed snippet")
 
 	// Create a copy of the input data and update the snippet
 	result := make(map[string]any)

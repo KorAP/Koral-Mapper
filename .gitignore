@@ -10,4 +10,5 @@ todo.txt
 *.yaml
 !/mappings/*.yaml
 \#*
+*.tar
 !/cmd/termmapper/
