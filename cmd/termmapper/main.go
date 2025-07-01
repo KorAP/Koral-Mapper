@@ -132,6 +132,8 @@ func main() {
 	app := fiber.New(fiber.Config{
 		DisableStartupMessage: true,
 		BodyLimit:             maxInputLength,
+		ReadBufferSize:        64 * 1024, // 64KB - increase header size limit
+		WriteBufferSize:       64 * 1024, // 64KB - increase response buffer size
 	})
 
 	// Set up routes
