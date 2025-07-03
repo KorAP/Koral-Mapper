@@ -356,6 +356,17 @@ func ApplyFoundryAndLayerOverridesWithPrecedence(node Node, foundry, layer strin
 //   - (a & b & (c | d) & e) -> (a & b & e) (OR-relation removed)
 //   - (a | b) -> nil (completely optional)
 func RestrictToObligatory(node Node, foundry, layer string) Node {
+	return restrictToObligatoryWithOverrides(node, foundry, layer, false)
+}
+
+// RestrictToObligatoryWithPrecedence is like RestrictToObligatory but respects precedence rules
+// when applying foundry and layer overrides
+func RestrictToObligatoryWithPrecedence(node Node, foundry, layer string) Node {
+	return restrictToObligatoryWithOverrides(node, foundry, layer, true)
+}
+
+// restrictToObligatoryWithOverrides performs the restriction and applies overrides with optional precedence
+func restrictToObligatoryWithOverrides(node Node, foundry, layer string, withPrecedence bool) Node {
 	if node == nil {
 		return nil
 	}
@@ -366,26 +377,11 @@ func RestrictToObligatory(node Node, foundry, layer string) Node {
 
 	// Then apply foundry and layer overrides to the smaller, restricted tree
 	if restricted != nil {
-		ApplyFoundryAndLayerOverrides(restricted, foundry, layer)
-	}
-
-	return restricted
-}
-
-// RestrictToObligatoryWithPrecedence is like RestrictToObligatory but respects precedence rules
-// when applying foundry and layer overrides
-func RestrictToObligatoryWithPrecedence(node Node, foundry, layer string) Node {
-	if node == nil {
-		return nil
-	}
-
-	// First, clone and restrict to obligatory operations
-	cloned := node.Clone()
-	restricted := restrictToObligatoryRecursive(cloned)
-
-	// Then apply foundry and layer overrides with precedence to the smaller, restricted tree
-	if restricted != nil {
-		ApplyFoundryAndLayerOverridesWithPrecedence(restricted, foundry, layer)
+		if withPrecedence {
+			ApplyFoundryAndLayerOverridesWithPrecedence(restricted, foundry, layer)
+		} else {
+			ApplyFoundryAndLayerOverrides(restricted, foundry, layer)
+		}
 	}
 
 	return restricted
@@ -420,7 +416,9 @@ func restrictToObligatoryRecursive(node Node) Node {
 		if n.Relation == OrRelation {
 			// OR-relations are optional, so remove them
 			return nil
-		} else if n.Relation == AndRelation {
+		}
+
+		if n.Relation == AndRelation {
 			// AND-relations are obligatory, but we need to process operands
 			var obligatoryOperands []Node
 			for _, operand := range n.Operands {

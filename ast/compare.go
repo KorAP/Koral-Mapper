@@ -4,7 +4,7 @@ import (
 	"reflect"
 )
 
-// NodesEqual compares two AST nodes for equality
+// NodesEqual compares two AST nodes for structural equality, ignoring rewrites metadata
 func NodesEqual(a, b Node) bool {
 	if a == nil || b == nil {
 		return a == b
@@ -21,8 +21,7 @@ func NodesEqual(a, b Node) bool {
 				n1.Key == n2.Key &&
 				n1.Layer == n2.Layer &&
 				n1.Match == n2.Match &&
-				n1.Value == n2.Value &&
-				rewritesEqual(n1.Rewrites, n2.Rewrites)
+				n1.Value == n2.Value
 		}
 	case *TermGroup:
 		if n2, ok := b.(*TermGroup); ok {
@@ -34,12 +33,11 @@ func NodesEqual(a, b Node) bool {
 					return false
 				}
 			}
-			return rewritesEqual(n1.Rewrites, n2.Rewrites)
+			return true
 		}
 	case *Token:
 		if n2, ok := b.(*Token); ok {
-			return NodesEqual(n1.Wrap, n2.Wrap) &&
-				rewritesEqual(n1.Rewrites, n2.Rewrites)
+			return NodesEqual(n1.Wrap, n2.Wrap)
 		}
 	case *CatchallNode:
 		if n2, ok := b.(*CatchallNode); ok {
@@ -70,24 +68,6 @@ func NodesEqual(a, b Node) bool {
 		}
 	}
 	return false
-}
-
-// rewritesEqual compares two slices of Rewrite structs for equality
-func rewritesEqual(a, b []Rewrite) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i].Editor != b[i].Editor ||
-			a[i].Operation != b[i].Operation ||
-			a[i].Scope != b[i].Scope ||
-			a[i].Src != b[i].Src ||
-			a[i].Comment != b[i].Comment ||
-			!reflect.DeepEqual(a[i].Original, b[i].Original) {
-			return false
-		}
-	}
-	return true
 }
 
 // IsTermNode checks if a node is a Term node
