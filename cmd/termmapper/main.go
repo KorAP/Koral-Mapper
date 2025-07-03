@@ -58,6 +58,16 @@ type QueryParams struct {
 	LayerB   string
 }
 
+// requestParams holds common request parameters
+type requestParams struct {
+	MapID    string
+	Dir      string
+	FoundryA string
+	FoundryB string
+	LayerA   string
+	LayerB   string
+}
+
 func parseConfig() *appConfig {
 	cfg := &appConfig{}
 
@@ -131,6 +141,45 @@ func setupFiberLogger() fiber.Handler {
 
 		return err
 	}
+}
+
+// extractRequestParams extracts and validates common request parameters
+func extractRequestParams(c *fiber.Ctx) (*requestParams, error) {
+	params := &requestParams{
+		MapID:    c.Params("map"),
+		Dir:      c.Query("dir", "atob"),
+		FoundryA: c.Query("foundryA", ""),
+		FoundryB: c.Query("foundryB", ""),
+		LayerA:   c.Query("layerA", ""),
+		LayerB:   c.Query("layerB", ""),
+	}
+
+	// Validate input parameters
+	if err := validateInput(params.MapID, params.Dir, params.FoundryA, params.FoundryB, params.LayerA, params.LayerB, c.Body()); err != nil {
+		return nil, err
+	}
+
+	// Validate direction
+	if params.Dir != "atob" && params.Dir != "btoa" {
+		return nil, fmt.Errorf("invalid direction, must be 'atob' or 'btoa'")
+	}
+
+	return params, nil
+}
+
+// parseRequestBody parses JSON request body and direction
+func parseRequestBody(c *fiber.Ctx, dir string) (any, mapper.Direction, error) {
+	var jsonData any
+	if err := c.BodyParser(&jsonData); err != nil {
+		return nil, mapper.BtoA, fmt.Errorf("invalid JSON in request body")
+	}
+
+	direction, err := mapper.ParseDirection(dir)
+	if err != nil {
+		return nil, mapper.BtoA, err
+	}
+
+	return jsonData, direction, nil
 }
 
 func main() {
@@ -232,38 +281,16 @@ func setupRoutes(app *fiber.App, m *mapper.Mapper, yamlConfig *config.MappingCon
 
 func handleTransform(m *mapper.Mapper) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		// Get parameters
-		mapID := c.Params("map")
-		dir := c.Query("dir", "atob")
-		foundryA := c.Query("foundryA", "")
-		foundryB := c.Query("foundryB", "")
-		layerA := c.Query("layerA", "")
-		layerB := c.Query("layerB", "")
-
-		// Validate input parameters
-		if err := validateInput(mapID, dir, foundryA, foundryB, layerA, layerB, c.Body()); err != nil {
+		// Extract and validate parameters
+		params, err := extractRequestParams(c)
+		if err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"error": err.Error(),
 			})
 		}
 
-		// Validate direction
-		if dir != "atob" && dir != "btoa" {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error": "invalid direction, must be 'atob' or 'btoa'",
-			})
-		}
-
 		// Parse request body
-		var jsonData any
-		if err := c.BodyParser(&jsonData); err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error": "invalid JSON in request body",
-			})
-		}
-
-		// Parse direction
-		direction, err := mapper.ParseDirection(dir)
+		jsonData, direction, err := parseRequestBody(c, params.Dir)
 		if err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"error": err.Error(),
@@ -271,18 +298,18 @@ func handleTransform(m *mapper.Mapper) fiber.Handler {
 		}
 
 		// Apply mappings
-		result, err := m.ApplyQueryMappings(mapID, mapper.MappingOptions{
+		result, err := m.ApplyQueryMappings(params.MapID, mapper.MappingOptions{
 			Direction: direction,
-			FoundryA:  foundryA,
-			FoundryB:  foundryB,
-			LayerA:    layerA,
-			LayerB:    layerB,
+			FoundryA:  params.FoundryA,
+			FoundryB:  params.FoundryB,
+			LayerA:    params.LayerA,
+			LayerB:    params.LayerB,
 		}, jsonData)
 
 		if err != nil {
 			log.Error().Err(err).
-				Str("mapID", mapID).
-				Str("direction", dir).
+				Str("mapID", params.MapID).
+				Str("direction", params.Dir).
 				Msg("Failed to apply mappings")
 
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
@@ -296,38 +323,16 @@ func handleTransform(m *mapper.Mapper) fiber.Handler {
 
 func handleResponseTransform(m *mapper.Mapper) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		// Get parameters
-		mapID := c.Params("map")
-		dir := c.Query("dir", "atob")
-		foundryA := c.Query("foundryA", "")
-		foundryB := c.Query("foundryB", "")
-		layerA := c.Query("layerA", "")
-		layerB := c.Query("layerB", "")
-
-		// Validate input parameters
-		if err := validateInput(mapID, dir, foundryA, foundryB, layerA, layerB, c.Body()); err != nil {
+		// Extract and validate parameters
+		params, err := extractRequestParams(c)
+		if err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"error": err.Error(),
 			})
 		}
 
-		// Validate direction
-		if dir != "atob" && dir != "btoa" {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error": "invalid direction, must be 'atob' or 'btoa'",
-			})
-		}
-
 		// Parse request body
-		var jsonData any
-		if err := c.BodyParser(&jsonData); err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error": "invalid JSON in request body",
-			})
-		}
-
-		// Parse direction
-		direction, err := mapper.ParseDirection(dir)
+		jsonData, direction, err := parseRequestBody(c, params.Dir)
 		if err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"error": err.Error(),
@@ -335,18 +340,18 @@ func handleResponseTransform(m *mapper.Mapper) fiber.Handler {
 		}
 
 		// Apply response mappings
-		result, err := m.ApplyResponseMappings(mapID, mapper.MappingOptions{
+		result, err := m.ApplyResponseMappings(params.MapID, mapper.MappingOptions{
 			Direction: direction,
-			FoundryA:  foundryA,
-			FoundryB:  foundryB,
-			LayerA:    layerA,
-			LayerB:    layerB,
+			FoundryA:  params.FoundryA,
+			FoundryB:  params.FoundryB,
+			LayerA:    params.LayerA,
+			LayerB:    params.LayerB,
 		}, jsonData)
 
 		if err != nil {
 			log.Error().Err(err).
-				Str("mapID", mapID).
-				Str("direction", dir).
+				Str("mapID", params.MapID).
+				Str("direction", params.Dir).
 				Msg("Failed to apply response mappings")
 
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
@@ -374,11 +379,10 @@ func validateInput(mapID, dir, foundryA, foundryB, layerA, layerB string, body [
 	}
 
 	for _, param := range params {
-		// Check input lengths
+		// Check input lengths and invalid characters in one combined condition
 		if len(param.value) > maxParamLength {
 			return fmt.Errorf("%s too long (max %d bytes)", param.name, maxParamLength)
 		}
-		// Check for invalid characters in parameters
 		if strings.ContainsAny(param.value, "<>{}[]\\") {
 			return fmt.Errorf("%s contains invalid characters", param.name)
 		}
@@ -402,14 +406,13 @@ func handleKalamarPlugin(yamlConfig *config.MappingConfig) fiber.Handler {
 		layerA := c.Query("layerA", "")
 		layerB := c.Query("layerB", "")
 
-		// Validate input parameters (reuse existing validation)
+		// Validate input parameters and direction in one step
 		if err := validateInput(mapID, dir, foundryA, foundryB, layerA, layerB, []byte{}); err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"error": err.Error(),
 			})
 		}
 
-		// Validate direction
 		if dir != "atob" && dir != "btoa" {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"error": "invalid direction, must be 'atob' or 'btoa'",
@@ -425,10 +428,6 @@ func handleKalamarPlugin(yamlConfig *config.MappingConfig) fiber.Handler {
 			})
 		}
 
-		// Use values from config (defaults are already applied during parsing)
-		server := yamlConfig.Server
-		sdk := yamlConfig.SDK
-
 		// Prepare template data
 		data := TemplateData{
 			Title:       config.Title,
@@ -436,8 +435,8 @@ func handleKalamarPlugin(yamlConfig *config.MappingConfig) fiber.Handler {
 			Hash:        config.Buildhash,
 			Date:        config.Buildtime,
 			Description: config.Description,
-			Server:      server,
-			SDK:         sdk,
+			Server:      yamlConfig.Server,
+			SDK:         yamlConfig.SDK,
 			ServiceURL:  yamlConfig.ServiceURL,
 			MapID:       mapID,
 			Mappings:    mappings,
