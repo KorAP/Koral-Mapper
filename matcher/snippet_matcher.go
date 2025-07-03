@@ -162,58 +162,6 @@ func (sm *SnippetMatcher) CheckToken(token TokenSpan) (bool, error) {
 	return sm.matcher.Match(nodeToMatch), nil
 }
 
-// CheckTokenSequence checks if a sequence of tokens matches the pattern
-func (sm *SnippetMatcher) CheckTokenSequence(tokens []TokenSpan) (bool, error) {
-	if len(tokens) == 0 {
-		return false, nil
-	}
-
-	// For token sequences, we need to check different strategies:
-	// 1. Check if any individual token matches
-	// 2. Check if the combined annotations of all tokens match
-
-	// Strategy 1: Check individual tokens
-	for _, token := range tokens {
-		matches, err := sm.CheckToken(token)
-		if err != nil {
-			return false, err
-		}
-		if matches {
-			return true, nil
-		}
-	}
-
-	// Strategy 2: Check combined annotations
-	allAnnotations := make([]string, 0)
-	for _, token := range tokens {
-		allAnnotations = append(allAnnotations, token.Annotations...)
-	}
-
-	// Remove duplicates from combined annotations
-	annotationMap := make(map[string]bool)
-	uniqueAnnotations := make([]string, 0)
-	for _, annotation := range allAnnotations {
-		if !annotationMap[annotation] {
-			annotationMap[annotation] = true
-			uniqueAnnotations = append(uniqueAnnotations, annotation)
-		}
-	}
-
-	if len(uniqueAnnotations) == 0 {
-		return false, nil
-	}
-
-	// Create a combined token for checking
-	combinedToken := TokenSpan{
-		Text:        strings.Join(getTokenTexts(tokens), " "),
-		StartPos:    tokens[0].StartPos,
-		EndPos:      tokens[len(tokens)-1].EndPos,
-		Annotations: uniqueAnnotations,
-	}
-
-	return sm.CheckToken(combinedToken)
-}
-
 // FindMatchingTokens finds all tokens in the snippet that match the pattern
 func (sm *SnippetMatcher) FindMatchingTokens(snippet string) ([]TokenSpan, error) {
 	tokens, err := sm.ParseSnippet(snippet)
@@ -222,61 +170,13 @@ func (sm *SnippetMatcher) FindMatchingTokens(snippet string) ([]TokenSpan, error
 	}
 
 	matchingTokens := make([]TokenSpan, 0)
-
 	for _, token := range tokens {
-		matches, err := sm.CheckToken(token)
-		if err != nil {
+		if matches, err := sm.CheckToken(token); err != nil {
 			return nil, fmt.Errorf("failed to check token '%s': %w", token.Text, err)
-		}
-		if matches {
+		} else if matches {
 			matchingTokens = append(matchingTokens, token)
 		}
 	}
 
 	return matchingTokens, nil
-}
-
-// FindMatchingTokenSequences finds all token sequences that match the pattern
-func (sm *SnippetMatcher) FindMatchingTokenSequences(snippet string, maxSequenceLength int) ([][]TokenSpan, error) {
-	tokens, err := sm.ParseSnippet(snippet)
-	if err != nil {
-		return nil, err
-	}
-
-	if maxSequenceLength <= 0 {
-		maxSequenceLength = len(tokens)
-	}
-
-	matchingSequences := make([][]TokenSpan, 0)
-
-	// Check all possible token sequences up to maxSequenceLength
-	for start := 0; start < len(tokens); start++ {
-		for length := 1; length <= maxSequenceLength && start+length <= len(tokens); length++ {
-			sequence := tokens[start : start+length]
-
-			matches, err := sm.CheckTokenSequence(sequence)
-			if err != nil {
-				return nil, fmt.Errorf("failed to check token sequence: %w", err)
-			}
-			if matches {
-				matchingSequences = append(matchingSequences, sequence)
-			}
-		}
-	}
-
-	return matchingSequences, nil
-}
-
-// GetReplacement returns the replacement node from the matcher
-func (sm *SnippetMatcher) GetReplacement() ast.Node {
-	return sm.matcher.replacement.Root
-}
-
-// Helper function to extract token texts
-func getTokenTexts(tokens []TokenSpan) []string {
-	texts := make([]string, len(tokens))
-	for i, token := range tokens {
-		texts[i] = token.Text
-	}
-	return texts
 }

@@ -181,11 +181,7 @@ func (m *Matcher) simplifyNode(node ast.Node) ast.Node {
 			return nil
 		}
 		if len(simplified) == 1 {
-			// If we have a single operand, return it directly
-			// But only if we're not inside a Token
-			if _, isToken := node.(*ast.Token); !isToken {
-				return simplified[0]
-			}
+			return simplified[0]
 		}
 
 		return &ast.TermGroup{
@@ -263,9 +259,7 @@ func (m *Matcher) matchNode(node, pattern ast.Node) bool {
 func (m *Matcher) tryMatchWrapped(node, pattern ast.Node) bool {
 	switch n := node.(type) {
 	case *ast.Token:
-		if n.Wrap != nil {
-			return m.matchNode(n.Wrap, pattern)
-		}
+		return n.Wrap != nil && m.matchNode(n.Wrap, pattern)
 	case *ast.CatchallNode:
 		if n.Wrap != nil && m.matchNode(n.Wrap, pattern) {
 			return true
