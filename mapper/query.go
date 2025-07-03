@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/KorAP/KoralPipe-TermMapper/ast"
-	"github.com/KorAP/KoralPipe-TermMapper/matcher"
-	"github.com/KorAP/KoralPipe-TermMapper/parser"
+	"github.com/KorAP/Koral-Mapper/ast"
+	"github.com/KorAP/Koral-Mapper/matcher"
+	"github.com/KorAP/Koral-Mapper/parser"
 )
 
 // ApplyQueryMappings applies the specified mapping rules to a JSON object

@@ -10,7 +10,7 @@ import (
 
 	"maps"
 
-	"github.com/KorAP/KoralPipe-TermMapper/ast"
+	"github.com/KorAP/Koral-Mapper/ast"
 )
 
 // rawNode represents the raw JSON structure

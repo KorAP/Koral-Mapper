@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/KorAP/KoralPipe-TermMapper/ast"
-	"github.com/KorAP/KoralPipe-TermMapper/matcher"
-	"github.com/KorAP/KoralPipe-TermMapper/parser"
+	"github.com/KorAP/Koral-Mapper/ast"
+	"github.com/KorAP/Koral-Mapper/matcher"
+	"github.com/KorAP/Koral-Mapper/parser"
 	"github.com/rs/zerolog/log"
 )
 

@@ -12,8 +12,8 @@ import (
 	"strings"
 	"testing"
 
-	tmconfig "github.com/KorAP/KoralPipe-TermMapper/config"
-	"github.com/KorAP/KoralPipe-TermMapper/mapper"
+	tmconfig "github.com/KorAP/Koral-Mapper/config"
+	"github.com/KorAP/Koral-Mapper/mapper"
 	"github.com/gofiber/fiber/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -485,7 +485,7 @@ func TestHealthEndpoint(t *testing.T) {
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	body, err = io.ReadAll(resp.Body)
 	require.NoError(t, err)
-	assert.Contains(t, string(body), "KoralPipe-TermMapper")
+	assert.Contains(t, string(body), "Koral-Mapper")
 
 }
 
@@ -569,7 +569,7 @@ func TestKalamarPluginWithCustomSdkAndServer(t *testing.T) {
 			assert.Contains(t, htmlContent, `data-server="`+tt.expectedServer+`"`)
 
 			// Ensure it's still a valid HTML page
-			assert.Contains(t, htmlContent, "KoralPipe-TermMapper")
+			assert.Contains(t, htmlContent, "Koral-Mapper")
 			assert.Contains(t, htmlContent, "<!DOCTYPE html>")
 		})
 	}
@@ -1120,18 +1120,18 @@ func TestConfigurableServiceURL(t *testing.T) {
 	}{
 		{
 			name:               "Custom service URL",
-			customServiceURL:   "https://custom.example.com/plugin/termmapper",
-			expectedServiceURL: "https://custom.example.com/plugin/termmapper",
+			customServiceURL:   "https://custom.example.com/plugin/koralmapper",
+			expectedServiceURL: "https://custom.example.com/plugin/koralmapper",
 		},
 		{
 			name:               "Default service URL when not specified",
 			customServiceURL:   "", // Will use default
-			expectedServiceURL: "https://korap.ids-mannheim.de/plugin/termmapper",
+			expectedServiceURL: "https://korap.ids-mannheim.de/plugin/koralmapper",
 		},
 		{
 			name:               "Custom service URL with different path",
-			customServiceURL:   "https://my-server.org/api/v1/termmapper",
-			expectedServiceURL: "https://my-server.org/api/v1/termmapper",
+			customServiceURL:   "https://my-server.org/api/v1/koralmapper",
+			expectedServiceURL: "https://my-server.org/api/v1/koralmapper",
 		},
 	}
 
@@ -1171,7 +1171,7 @@ func TestConfigurableServiceURL(t *testing.T) {
 			assert.Contains(t, htmlContent, "'service' : '"+expectedJSURL)
 
 			// Ensure it's still a valid HTML page
-			assert.Contains(t, htmlContent, "KoralPipe-TermMapper")
+			assert.Contains(t, htmlContent, "Koral-Mapper")
 			assert.Contains(t, htmlContent, "<!DOCTYPE html>")
 		})
 	}
@@ -1182,7 +1182,7 @@ func TestServiceURLConfigFileLoading(t *testing.T) {
 	configContent := `
 sdk: "https://custom.example.com/sdk.js"
 server: "https://custom.example.com/"
-serviceURL: "https://custom.example.com/api/termmapper"
+serviceURL: "https://custom.example.com/api/koralmapper"
 lists:
 - id: config-mapper
   mappings:
@@ -1202,7 +1202,7 @@ lists:
 	require.NoError(t, err)
 
 	// Verify that the service URL was loaded correctly
-	assert.Equal(t, "https://custom.example.com/api/termmapper", config.ServiceURL)
+	assert.Equal(t, "https://custom.example.com/api/koralmapper", config.ServiceURL)
 
 	// Verify other fields are also preserved
 	assert.Equal(t, "https://custom.example.com/sdk.js", config.SDK)
@@ -1225,7 +1225,7 @@ lists:
 	require.NoError(t, err)
 
 	htmlContent := string(body)
-	expectedJSURL := "https://custom.example.com/api/termmapper/config-mapper/query"
+	expectedJSURL := "https://custom.example.com/api/koralmapper/config-mapper/query"
 	assert.Contains(t, htmlContent, "'service' : '"+expectedJSURL)
 }
 
@@ -1244,7 +1244,7 @@ func TestServiceURLDefaults(t *testing.T) {
 	tmconfig.ApplyDefaults(config)
 
 	// Check that the default service URL was applied
-	assert.Equal(t, "https://korap.ids-mannheim.de/plugin/termmapper", config.ServiceURL)
+	assert.Equal(t, "https://korap.ids-mannheim.de/plugin/koralmapper", config.ServiceURL)
 
 	// Check that other defaults were also applied
 	assert.Equal(t, "https://korap.ids-mannheim.de/", config.Server)
@@ -1261,7 +1261,7 @@ func TestServiceURLWithExampleConfig(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify that the default service URL was applied since it's not in the example config
-	assert.Equal(t, "https://korap.ids-mannheim.de/plugin/termmapper", config.ServiceURL)
+	assert.Equal(t, "https://korap.ids-mannheim.de/plugin/koralmapper", config.ServiceURL)
 
 	// Verify other values from the example config are preserved
 	assert.Equal(t, "https://korap.ids-mannheim.de/js/korap-plugin-latest.js", config.SDK)
@@ -1288,7 +1288,7 @@ func TestServiceURLWithExampleConfig(t *testing.T) {
 	require.NoError(t, err)
 
 	htmlContent := string(body)
-	expectedJSURL := "https://korap.ids-mannheim.de/plugin/termmapper/main-config-mapper/query"
+	expectedJSURL := "https://korap.ids-mannheim.de/plugin/koralmapper/main-config-mapper/query"
 	assert.Contains(t, htmlContent, "'service' : '"+expectedJSURL)
 }
 
@@ -1301,27 +1301,27 @@ func TestGenerateKalamarPluginHTMLWithURLJoining(t *testing.T) {
 	}{
 		{
 			name:       "Service URL without trailing slash",
-			serviceURL: "https://example.com/plugin/termmapper",
+			serviceURL: "https://example.com/plugin/koralmapper",
 			mapID:      "test-mapper",
-			expected:   "'service' : 'https://example.com/plugin/termmapper/test-mapper/query",
+			expected:   "'service' : 'https://example.com/plugin/koralmapper/test-mapper/query",
 		},
 		{
 			name:       "Service URL with trailing slash",
-			serviceURL: "https://example.com/plugin/termmapper/",
+			serviceURL: "https://example.com/plugin/koralmapper/",
 			mapID:      "test-mapper",
-			expected:   "'service' : 'https://example.com/plugin/termmapper/test-mapper/query",
+			expected:   "'service' : 'https://example.com/plugin/koralmapper/test-mapper/query",
 		},
 		{
 			name:       "Map ID with leading slash",
-			serviceURL: "https://example.com/plugin/termmapper",
+			serviceURL: "https://example.com/plugin/koralmapper",
 			mapID:      "/test-mapper",
-			expected:   "'service' : 'https://example.com/plugin/termmapper/test-mapper/query",
+			expected:   "'service' : 'https://example.com/plugin/koralmapper/test-mapper/query",
 		},
 		{
 			name:       "Both with slashes",
-			serviceURL: "https://example.com/plugin/termmapper/",
+			serviceURL: "https://example.com/plugin/koralmapper/",
 			mapID:      "/test-mapper",
-			expected:   "'service' : 'https://example.com/plugin/termmapper/test-mapper/query",
+			expected:   "'service' : 'https://example.com/plugin/koralmapper/test-mapper/query",
 		},
 		{
 			name:       "Complex map ID",
@@ -1376,7 +1376,7 @@ func TestKalamarPluginWithQueryParameters(t *testing.T) {
 
 	// Create mock config
 	mockConfig := &tmconfig.MappingConfig{
-		ServiceURL: "https://example.com/plugin/termmapper",
+		ServiceURL: "https://example.com/plugin/koralmapper",
 		Lists:      []tmconfig.MappingList{mappingList},
 	}
 
@@ -1398,43 +1398,43 @@ func TestKalamarPluginWithQueryParameters(t *testing.T) {
 		{
 			name:             "Default parameters (no query params)",
 			url:              "/test-mapper",
-			expectedQueryURL: "https://example.com/plugin/termmapper/test-mapper/query?dir=atob",
-			expectedRespURL:  "https://example.com/plugin/termmapper/test-mapper/response?dir=btoa",
+			expectedQueryURL: "https://example.com/plugin/koralmapper/test-mapper/query?dir=atob",
+			expectedRespURL:  "https://example.com/plugin/koralmapper/test-mapper/response?dir=btoa",
 			expectedStatus:   http.StatusOK,
 		},
 		{
 			name:             "Explicit dir=atob",
 			url:              "/test-mapper?dir=atob",
-			expectedQueryURL: "https://example.com/plugin/termmapper/test-mapper/query?dir=atob",
-			expectedRespURL:  "https://example.com/plugin/termmapper/test-mapper/response?dir=btoa",
+			expectedQueryURL: "https://example.com/plugin/koralmapper/test-mapper/query?dir=atob",
+			expectedRespURL:  "https://example.com/plugin/koralmapper/test-mapper/response?dir=btoa",
 			expectedStatus:   http.StatusOK,
 		},
 		{
 			name:             "Explicit dir=btoa",
 			url:              "/test-mapper?dir=btoa",
-			expectedQueryURL: "https://example.com/plugin/termmapper/test-mapper/query?dir=btoa",
-			expectedRespURL:  "https://example.com/plugin/termmapper/test-mapper/response?dir=atob",
+			expectedQueryURL: "https://example.com/plugin/koralmapper/test-mapper/query?dir=btoa",
+			expectedRespURL:  "https://example.com/plugin/koralmapper/test-mapper/response?dir=atob",
 			expectedStatus:   http.StatusOK,
 		},
 		{
 			name:             "With foundry parameters",
 			url:              "/test-mapper?dir=atob&foundryA=opennlp&foundryB=upos",
-			expectedQueryURL: "https://example.com/plugin/termmapper/test-mapper/query?dir=atob&foundryA=opennlp&foundryB=upos",
-			expectedRespURL:  "https://example.com/plugin/termmapper/test-mapper/response?dir=btoa&foundryA=opennlp&foundryB=upos",
+			expectedQueryURL: "https://example.com/plugin/koralmapper/test-mapper/query?dir=atob&foundryA=opennlp&foundryB=upos",
+			expectedRespURL:  "https://example.com/plugin/koralmapper/test-mapper/response?dir=btoa&foundryA=opennlp&foundryB=upos",
 			expectedStatus:   http.StatusOK,
 		},
 		{
 			name:             "With layer parameters",
 			url:              "/test-mapper?dir=btoa&layerA=pos&layerB=upos",
-			expectedQueryURL: "https://example.com/plugin/termmapper/test-mapper/query?dir=btoa&layerA=pos&layerB=upos",
-			expectedRespURL:  "https://example.com/plugin/termmapper/test-mapper/response?dir=atob&layerA=pos&layerB=upos",
+			expectedQueryURL: "https://example.com/plugin/koralmapper/test-mapper/query?dir=btoa&layerA=pos&layerB=upos",
+			expectedRespURL:  "https://example.com/plugin/koralmapper/test-mapper/response?dir=atob&layerA=pos&layerB=upos",
 			expectedStatus:   http.StatusOK,
 		},
 		{
 			name:             "All parameters",
 			url:              "/test-mapper?dir=atob&foundryA=opennlp&foundryB=upos&layerA=pos&layerB=upos",
-			expectedQueryURL: "https://example.com/plugin/termmapper/test-mapper/query?dir=atob&foundryA=opennlp&foundryB=upos&layerA=pos&layerB=upos",
-			expectedRespURL:  "https://example.com/plugin/termmapper/test-mapper/response?dir=btoa&foundryA=opennlp&foundryB=upos&layerA=pos&layerB=upos",
+			expectedQueryURL: "https://example.com/plugin/koralmapper/test-mapper/query?dir=atob&foundryA=opennlp&foundryB=upos&layerA=pos&layerB=upos",
+			expectedRespURL:  "https://example.com/plugin/koralmapper/test-mapper/response?dir=btoa&foundryA=opennlp&foundryB=upos&layerA=pos&layerB=upos",
 			expectedStatus:   http.StatusOK,
 		},
 		{
@@ -1483,7 +1483,7 @@ func TestKalamarPluginWithQueryParameters(t *testing.T) {
 				assert.Contains(t, htmlContent, "'service' : '"+tt.expectedRespURL+"'")
 
 				// Ensure it's still a valid HTML page
-				assert.Contains(t, htmlContent, "KoralPipe-TermMapper")
+				assert.Contains(t, htmlContent, "Koral-Mapper")
 				assert.Contains(t, htmlContent, "<!DOCTYPE html>")
 			}
 		})

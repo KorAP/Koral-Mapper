@@ -1,21 +1,21 @@
-# KoralPipe-TermMapper
+# Koral-Mapper
 
 A KorAP service using the KoralPipe mechanism to rewrite terms in queries and responses between different annotations.
 
 ## Overview
 
-KoralPipe-TermMapper is a tool for transforming linguistic annotations between different annotation schemes. It allows you to define mapping rules in YAML configuration files and apply these mappings to JSON-encoded linguistic annotations.
+Koral-Mapper is a tool for transforming linguistic annotations between different annotation schemes. It allows you to define mapping rules in YAML configuration files and apply these mappings to JSON-encoded linguistic annotations.
 
 ## Installation
 
 ```bash
-go get github.com/KorAP/KoralPipe-TermMapper
+go get github.com/KorAP/Koral-Mapper
 ```
 
 ## Usage
 
 ```bash
-termmapper -c config.yaml -m extra-mapper1.yaml -m extra-mapper2.yaml
+koralmapper -c config.yaml -m extra-mapper1.yaml -m extra-mapper2.yaml
 ```
 
 Command Line Options
@@ -30,7 +30,7 @@ Command Line Options
 
 ## Configuration
 
-KoralPipe-TermMapper supports loading configuration from multiple sources:
+Koral-Mapper supports loading configuration from multiple sources:
 
 1. **Main Configuration File** (`-c`): Contains global settings (SDK, server endpoints, port, log level) and optional mapping lists
 2. **Individual Mapping Files** (`-m`): Contains single mapping lists, can be specified multiple times
@@ -54,8 +54,8 @@ port: 8080
 # Optional: Log level - debug, info, warn, error (default: warn)
 loglevel: info
 
-# Optional: ServiceURL for the termmapper
-serviceURL: "https://korap.ids-mannheim.de/plugin/termmapper"
+# Optional: ServiceURL for the koralmapper
+serviceURL: "https://korap.ids-mannheim.de/plugin/koralmapper"
 
 # Optional: Mapping lists (same format as individual mapping files)
 lists:
@@ -90,7 +90,7 @@ The `sdk`, `server`, `port`, and `loglevel` fields in the main configuration fil
 - **`server`**: Custom server endpoint URL (default: `https://korap.ids-mannheim.de/`)
 - **`port`**: Server port (default: `5725`)
 - **`loglevel`**: Log level (default: `warn`)
-- **`serviceURL`**: Service URL of the TermMapper (default: `https://korap.ids-mannheim.de/plugin/termmapper`)
+- **`serviceURL`**: Service URL of the KoralMapper (default: `https://korap.ids-mannheim.de/plugin/koralmapper`)
 
 These values are applied during configuration parsing. When using only individual mapping files (`-m` flags), default values are used unless overridden by command line arguments.
 
@@ -100,9 +100,9 @@ Each mapping rule consists of two patterns separated by `<>`. The patterns can b
 - Simple terms: `[key]` or `[foundry/layer=key]` or `[foundry/layer=key:value]`
 - Complex terms with AND/OR relations: `[term1 & term2]` or `[term1 | term2]` or `[term1 | (term2 & term3)]`
 
-### Foundry and Layer Precedence for TermMapping
+### Foundry and Layer Precedence for term mapping
 
-KoralPipe-TermMapper follows a strict precedence hierarchy when determining which foundry and layer values to use during mapping transformations. This ensures predictable behavior when combining mapping rules with runtime overrides.
+Koral-Mapper follows a strict precedence hierarchy when determining which foundry and layer values to use during mapping transformations. This ensures predictable behavior when combining mapping rules with runtime overrides.
 
 #### Precedence Rules
 
@@ -252,7 +252,7 @@ Mapping between STTS and UD part-of-spech tags.
 Copyright (C) 2025, [IDS Mannheim](https://www.ids-mannheim.de/)<br>
 Author: [Nils Diewald](https://www.nils-diewald.de/)
 
-TermMapper is free software published under the
+Koral-Mapper is free software published under the
 [BSD-2 License](https://opensource.org/licenses/BSD-2-Clause).
 
 *Disclaimer*: This software was developed (as an experiment) with major assistance by AI (mainly Claude 3.5-sonnet and Claude 4-sonnet).

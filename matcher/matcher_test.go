@@ -7,7 +7,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/KorAP/KoralPipe-TermMapper/ast"
+	"github.com/KorAP/Koral-Mapper/ast"
 	"github.com/stretchr/testify/assert"
 )
 

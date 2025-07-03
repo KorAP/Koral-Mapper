@@ -18,14 +18,14 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
     go build -v \
     -ldflags "-extldflags '-static' -s -w" \
     --trimpath \
-    -o /src/termmapper ./cmd/termmapper/
+    -o /src/koralmapper ./cmd/koralmapper/
 
 FROM gruebel/upx:latest AS upx
 
-COPY --from=build /src/termmapper /termmapper-big
+COPY --from=build /src/koralmapper /koralmapper-big
 
 # Compress the binary and copy it to final image
-RUN upx --best --lzma -o /termmapper /termmapper-big
+RUN upx --best --lzma -o /koralmapper /koralmapper-big
 
 # Main stage
 FROM scratch AS final
@@ -36,14 +36,14 @@ EXPOSE 5725
 
 COPY --from=build /etc/ssl/certs /etc/ssl/certs
 COPY --from=build /src/mappings /mappings
-COPY --from=upx   /termmapper      /termmapper
+COPY --from=upx   /koralmapper      /koralmapper
 
 ENTRYPOINT [ "/termmapper" ]
 
 LABEL maintainer="korap@ids-mannheim.de"
-LABEL description="Docker Image for KoralPipe-TermMapper"
-LABEL repository="https://github.com/KorAP/KoralPipe-TermMapper"
+LABEL description="Docker Image for Koral-Mapper"
+LABEL repository="https://github.com/KorAP/Koral-Mapper"
 
-# docker build -f Dockerfile -t korap/koralpipe-termmapper:latest .
-# docker run --rm --network host korap/koralpipe-termmapper:latest -m /mappings/*.yaml
-# docker save -o korap-koralpipe-termmapper-latest.tar korap/koralpipe-termmapper:latest
+# docker build -f Dockerfile -t korap/koral-mapper:latest .
+# docker run --rm --network host korap/koral-mapper:latest -m /mappings/*.yaml
+# docker save -o korap-koral-mapper-latest.tar korap/koral-mapper:latest

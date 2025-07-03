@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"regexp"
 
-	"github.com/KorAP/KoralPipe-TermMapper/ast"
+	"github.com/KorAP/Koral-Mapper/ast"
 )
 
 // TitleAttribute represents a parsed title attribute from an HTML span

@@ -5,10 +5,13 @@ testdata/sandbox
 examples/
 todo.txt
 /vendor
+/koralmapper
 /termmapper
+/cmd/koralmapper/koralmapper
 /cmd/termmapper/termmapper
 *.yaml
 !/mappings/*.yaml
 \#*
 *.tar
 !/cmd/termmapper/
+!/cmd/koralmapper/

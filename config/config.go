@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/KorAP/KoralPipe-TermMapper/ast"
-	"github.com/KorAP/KoralPipe-TermMapper/parser"
+	"github.com/KorAP/Koral-Mapper/ast"
+	"github.com/KorAP/Koral-Mapper/parser"
 	"github.com/rs/zerolog/log"
 	"gopkg.in/yaml.v3"
 )
@@ -13,7 +13,7 @@ import (
 const (
 	defaultServer     = "https://korap.ids-mannheim.de/"
 	defaultSDK        = "https://korap.ids-mannheim.de/js/korap-plugin-latest.js"
-	defaultServiceURL = "https://korap.ids-mannheim.de/plugin/termmapper"
+	defaultServiceURL = "https://korap.ids-mannheim.de/plugin/koralmapper"
 	defaultPort       = 5725
 	defaultLogLevel   = "warn"
 )

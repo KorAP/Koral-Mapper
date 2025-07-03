@@ -11,8 +11,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/KorAP/KoralPipe-TermMapper/config"
-	"github.com/KorAP/KoralPipe-TermMapper/mapper"
+	"github.com/KorAP/Koral-Mapper/config"
+	"github.com/KorAP/Koral-Mapper/mapper"
 	"github.com/alecthomas/kong"
 	"github.com/gofiber/fiber/v2"
 	"github.com/rs/zerolog"
@@ -556,7 +556,7 @@ func generateKalamarPluginHTML(data TemplateData, queryParams QueryParams) strin
 
         function pluginit (p) {
           p.onMessage = function(msg) {
-            if (msg.key == 'termmapper') {
+            if (msg.key == 'koralmapper') {
               if (msg.value) {
                 qdata['job'] = 'add';
               }

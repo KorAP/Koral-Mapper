@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/KorAP/KoralPipe-TermMapper/ast"
-	"github.com/KorAP/KoralPipe-TermMapper/config"
-	"github.com/KorAP/KoralPipe-TermMapper/matcher"
+	"github.com/KorAP/Koral-Mapper/ast"
+	"github.com/KorAP/Koral-Mapper/config"
+	"github.com/KorAP/Koral-Mapper/matcher"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

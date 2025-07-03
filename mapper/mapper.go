@@ -3,8 +3,8 @@ package mapper
 import (
 	"fmt"
 
-	"github.com/KorAP/KoralPipe-TermMapper/config"
-	"github.com/KorAP/KoralPipe-TermMapper/parser"
+	"github.com/KorAP/Koral-Mapper/config"
+	"github.com/KorAP/Koral-Mapper/parser"
 )
 
 // Direction represents the mapping direction (A to B or B to A)

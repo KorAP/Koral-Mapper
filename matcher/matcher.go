@@ -3,7 +3,7 @@ package matcher
 import (
 	"fmt"
 
-	"github.com/KorAP/KoralPipe-TermMapper/ast"
+	"github.com/KorAP/Koral-Mapper/ast"
 )
 
 // Matcher handles pattern matching and replacement in the AST

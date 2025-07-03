@@ -3,7 +3,7 @@ package mapper
 import (
 	"testing"
 
-	"github.com/KorAP/KoralPipe-TermMapper/config"
+	"github.com/KorAP/Koral-Mapper/config"
 )
 
 // BenchmarkApplyQueryMappings benchmarks the optimized ApplyQueryMappings method

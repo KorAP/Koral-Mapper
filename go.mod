@@ -1,4 +1,4 @@
-module github.com/KorAP/KoralPipe-TermMapper
+module github.com/KorAP/Koral-Mapper
 
 go 1.23.0
 

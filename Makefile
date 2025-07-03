@@ -1,5 +1,5 @@
-MODULE  = github.com/KorAP/KoralPipe-TermMapper
-CONFIG  = github.com/KorAP/KoralPipe-TermMapper/config
+MODULE  = github.com/KorAP/Koral-Mapper
+CONFIG  = github.com/KorAP/Koral-Mapper/config
 DEV_DIR      = $(shell pwd)
 BUILDDATE    = $(shell date -u '+%Y-%m-%d_%I:%M:%S%p')
 BUILDVERSION = $(shell git describe --tags --abbrev=0 2>/dev/null)
@@ -7,7 +7,7 @@ BUILDCOMMIT  = $(shell git rev-parse --short HEAD)
 
 BUILDOUT =
 ifeq ($(ACTION), build)
-  BUILDOUT = -o ./termmapper
+  BUILDOUT = -o ./koralmapper
 endif
 
 
@@ -24,7 +24,7 @@ build:
                        -w" \
 					--trimpath \
 					$(BUILDOUT) \
-					./cmd/termmapper/
+					./cmd/koralmapper/
 
 update:	## Update all dependencies and clean up the dependency files.
 	go get -u all && go mod tidy
@@ -39,7 +39,7 @@ vet: 	## Run `go vet` on the code.
 	go vet ./...
 
 fuzz:
-	go test -fuzz=FuzzTransformEndpoint -fuzztime=1m ./cmd/termmapper
+	go test -fuzz=FuzzTransformEndpoint -fuzztime=1m ./cmd/koralmapper
 
 docker:
-	docker build -f Dockerfile -t korap/koralpipe-termmapper:latest .
+	docker build -f Dockerfile -t korap/koral-mapper:latest .

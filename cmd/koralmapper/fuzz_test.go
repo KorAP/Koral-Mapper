@@ -11,8 +11,8 @@ import (
 	"strings"
 	"testing"
 
-	tmconfig "github.com/KorAP/KoralPipe-TermMapper/config"
-	"github.com/KorAP/KoralPipe-TermMapper/mapper"
+	tmconfig "github.com/KorAP/Koral-Mapper/config"
+	"github.com/KorAP/Koral-Mapper/mapper"
 	"github.com/gofiber/fiber/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -409,12 +409,12 @@ func TestLargeInput(t *testing.T) {
 }
 
 // # Run fuzzing for 1 minute
-// go test -fuzz=FuzzTransformEndpoint -fuzztime=1m ./cmd/termmapper
+// go test -fuzz=FuzzTransformEndpoint -fuzztime=1m ./cmd/koralmapper
 //
 // # Run fuzzing until a crash is found or Ctrl+C is pressed
-// go test -fuzz=FuzzTransformEndpoint ./cmd/termmapper
+// go test -fuzz=FuzzTransformEndpoint ./cmd/koralmapper
 //
 // # Run fuzzing with verbose output
-// go test -fuzz=FuzzTransformEndpoint -v ./cmd/termmapper
+// go test -fuzz=FuzzTransformEndpoint -v ./cmd/koralmapper
 //
 // go test -run=FuzzTransformEndpoint/testdata/fuzz/FuzzTransformEndpoint/$SEED

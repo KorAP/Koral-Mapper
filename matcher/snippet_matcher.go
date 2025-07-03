@@ -5,8 +5,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/KorAP/KoralPipe-TermMapper/ast"
-	"github.com/KorAP/KoralPipe-TermMapper/parser"
+	"github.com/KorAP/Koral-Mapper/ast"
+	"github.com/KorAP/Koral-Mapper/parser"
 	"github.com/orisano/gosax"
 )
 
