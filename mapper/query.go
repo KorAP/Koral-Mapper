@@ -117,12 +117,6 @@ func (m *Mapper) ApplyQueryMappings(mappingID string, opts MappingOptions, jsonD
 			replacement = token.Wrap
 		}
 
-		// First, quickly check if the pattern could match without creating a full matcher
-		// This is a lightweight pre-check to avoid expensive operations
-		if !m.couldPatternMatch(node, pattern) {
-			continue
-		}
-
 		// Get or create pattern with overrides
 		patternKey := patternCacheKey{ruleIndex: i, foundry: patternFoundry, layer: patternLayer, isReplacement: false}
 		processedPattern, exists := patternCache[patternKey]
@@ -326,89 +320,4 @@ func isValidQueryObject(data any) bool {
 	}
 
 	return true
-}
-
-// couldPatternMatch performs a lightweight check to see if a pattern could potentially match a node
-// This is an optimization to avoid expensive operations when there's clearly no match possible
-func (m *Mapper) couldPatternMatch(node, pattern ast.Node) bool {
-	if pattern == nil {
-		return true
-	}
-	if node == nil {
-		return false
-	}
-
-	// Handle Token wrappers
-	if token, ok := pattern.(*ast.Token); ok {
-		pattern = token.Wrap
-	}
-	if token, ok := node.(*ast.Token); ok {
-		node = token.Wrap
-	}
-
-	// For simple terms, check basic compatibility
-	if patternTerm, ok := pattern.(*ast.Term); ok {
-		// Check if there's any term in the node structure that could match
-		return m.hasMatchingTerm(node, patternTerm)
-	}
-
-	// For TermGroups, we need to check all possible matches
-	if patternGroup, ok := pattern.(*ast.TermGroup); ok {
-		if patternGroup.Relation == ast.OrRelation {
-			// For OR relations, any operand could match
-			for _, op := range patternGroup.Operands {
-				if m.couldPatternMatch(node, op) {
-					return true
-				}
-			}
-			return false
-		} else {
-			// For AND relations, all operands must have potential matches
-			for _, op := range patternGroup.Operands {
-				if !m.couldPatternMatch(node, op) {
-					return false
-				}
-			}
-			return true
-		}
-	}
-
-	// For other cases, assume they could match (conservative approach)
-	return true
-}
-
-// hasMatchingTerm checks if there's any term in the node structure that could match the pattern term
-func (m *Mapper) hasMatchingTerm(node ast.Node, patternTerm *ast.Term) bool {
-	if node == nil {
-		return false
-	}
-
-	switch n := node.(type) {
-	case *ast.Term:
-		// Check if this term could match the pattern
-		// We only check key as that's the most distinctive attribute
-		return n.Key == patternTerm.Key
-	case *ast.TermGroup:
-		// Check all operands
-		for _, op := range n.Operands {
-			if m.hasMatchingTerm(op, patternTerm) {
-				return true
-			}
-		}
-		return false
-	case *ast.Token:
-		return m.hasMatchingTerm(n.Wrap, patternTerm)
-	case *ast.CatchallNode:
-		if n.Wrap != nil && m.hasMatchingTerm(n.Wrap, patternTerm) {
-			return true
-		}
-		for _, op := range n.Operands {
-			if m.hasMatchingTerm(op, patternTerm) {
-				return true
-			}
-		}
-		return false
-	default:
-		return false
-	}
 }
