@@ -309,6 +309,42 @@ func ApplyFoundryAndLayerOverrides(node Node, foundry, layer string) {
 	}
 }
 
+// ApplyFoundryAndLayerOverridesWithPrecedence applies foundry and layer overrides while respecting precedence:
+// 1. Mapping rule foundry/layer (highest priority - don't override if already set)
+// 2. Passed overwrite foundry/layer (from MappingOptions)
+// 3. Mapping list foundry/layer (lowest priority - defaults)
+func ApplyFoundryAndLayerOverridesWithPrecedence(node Node, foundry, layer string) {
+	if node == nil {
+		return
+	}
+
+	switch n := node.(type) {
+	case *Term:
+		// Only override if the term doesn't already have explicit values (respecting precedence)
+		if foundry != "" && n.Foundry == "" {
+			n.Foundry = foundry
+		}
+		if layer != "" && n.Layer == "" {
+			n.Layer = layer
+		}
+	case *TermGroup:
+		for _, op := range n.Operands {
+			ApplyFoundryAndLayerOverridesWithPrecedence(op, foundry, layer)
+		}
+	case *Token:
+		if n.Wrap != nil {
+			ApplyFoundryAndLayerOverridesWithPrecedence(n.Wrap, foundry, layer)
+		}
+	case *CatchallNode:
+		if n.Wrap != nil {
+			ApplyFoundryAndLayerOverridesWithPrecedence(n.Wrap, foundry, layer)
+		}
+		for _, op := range n.Operands {
+			ApplyFoundryAndLayerOverridesWithPrecedence(op, foundry, layer)
+		}
+	}
+}
+
 // RestrictToObligatory takes a replacement node from a mapping rule and reduces the boolean structure
 // to only obligatory operations by removing optional OR-relations and keeping required AND-relations.
 // It also applies foundry and layer overrides like ApplyFoundryAndLayerOverrides().
@@ -331,6 +367,25 @@ func RestrictToObligatory(node Node, foundry, layer string) Node {
 	// Then apply foundry and layer overrides to the smaller, restricted tree
 	if restricted != nil {
 		ApplyFoundryAndLayerOverrides(restricted, foundry, layer)
+	}
+
+	return restricted
+}
+
+// RestrictToObligatoryWithPrecedence is like RestrictToObligatory but respects precedence rules
+// when applying foundry and layer overrides
+func RestrictToObligatoryWithPrecedence(node Node, foundry, layer string) Node {
+	if node == nil {
+		return nil
+	}
+
+	// First, clone and restrict to obligatory operations
+	cloned := node.Clone()
+	restricted := restrictToObligatoryRecursive(cloned)
+
+	// Then apply foundry and layer overrides with precedence to the smaller, restricted tree
+	if restricted != nil {
+		ApplyFoundryAndLayerOverridesWithPrecedence(restricted, foundry, layer)
 	}
 
 	return restricted

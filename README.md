@@ -100,6 +100,26 @@ Each mapping rule consists of two patterns separated by `<>`. The patterns can b
 - Simple terms: `[key]` or `[foundry/layer=key]` or `[foundry/layer=key:value]`
 - Complex terms with AND/OR relations: `[term1 & term2]` or `[term1 | term2]` or `[term1 | (term2 & term3)]`
 
+### Foundry and Layer Precedence for TermMapping
+
+KoralPipe-TermMapper follows a strict precedence hierarchy when determining which foundry and layer values to use during mapping transformations. This ensures predictable behavior when combining mapping rules with runtime overrides.
+
+#### Precedence Rules
+
+The precedence hierarchy is applied separately for foundry and layer values:
+
+1. **Mapping rule foundry/layer** (highest priority)
+   - Explicit foundry/layer specifications in mapping rule patterns
+   - Example: `[opennlp/p=DT]` has explicit foundry "opennlp" and layer "p"
+
+2. **Passed overwrite foundry/layer** (medium priority)
+   - Values provided via query parameters (`foundryA`, `foundryB`, `layerA`, `layerB`)
+   - Applied only when mapping rules don't have explicit foundry/layer
+
+3. **Mapping list foundry/layer** (lowest priority)
+   - Default values from the mapping list configuration
+   - Used as fallback when neither mapping rules nor query parameters specify values
+
 ## API Endpoints
 
 ### POST /:map/query

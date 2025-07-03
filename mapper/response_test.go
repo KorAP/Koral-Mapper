@@ -9,484 +9,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func XTestResponseMapping(t *testing.T) {
-
-	responseSnippet := `{
-  "@context": "http://korap.ids-mannheim.de/ns/KoralQuery/v0.3/context.jsonld",
-  "ID": null,
-  "author": "Schmelzle, u.a.",
-  "availability": "CC-BY-SA",
-  "context": {
-    "left": [
-      "token",
-      0
-    ],
-    "right": [
-      "token",
-      0
-    ]
-  },
-  "corpusID": null,
-  "corpusSigle": "WPD17",
-  "docID": null,
-  "docSigle": "WPD17/J80",
-  "fields": [
-    {
-      "@type": "koral:field",
-      "key": "ID"
-    },
-    {
-      "@type": "koral:field",
-      "key": "textSigle",
-      "type": "type:string",
-      "value": "WPD17/J80/33968"
-    },
-    {
-      "@type": "koral:field",
-      "key": "corpusID"
-    },
-    {
-      "@type": "koral:field",
-      "key": "author",
-      "type": "type:text",
-      "value": "Schmelzle, u.a."
-    },
-    {
-      "@type": "koral:field",
-      "key": "title",
-      "type": "type:text",
-      "value": "Johanne von Gemmingen"
-    },
-    {
-      "@type": "koral:field",
-      "key": "subTitle"
-    },
-    {
-      "@type": "koral:field",
-      "key": "textClass"
-    },
-    {
-      "@type": "koral:field",
-      "key": "pubPlace",
-      "type": "type:string",
-      "value": "URL:http://de.wikipedia.org"
-    },
-    {
-      "@type": "koral:field",
-      "key": "pubDate",
-      "type": "type:date",
-      "value": "2017-07-01"
-    },
-    {
-      "@type": "koral:field",
-      "key": "availability",
-      "type": "type:string",
-      "value": "CC-BY-SA"
-    },
-    {
-      "@type": "koral:field",
-      "key": "layerInfos",
-      "type": "type:store",
-      "value": "corenlp/c=spans corenlp/p=tokens corenlp/s=spans dereko/s=spans malt/d=rels marmot/m=tokens marmot/p=tokens opennlp/p=tokens opennlp/s=spans tt/l=tokens tt/p=tokens"
-    },
-    {
-      "@type": "koral:field",
-      "key": "docSigle",
-      "type": "type:string",
-      "value": "WPD17/J80"
-    },
-    {
-      "@type": "koral:field",
-      "key": "corpusSigle",
-      "type": "type:string",
-      "value": "WPD17"
-    }
-  ],
-  "hasSnippet": true,
-  "hasTokens": false,
-  "layerInfos": "corenlp/c=spans corenlp/p=tokens corenlp/s=spans dereko/s=spans malt/d=rels marmot/m=tokens marmot/p=tokens opennlp/p=tokens opennlp/s=spans tt/l=tokens tt/p=tokens",
-  "matchID": "p162-165(1)163-163x_yuvMM6VZLzLe_qZ0zb9yguvk37eDi-pSoL1nBdUkhNs",
-  "meta": {
-    "version": "Krill-0.64.1"
-  },
-  "pubDate": "2017-07-01",
-  "pubPlace": "URL:http://de.wikipedia.org",
-  "snippet": "<span class=\"context-left\">` +
-		`</span>` +
-		`<span class=\"match\">` +
-		`<mark>` +
-		`<span title=\"corenlp/p:ART\">` +
-		`<span title=\"marmot/m:case:nom\">` +
-		`<span title=\"marmot/m:gender:masc\">` +
-		`<span title=\"marmot/m:number:sg\">` +
-		`<span title=\"marmot/p:ART\">` +
-		`<span title=\"opennlp/p:ART\">` +
-		`<span title=\"tt/l:die\">` +
-		`<span title=\"tt/p:ART\">Der</span>` +
-		`</span>` +
-		`</span>` +
-		`</span>` +
-		`</span>` +
-		`</span>` +
-		`</span>` +
-		`</span> ` +
-		`<span title=\"corenlp/p:ADJA\">` +
-		`<span title=\"marmot/m:case:nom\">` +
-		`<span title=\"marmot/m:degree:pos\">` +
-		`<span title=\"marmot/m:gender:masc\">` +
-		`<span title=\"marmot/m:number:sg\">` +
-		`<span title=\"marmot/p:ADJA\">` +
-		`<span title=\"opennlp/p:ADJA\">` +
-		`<span title=\"tt/l:alt\">` +
-		`<span title=\"tt/p:ADJA\">alte</span>` +
-		`</span>` +
-		`</span>` +
-		`</span>` +
-		`</span>` +
-		`</span>` +
-		`</span>` +
-		`</span>` +
-		`</span> ` +
-		`<span title=\"corenlp/p:NN\">` +
-		`<span title=\"marmot/m:case:nom\">` +
-		`<span title=\"marmot/m:gender:masc\">` +
-		`<span title=\"marmot/m:number:sg\">` +
-		`<span title=\"marmot/p:NN\">` +
-		`<span title=\"opennlp/p:NN\">` +
-		`<span title=\"tt/l:Baum\">` +
-		`<span title=\"tt/p:NN\">Baum</span>` +
-		`</span>` +
-		`</span>` +
-		`</span>` +
-		`</span>` +
-		`</span>` +
-		`</span>` +
-		`</span>` +
-		`</mark> ` +
-		`<span title=\"corenlp/p:KON\">` +
-		`<span title=\"marmot/p:KON\">` +
-		`<span title=\"opennlp/p:KON\">` +
-		`<span title=\"tt/l:und\">` +
-		`<span title=\"tt/p:KON\">und</span>` +
-		`</span>` +
-		`</span>` +
-		`</span>` +
-		`</span> ` +
-		`<span title=\"corenlp/p:ADJA\">` +
-		`<span title=\"marmot/m:case:nom\">` +
-		`<span title=\"marmot/m:degree:pos\">` +
-		`<span title=\"marmot/m:gender:masc\">` +
-		`<span title=\"marmot/m:number:pl\">` +
-		`<span title=\"marmot/p:ADJA\">` +
-		`<span title=\"opennlp/p:ADJA\">` +
-		`<span title=\"tt/l:andere\">` +
-		`<span title=\"tt/p:PIAT\">` +
-		`<span title=\"tt/p:PIS\">andere</span>` +
-		`</span>` +
-		`</span>` +
-		`</span>` +
-		`</span>` +
-		`</span>` +
-		`</span>` +
-		`</span>` +
-		`</span>` +
-		`</span> ` +
-		`<span title=\"corenlp/p:NN\">` +
-		`<span title=\"marmot/m:case:nom\">` +
-		`<span title=\"marmot/m:gender:masc\">` +
-		`<span title=\"marmot/m:number:pl\">` +
-		`<span title=\"marmot/p:NN\">` +
-		`<span title=\"opennlp/p:NN\">` +
-		`<span title=\"tt/l:Märchen\">` +
-		`<span title=\"tt/p:NN\">Märchen</span>` +
-		`</span>` +
-		`</span>` +
-		`</span>` +
-		`</span>` +
-		`</span>` +
-		`</span>` +
-		`</span>, ` +
-		`<span title=\"corenlp/p:CARD\">` +
-		`<span title=\"marmot/p:CARD\">` +
-		`<span title=\"opennlp/p:CARD\">` +
-		`<span title=\"tt/l:@card@\">` +
-		`<span title=\"tt/p:CARD\">1946</span>` +
-		`</span>` +
-		`</span>` +
-		`</span>` +
-		`</span> ` +
-		`</span>` +
-		`<span class=\"context-right\"></span>",` +
-		`"subTitle": null,
-  "textClass": null,
-  "textID": null,
-  "textSigle": "WPD17/J80/33968",
-  "title": "Johanne von Gemmingen"
-}`
-
-	expectedOutput := `{
-  "@context": "http://korap.ids-mannheim.de/ns/KoralQuery/v0.3/context.jsonld",
-  "ID": null,
-  "author": "Schmelzle, u.a.",
-  "availability": "CC-BY-SA",
-  "context": {
-    "left": [
-      "token",
-      0
-    ],
-    "right": [
-      "token",
-      0
-    ]
-  },
-  "corpusID": null,
-  "corpusSigle": "WPD17",
-  "docID": null,
-  "docSigle": "WPD17/J80",
-  "fields": [
-    {
-      "@type": "koral:field",
-      "key": "ID"
-    },
-    {
-      "@type": "koral:field",
-      "key": "textSigle",
-      "type": "type:string",
-      "value": "WPD17/J80/33968"
-    },
-    {
-      "@type": "koral:field",
-      "key": "corpusID"
-    },
-    {
-      "@type": "koral:field",
-      "key": "author",
-      "type": "type:text",
-      "value": "Schmelzle, u.a."
-    },
-    {
-      "@type": "koral:field",
-      "key": "title",
-      "type": "type:text",
-      "value": "Johanne von Gemmingen"
-    },
-    {
-      "@type": "koral:field",
-      "key": "subTitle"
-    },
-    {
-      "@type": "koral:field",
-      "key": "textClass"
-    },
-    {
-      "@type": "koral:field",
-      "key": "pubPlace",
-      "type": "type:string",
-      "value": "URL:http://de.wikipedia.org"
-    },
-    {
-      "@type": "koral:field",
-      "key": "pubDate",
-      "type": "type:date",
-      "value": "2017-07-01"
-    },
-    {
-      "@type": "koral:field",
-      "key": "availability",
-      "type": "type:string",
-      "value": "CC-BY-SA"
-    },
-    {
-      "@type": "koral:field",
-      "key": "layerInfos",
-      "type": "type:store",
-      "value": "corenlp/c=spans corenlp/p=tokens corenlp/s=spans dereko/s=spans malt/d=rels marmot/m=tokens marmot/p=tokens opennlp/p=tokens opennlp/s=spans tt/l=tokens tt/p=tokens"
-    },
-    {
-      "@type": "koral:field",
-      "key": "docSigle",
-      "type": "type:string",
-      "value": "WPD17/J80"
-    },
-    {
-      "@type": "koral:field",
-      "key": "corpusSigle",
-      "type": "type:string",
-      "value": "WPD17"
-    }
-  ],
-  "hasSnippet": true,
-  "hasTokens": false,
-  "layerInfos": "corenlp/c=spans corenlp/p=tokens corenlp/s=spans dereko/s=spans malt/d=rels marmot/m=tokens marmot/p=tokens opennlp/p=tokens opennlp/s=spans tt/l=tokens tt/p=tokens",
-  "matchID": "p162-165(1)163-163x_yuvMM6VZLzLe_qZ0zb9yguvk37eDi-pSoL1nBdUkhNs",
-  "meta": {
-    "version": "Krill-0.64.1"
-  },
-  "pubDate": "2017-07-01",
-  "pubPlace": "URL:http://de.wikipedia.org",
-  "snippet": "<span class=\"context-left\">` +
-		`</span>` +
-		`<span class=\"match\">` +
-		`<mark>` +
-		`<span title=\"corenlp/p:ART\">` +
-		`<span title=\"marmot/m:case:nom\">` +
-		`<span title=\"marmot/m:gender:masc\">` +
-		`<span title=\"marmot/m:number:sg\">` +
-		`<span title=\"marmot/p:ART\">` +
-		`<span title=\"opennlp/p:ART\">` +
-		`<span title=\"tt/l:die\">` +
-		`<span title=\"tt/p:ART\">` +
-		`<span title=\"opennlp/p:M\" class=\"notinindex\">` +
-		`<span title=\"opennlp/m:M\" class=\"notinindex\">Der</span>` +
-		`</span>` +
-		`</span>` +
-		`</span>` +
-		`</span>` +
-		`</span>` +
-		`</span>` +
-		`</span>` +
-		`</span>` +
-		`</span> ` +
-		`<span title=\"corenlp/p:ADJA\">` +
-		`<span title=\"marmot/m:case:nom\">` +
-		`<span title=\"marmot/m:degree:pos\">` +
-		`<span title=\"marmot/m:gender:masc\">` +
-		`<span title=\"marmot/m:number:sg\">` +
-		`<span title=\"marmot/p:ADJA\">` +
-		`<span title=\"opennlp/p:ADJA\">` +
-		`<span title=\"tt/l:alt\">` +
-		`<span title=\"tt/p:ADJA\">` +
-		`<span title=\"opennlp/p:M\" class=\"notinindex\">` +
-		`<span title=\"opennlp/m:M\" class=\"notinindex\">alte</span>` +
-		`</span>` +
-		`</span>` +
-		`</span>` +
-		`</span>` +
-		`</span>` +
-		`</span>` +
-		`</span>` +
-		`</span>` +
-		`</span>` +
-		`</span> ` +
-		`<span title=\"corenlp/p:NN\">` +
-		`<span title=\"marmot/m:case:nom\">` +
-		`<span title=\"marmot/m:gender:masc\">` +
-		`<span title=\"marmot/m:number:sg\">` +
-		`<span title=\"marmot/p:NN\">` +
-		`<span title=\"opennlp/p:NN\">` +
-		`<span title=\"tt/l:Baum\">` +
-		`<span title=\"tt/p:NN\">` +
-		`<span title=\"opennlp/p:M\" class=\"notinindex\">` +
-		`<span title=\"opennlp/m:M\" class=\"notinindex\">Baum</span>` +
-		`</span>` +
-		`</span>` +
-		`</span>` +
-		`</span>` +
-		`</span>` +
-		`</span>` +
-		`</span>` +
-		`</span>` +
-		`</span>` +
-		`</mark> ` +
-		`<span title=\"corenlp/p:KON\">` +
-		`<span title=\"marmot/p:KON\">` +
-		`<span title=\"opennlp/p:KON\">` +
-		`<span title=\"tt/l:und\">` +
-		`<span title=\"tt/p:KON\">und</span>` +
-		`</span>` +
-		`</span>` +
-		`</span>` +
-		`</span> ` +
-		`<span title=\"corenlp/p:ADJA\">` +
-		`<span title=\"marmot/m:case:nom\">` +
-		`<span title=\"marmot/m:degree:pos\">` +
-		`<span title=\"marmot/m:gender:masc\">` +
-		`<span title=\"marmot/m:number:pl\">` +
-		`<span title=\"marmot/p:ADJA\">` +
-		`<span title=\"opennlp/p:ADJA\">` +
-		`<span title=\"tt/l:andere\">` +
-		`<span title=\"tt/p:PIAT\">` +
-		`<span title=\"tt/p:PIS\">` +
-		`<span title=\"opennlp/p:M\" class=\"notinindex\">` +
-		`<span title=\"opennlp/m:M\" class=\"notinindex\">andere</span>` +
-		`</span>` +
-		`</span>` +
-		`</span>` +
-		`</span>` +
-		`</span>` +
-		`</span>` +
-		`</span>` +
-		`</span>` +
-		`</span>` +
-		`</span>` +
-		`</span> ` +
-		`<span title=\"corenlp/p:NN\">` +
-		`<span title=\"marmot/m:case:nom\">` +
-		`<span title=\"marmot/m:gender:masc\">` +
-		`<span title=\"marmot/m:number:pl\">` +
-		`<span title=\"marmot/p:NN\">` +
-		`<span title=\"opennlp/p:NN\">` +
-		`<span title=\"tt/l:Märchen\">` +
-		`<span title=\"tt/p:NN\">` +
-		`<span title=\"opennlp/p:M\" class=\"notinindex\">` +
-		`<span title=\"opennlp/p:M\" class=\"notinindex\">Märchen</span>` +
-		`</span>` +
-		`</span>` +
-		`</span>` +
-		`</span>` +
-		`</span>` +
-		`</span>` +
-		`</span>` +
-		`</span>` +
-		`</span>, ` +
-		`<span title=\"corenlp/p:CARD\">` +
-		`<span title=\"marmot/p:CARD\">` +
-		`<span title=\"opennlp/p:CARD\">` +
-		`<span title=\"tt/l:@card@\">` +
-		`<span title=\"tt/p:CARD\">1946</span>` +
-		`</span>` +
-		`</span>` +
-		`</span>` +
-		`</span> ` +
-		`</span>` +
-		`<span class=\"context-right\"></span>",` +
-		`"subTitle": null,
-  "textClass": null,
-  "textID": null,
-  "textSigle": "WPD17/J80/33968",
-  "title": "Johanne von Gemmingen"
-}`
-
-	// Create test mapping list specifically for token to termGroup test
-	mappingList := config.MappingList{
-		ID:       "test-mapper",
-		FoundryA: "marmot",
-		LayerA:   "m",
-		FoundryB: "opennlp", // Keep the same foundry for both sides
-		LayerB:   "p",
-		Mappings: []config.MappingRule{
-			"[gender=masc] <> [opennlp/p=M & opennlp/m=M]",
-		},
-	}
-
-	// Create a new mapper
-	m, err := NewMapper([]config.MappingList{mappingList})
-	require.NoError(t, err)
-
-	var inputData any
-	err = json.Unmarshal([]byte(responseSnippet), &inputData)
-	assert.Nil(t, err)
-
-	result, err := m.ApplyResponseMappings("test-mapper", MappingOptions{Direction: AtoB}, inputData)
-	assert.Nil(t, err)
-
-	var expectedData any
-	err = json.Unmarshal([]byte(expectedOutput), &expectedData)
-
-	assert.Equal(t, expectedData, result)
-	assert.Nil(t, err)
-}
-
 // TestResponseMappingAnnotationCreation tests creating new annotations based on RestrictToObligatory
 func TestResponseMappingAnnotationCreation(t *testing.T) {
 	// Simple snippet with a single annotated token
@@ -969,4 +491,87 @@ func TestResponseMappingNestedSpans(t *testing.T) {
 
 	author := resultMap["author"].(string)
 	assert.Equal(t, "John Doe", author)
+}
+
+// TestResponseMappingWithLayerOverride tests layer precedence rules
+func TestResponseMappingWithLayerOverride(t *testing.T) {
+	// Test 1: Explicit layer in mapping rule should take precedence over MappingOptions
+	t.Run("Explicit layer takes precedence", func(t *testing.T) {
+		responseSnippet := `{
+			"snippet": "<span title=\"marmot/p:DET\">Der</span>"
+		}`
+
+		// Mapping rule with explicit layer [p=DT] - this should NOT be overridden
+		mappingList := config.MappingList{
+			ID:       "test-layer-precedence",
+			FoundryA: "marmot",
+			LayerA:   "p",
+			FoundryB: "opennlp",
+			LayerB:   "p", // default layer
+			Mappings: []config.MappingRule{
+				"[DET] <> [p=DT]", // Explicit layer "p" should not be overridden
+			},
+		}
+
+		m, err := NewMapper([]config.MappingList{mappingList})
+		require.NoError(t, err)
+
+		var inputData any
+		err = json.Unmarshal([]byte(responseSnippet), &inputData)
+		require.NoError(t, err)
+
+		// Apply with layer override - should NOT affect explicit layer in mapping rule
+		result, err := m.ApplyResponseMappings("test-layer-precedence", MappingOptions{
+			Direction: AtoB,
+			LayerB:    "pos", // This should NOT override the explicit "p" layer in [p=DT]
+		}, inputData)
+		require.NoError(t, err)
+
+		resultMap := result.(map[string]any)
+		snippet := resultMap["snippet"].(string)
+
+		// Should use explicit layer "p" from mapping rule, NOT "pos" from override
+		assert.Contains(t, snippet, `title="opennlp/p:DT" class="notinindex"`)
+		assert.NotContains(t, snippet, `title="opennlp/pos:DT" class="notinindex"`)
+	})
+
+	// Test 2: Implicit layer in mapping rule should use MappingOptions layer override
+	t.Run("Implicit layer uses MappingOptions override", func(t *testing.T) {
+		responseSnippet := `{
+			"snippet": "<span title=\"marmot/p:DET\">Der</span>"
+		}`
+
+		// Mapping rule with implicit layer [DT] - this should use layer override
+		mappingList := config.MappingList{
+			ID:       "test-layer-override",
+			FoundryA: "marmot",
+			LayerA:   "p",
+			FoundryB: "opennlp",
+			LayerB:   "p", // default layer
+			Mappings: []config.MappingRule{
+				"[DET] <> [DT]", // No explicit layer - should use override
+			},
+		}
+
+		m, err := NewMapper([]config.MappingList{mappingList})
+		require.NoError(t, err)
+
+		var inputData any
+		err = json.Unmarshal([]byte(responseSnippet), &inputData)
+		require.NoError(t, err)
+
+		// Apply with layer override - should affect implicit layer in mapping rule
+		result, err := m.ApplyResponseMappings("test-layer-override", MappingOptions{
+			Direction: AtoB,
+			LayerB:    "pos", // This should override the default layer for [DT]
+		}, inputData)
+		require.NoError(t, err)
+
+		resultMap := result.(map[string]any)
+		snippet := resultMap["snippet"].(string)
+
+		// Should use layer "pos" from override, NOT default "p" layer
+		assert.Contains(t, snippet, `title="opennlp/pos:DT" class="notinindex"`)
+		assert.NotContains(t, snippet, `title="opennlp/p:DT" class="notinindex"`)
+	})
 }

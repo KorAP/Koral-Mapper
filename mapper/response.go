@@ -6,6 +6,7 @@ import (
 
 	"github.com/KorAP/KoralPipe-TermMapper/ast"
 	"github.com/KorAP/KoralPipe-TermMapper/matcher"
+	"github.com/KorAP/KoralPipe-TermMapper/parser"
 	"github.com/rs/zerolog/log"
 )
 
@@ -37,7 +38,7 @@ func (m *Mapper) ApplyResponseMappings(mappingID string, opts MappingOptions, js
 
 	// Process the snippet with each rule
 	processedSnippet := snippet
-	for _, rule := range rules {
+	for ruleIndex, rule := range rules {
 		// Create pattern and replacement based on direction
 		var pattern, replacement ast.Node
 		if opts.Direction { // true means AtoB
@@ -56,34 +57,34 @@ func (m *Mapper) ApplyResponseMappings(mappingID string, opts MappingOptions, js
 			replacement = token.Wrap
 		}
 
-		// Apply foundry and layer overrides to pattern and replacement
+		// Apply foundry and layer overrides with proper precedence
+		mappingList := m.mappingLists[mappingID]
+
+		// Determine foundry and layer values based on direction
 		var patternFoundry, patternLayer, replacementFoundry, replacementLayer string
-		if opts.Direction { // true means AtoB
+		if opts.Direction { // AtoB
 			patternFoundry, patternLayer = opts.FoundryA, opts.LayerA
 			replacementFoundry, replacementLayer = opts.FoundryB, opts.LayerB
-		} else {
+			// Apply mapping list defaults if not specified
+			if replacementFoundry == "" {
+				replacementFoundry = mappingList.FoundryB
+			}
+			if replacementLayer == "" {
+				replacementLayer = mappingList.LayerB
+			}
+		} else { // BtoA
 			patternFoundry, patternLayer = opts.FoundryB, opts.LayerB
 			replacementFoundry, replacementLayer = opts.FoundryA, opts.LayerA
-		}
-
-		// If foundry/layer are empty in options, get them from the mapping list
-		mappingList := m.mappingLists[mappingID]
-		if replacementFoundry == "" {
-			if opts.Direction { // AtoB
-				replacementFoundry = mappingList.FoundryB
-			} else {
+			// Apply mapping list defaults if not specified
+			if replacementFoundry == "" {
 				replacementFoundry = mappingList.FoundryA
 			}
-		}
-		if replacementLayer == "" {
-			if opts.Direction { // AtoB
-				replacementLayer = mappingList.LayerB
-			} else {
+			if replacementLayer == "" {
 				replacementLayer = mappingList.LayerA
 			}
 		}
 
-		// Clone pattern and apply overrides
+		// Clone pattern and apply foundry and layer overrides
 		processedPattern := pattern.Clone()
 		if patternFoundry != "" || patternLayer != "" {
 			ast.ApplyFoundryAndLayerOverrides(processedPattern, patternFoundry, patternLayer)
@@ -108,9 +109,10 @@ func (m *Mapper) ApplyResponseMappings(mappingID string, opts MappingOptions, js
 			continue // No matches, try next rule
 		}
 
-		// Apply RestrictToObligatory to the replacement to get the annotations to add
-		// Note: Only pass foundry override, not layer, since replacement terms have correct layers
-		restrictedReplacement := ast.RestrictToObligatory(replacement, replacementFoundry, "")
+		// Apply RestrictToObligatory with layer precedence logic
+		restrictedReplacement := m.applyReplacementWithLayerPrecedence(
+			replacement, replacementFoundry, replacementLayer,
+			mappingID, ruleIndex, bool(opts.Direction))
 		if restrictedReplacement == nil {
 			continue // Nothing obligatory to add
 		}
@@ -238,4 +240,125 @@ func (m *Mapper) addAnnotationsToSnippet(snippet string, matchingTokens []matche
 	}
 
 	return result, nil
+}
+
+// applyReplacementWithLayerPrecedence applies RestrictToObligatory with proper layer precedence
+func (m *Mapper) applyReplacementWithLayerPrecedence(
+	replacement ast.Node, foundry, layerOverride string,
+	mappingID string, ruleIndex int, direction bool) ast.Node {
+
+	// First, apply RestrictToObligatory without layer override to preserve explicit layers
+	restricted := ast.RestrictToObligatory(replacement, foundry, "")
+	if restricted == nil {
+		return nil
+	}
+
+	// If no layer override is specified, we're done
+	if layerOverride == "" {
+		return restricted
+	}
+
+	// Apply layer override only to terms that didn't have explicit layers in the original rule
+	mappingList := m.mappingLists[mappingID]
+	if ruleIndex < len(mappingList.Mappings) {
+		originalRule := string(mappingList.Mappings[ruleIndex])
+		m.applySelectiveLayerOverrides(restricted, layerOverride, originalRule, direction)
+	}
+
+	return restricted
+}
+
+// applySelectiveLayerOverrides applies layer overrides only to terms without explicit layers
+func (m *Mapper) applySelectiveLayerOverrides(node ast.Node, layerOverride, originalRule string, direction bool) {
+	if node == nil {
+		return
+	}
+
+	// Parse the original rule without defaults to detect explicit layers
+	explicitTerms := m.getExplicitTerms(originalRule, direction)
+
+	// Apply overrides only to terms that weren't explicit in the original rule
+	termIndex := 0
+	m.applyLayerOverrideToImplicitTerms(node, layerOverride, explicitTerms, &termIndex)
+}
+
+// getExplicitTerms parses the original rule without defaults to identify terms with explicit layers
+func (m *Mapper) getExplicitTerms(originalRule string, direction bool) map[int]bool {
+	explicitTerms := make(map[int]bool)
+
+	// Parse without defaults to see what was explicitly specified
+	parser, err := parser.NewGrammarParser("", "")
+	if err != nil {
+		return explicitTerms
+	}
+
+	result, err := parser.ParseMapping(originalRule)
+	if err != nil {
+		return explicitTerms
+	}
+
+	// Get the replacement side based on direction
+	var replacement ast.Node
+	if direction { // AtoB
+		replacement = result.Lower.Wrap
+	} else { // BtoA
+		replacement = result.Upper.Wrap
+	}
+
+	// Extract terms and check which ones have explicit layers
+	termIndex := 0
+	m.markExplicitTerms(replacement, explicitTerms, &termIndex)
+	return explicitTerms
+}
+
+// markExplicitTerms recursively marks terms that have explicit layers
+func (m *Mapper) markExplicitTerms(node ast.Node, explicitTerms map[int]bool, termIndex *int) {
+	if node == nil {
+		return
+	}
+
+	switch n := node.(type) {
+	case *ast.Term:
+		// A term has an explicit layer if it was specified in the original rule
+		if n.Layer != "" {
+			explicitTerms[*termIndex] = true
+		}
+		*termIndex++
+
+	case *ast.TermGroup:
+		for _, operand := range n.Operands {
+			m.markExplicitTerms(operand, explicitTerms, termIndex)
+		}
+
+	case *ast.Token:
+		if n.Wrap != nil {
+			m.markExplicitTerms(n.Wrap, explicitTerms, termIndex)
+		}
+	}
+}
+
+// applyLayerOverrideToImplicitTerms applies layer override only to terms not marked as explicit
+func (m *Mapper) applyLayerOverrideToImplicitTerms(node ast.Node, layerOverride string, explicitTerms map[int]bool, termIndex *int) {
+	if node == nil {
+		return
+	}
+
+	switch n := node.(type) {
+	case *ast.Term:
+		// Apply override only if this term wasn't explicit in the original rule
+		if !explicitTerms[*termIndex] && n.Layer != "" {
+			n.Layer = layerOverride
+		}
+		*termIndex++
+
+	case *ast.TermGroup:
+		for _, operand := range n.Operands {
+			m.applyLayerOverrideToImplicitTerms(operand, layerOverride, explicitTerms, termIndex)
+		}
+
+	case *ast.Token:
+		if n.Wrap != nil {
+			m.applyLayerOverrideToImplicitTerms(n.Wrap, layerOverride, explicitTerms, termIndex)
+		}
+	}
 }
