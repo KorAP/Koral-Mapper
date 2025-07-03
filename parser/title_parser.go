@@ -30,9 +30,9 @@ func NewTitleAttributeParser() *TitleAttributeParser {
 	}
 }
 
-// ParseTitleAttribute parses a single title attribute string
+// parseTitleAttribute parses a single title attribute string
 // Expects format: "foundry/layer:key" or "foundry/layer:key[:=]value"
-func (p *TitleAttributeParser) ParseTitleAttribute(title string) (*TitleAttribute, error) {
+func (p *TitleAttributeParser) parseTitleAttribute(title string) (*TitleAttribute, error) {
 	if title == "" {
 		return nil, fmt.Errorf("empty title attribute")
 	}
@@ -63,7 +63,7 @@ func (p *TitleAttributeParser) ParseTitleAttributesToTerms(titles []string) ([]a
 	terms := make([]ast.Node, 0) // Initialize as empty slice instead of nil
 
 	for _, title := range titles {
-		attr, err := p.ParseTitleAttribute(title)
+		attr, err := p.parseTitleAttribute(title)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse title '%s': %w", title, err)
 		}
@@ -80,23 +80,4 @@ func (p *TitleAttributeParser) ParseTitleAttributesToTerms(titles []string) ([]a
 	}
 
 	return terms, nil
-}
-
-// ToAST converts a TitleAttribute to an AST Term node
-func (attr *TitleAttribute) ToAST() ast.Node {
-	return &ast.Term{
-		Foundry: attr.Foundry,
-		Layer:   attr.Layer,
-		Key:     attr.Key,
-		Value:   attr.Value,
-		Match:   ast.MatchEqual,
-	}
-}
-
-// String returns a string representation of the title attribute
-func (attr *TitleAttribute) String() string {
-	if attr.Value != "" {
-		return fmt.Sprintf("%s/%s:%s=%s", attr.Foundry, attr.Layer, attr.Key, attr.Value)
-	}
-	return fmt.Sprintf("%s/%s:%s", attr.Foundry, attr.Layer, attr.Key)
 }

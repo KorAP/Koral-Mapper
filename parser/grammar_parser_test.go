@@ -126,151 +126,8 @@ func TestGrammarParserSimpleTerm(t *testing.T) {
 	}
 }
 
-func TestGrammarParser(t *testing.T) {
-	tests := []struct {
-		name           string
-		input          string
-		defaultFoundry string
-		defaultLayer   string
-		expected       ast.Node
-		expectError    bool
-	}{
-		{
-			name:           "Simple term with foundry and layer",
-			input:          "[opennlp/p=PIDAT]",
-			defaultFoundry: "opennlp",
-			defaultLayer:   "p",
-			expected: &ast.Token{
-				Wrap: &ast.Term{
-					Foundry: "opennlp",
-					Key:     "PIDAT",
-					Layer:   "p",
-					Match:   ast.MatchEqual,
-				},
-			},
-		},
-		{
-			name:           "Term group with and relation",
-			input:          "[opennlp/p=PIDAT & opennlp/p=AdjType:Pdt]",
-			defaultFoundry: "opennlp",
-			defaultLayer:   "p",
-			expected: &ast.Token{
-				Wrap: &ast.TermGroup{
-					Operands: []ast.Node{
-						&ast.Term{
-							Foundry: "opennlp",
-							Key:     "PIDAT",
-							Layer:   "p",
-							Match:   ast.MatchEqual,
-						},
-						&ast.Term{
-							Foundry: "opennlp",
-							Key:     "AdjType",
-							Layer:   "p",
-							Match:   ast.MatchEqual,
-							Value:   "Pdt",
-						},
-					},
-					Relation: ast.AndRelation,
-				},
-			},
-		},
-		{
-			name:           "Term group with or relation",
-			input:          "[opennlp/p=PronType:Ind | opennlp/p=PronType:Neg]",
-			defaultFoundry: "opennlp",
-			defaultLayer:   "p",
-			expected: &ast.Token{
-				Wrap: &ast.TermGroup{
-					Operands: []ast.Node{
-						&ast.Term{
-							Foundry: "opennlp",
-							Key:     "PronType",
-							Layer:   "p",
-							Match:   ast.MatchEqual,
-							Value:   "Ind",
-						},
-						&ast.Term{
-							Foundry: "opennlp",
-							Key:     "PronType",
-							Layer:   "p",
-							Match:   ast.MatchEqual,
-							Value:   "Neg",
-						},
-					},
-					Relation: ast.OrRelation,
-				},
-			},
-		},
-		{
-			name:           "Complex term group",
-			input:          "[opennlp/p=PIDAT & (opennlp/p=PronType:Ind | opennlp/p=PronType:Neg)]",
-			defaultFoundry: "opennlp",
-			defaultLayer:   "p",
-			expected: &ast.Token{
-				Wrap: &ast.TermGroup{
-					Operands: []ast.Node{
-						&ast.Term{
-							Foundry: "opennlp",
-							Key:     "PIDAT",
-							Layer:   "p",
-							Match:   ast.MatchEqual,
-						},
-						&ast.TermGroup{
-							Operands: []ast.Node{
-								&ast.Term{
-									Foundry: "opennlp",
-									Key:     "PronType",
-									Layer:   "p",
-									Match:   ast.MatchEqual,
-									Value:   "Ind",
-								},
-								&ast.Term{
-									Foundry: "opennlp",
-									Key:     "PronType",
-									Layer:   "p",
-									Match:   ast.MatchEqual,
-									Value:   "Neg",
-								},
-							},
-							Relation: ast.OrRelation,
-						},
-					},
-					Relation: ast.AndRelation,
-				},
-			},
-		},
-		{
-			name:           "Wildcard pattern",
-			input:          "[opennlp/*=PIDAT]",
-			defaultFoundry: "opennlp",
-			defaultLayer:   "p",
-			expected: &ast.Token{
-				Wrap: &ast.Term{
-					Foundry: "opennlp",
-					Key:     "PIDAT",
-					Layer:   "p",
-					Match:   ast.MatchEqual,
-				},
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			parser, err := NewGrammarParser(tt.defaultFoundry, tt.defaultLayer)
-			require.NoError(t, err)
-
-			result, err := parser.Parse(tt.input)
-			if tt.expectError {
-				assert.Error(t, err)
-				return
-			}
-			require.NoError(t, err)
-			assert.Equal(t, tt.expected, result)
-		})
-	}
-}
+// TestGrammarParser was removed as the Parse method is no longer supported
+// The functionality is now only available through ParseMapping method
 
 func TestMappingRules(t *testing.T) {
 	tests := []struct {
@@ -363,6 +220,156 @@ func TestMappingRules(t *testing.T) {
 								Match: ast.MatchEqual,
 							},
 						},
+					},
+				},
+			},
+		},
+		// Additional tests to cover functionality from removed TestGrammarParser
+		{
+			name:  "Simple term with foundry and layer",
+			input: "[opennlp/p=PIDAT] <> [PIDAT]",
+			expected: &MappingResult{
+				Upper: &ast.Token{
+					Wrap: &ast.Term{
+						Foundry: "opennlp",
+						Layer:   "p",
+						Key:     "PIDAT",
+						Match:   ast.MatchEqual,
+					},
+				},
+				Lower: &ast.Token{
+					Wrap: &ast.Term{
+						Key:   "PIDAT",
+						Match: ast.MatchEqual,
+					},
+				},
+			},
+		},
+		{
+			name:  "Term group with and relation",
+			input: "[opennlp/p=PIDAT & opennlp/p=AdjType:Pdt] <> [PIDAT]",
+			expected: &MappingResult{
+				Upper: &ast.Token{
+					Wrap: &ast.TermGroup{
+						Operands: []ast.Node{
+							&ast.Term{
+								Foundry: "opennlp",
+								Layer:   "p",
+								Key:     "PIDAT",
+								Match:   ast.MatchEqual,
+							},
+							&ast.Term{
+								Foundry: "opennlp",
+								Layer:   "p",
+								Key:     "AdjType",
+								Value:   "Pdt",
+								Match:   ast.MatchEqual,
+							},
+						},
+						Relation: ast.AndRelation,
+					},
+				},
+				Lower: &ast.Token{
+					Wrap: &ast.Term{
+						Key:   "PIDAT",
+						Match: ast.MatchEqual,
+					},
+				},
+			},
+		},
+		{
+			name:  "Term group with or relation",
+			input: "[opennlp/p=PronType:Ind | opennlp/p=PronType:Neg] <> [PRON]",
+			expected: &MappingResult{
+				Upper: &ast.Token{
+					Wrap: &ast.TermGroup{
+						Operands: []ast.Node{
+							&ast.Term{
+								Foundry: "opennlp",
+								Layer:   "p",
+								Key:     "PronType",
+								Value:   "Ind",
+								Match:   ast.MatchEqual,
+							},
+							&ast.Term{
+								Foundry: "opennlp",
+								Layer:   "p",
+								Key:     "PronType",
+								Value:   "Neg",
+								Match:   ast.MatchEqual,
+							},
+						},
+						Relation: ast.OrRelation,
+					},
+				},
+				Lower: &ast.Token{
+					Wrap: &ast.Term{
+						Key:   "PRON",
+						Match: ast.MatchEqual,
+					},
+				},
+			},
+		},
+		{
+			name:  "Complex term group with nested parentheses",
+			input: "[opennlp/p=PIDAT & (opennlp/p=PronType:Ind | opennlp/p=PronType:Neg)] <> [COMPLEX]",
+			expected: &MappingResult{
+				Upper: &ast.Token{
+					Wrap: &ast.TermGroup{
+						Operands: []ast.Node{
+							&ast.Term{
+								Foundry: "opennlp",
+								Layer:   "p",
+								Key:     "PIDAT",
+								Match:   ast.MatchEqual,
+							},
+							&ast.TermGroup{
+								Operands: []ast.Node{
+									&ast.Term{
+										Foundry: "opennlp",
+										Layer:   "p",
+										Key:     "PronType",
+										Value:   "Ind",
+										Match:   ast.MatchEqual,
+									},
+									&ast.Term{
+										Foundry: "opennlp",
+										Layer:   "p",
+										Key:     "PronType",
+										Value:   "Neg",
+										Match:   ast.MatchEqual,
+									},
+								},
+								Relation: ast.OrRelation,
+							},
+						},
+						Relation: ast.AndRelation,
+					},
+				},
+				Lower: &ast.Token{
+					Wrap: &ast.Term{
+						Key:   "COMPLEX",
+						Match: ast.MatchEqual,
+					},
+				},
+			},
+		},
+		{
+			name:  "Wildcard pattern",
+			input: "[opennlp/*=PIDAT] <> [PIDAT]",
+			expected: &MappingResult{
+				Upper: &ast.Token{
+					Wrap: &ast.Term{
+						Foundry: "opennlp",
+						Layer:   "",
+						Key:     "PIDAT",
+						Match:   ast.MatchEqual,
+					},
+				},
+				Lower: &ast.Token{
+					Wrap: &ast.Term{
+						Key:   "PIDAT",
+						Match: ast.MatchEqual,
 					},
 				},
 			},

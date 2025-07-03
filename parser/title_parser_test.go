@@ -8,126 +8,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestTitleAttributeParser_ParseTitleAttribute(t *testing.T) {
-	parser := NewTitleAttributeParser()
-
-	tests := []struct {
-		name     string
-		input    string
-		expected *TitleAttribute
-		wantErr  bool
-	}{
-		{
-			name:  "Parse simple title with key only",
-			input: "corenlp/p:ART",
-			expected: &TitleAttribute{
-				Foundry: "corenlp",
-				Layer:   "p",
-				Key:     "ART",
-				Value:   "",
-			},
-			wantErr: false,
-		},
-		{
-			name:  "Parse title with key and value",
-			input: "marmot/m:case:nom",
-			expected: &TitleAttribute{
-				Foundry: "marmot",
-				Layer:   "m",
-				Key:     "case",
-				Value:   "nom",
-			},
-			wantErr: false,
-		},
-		{
-			name:  "Parse title with colon separator for value",
-			input: "marmot/m:gender:masc",
-			expected: &TitleAttribute{
-				Foundry: "marmot",
-				Layer:   "m",
-				Key:     "gender",
-				Value:   "masc",
-			},
-			wantErr: false,
-		},
-		{
-			name:  "Parse title with equals separator for value",
-			input: "marmot/m:degree:pos",
-			expected: &TitleAttribute{
-				Foundry: "marmot",
-				Layer:   "m",
-				Key:     "degree",
-				Value:   "pos",
-			},
-			wantErr: false,
-		},
-		{
-			name:  "Parse title with lemma layer",
-			input: "tt/l:die",
-			expected: &TitleAttribute{
-				Foundry: "tt",
-				Layer:   "l",
-				Key:     "die",
-				Value:   "",
-			},
-			wantErr: false,
-		},
-		{
-			name:  "Parse title with special characters in value",
-			input: "tt/l:@card@",
-			expected: &TitleAttribute{
-				Foundry: "tt",
-				Layer:   "l",
-				Key:     "@card@",
-				Value:   "",
-			},
-			wantErr: false,
-		},
-		{
-			name:    "Empty title should fail",
-			input:   "",
-			wantErr: true,
-		},
-		{
-			name:    "Missing foundry separator should fail",
-			input:   "corenlp_p:ART",
-			wantErr: true,
-		},
-		{
-			name:    "Missing layer separator should fail",
-			input:   "corenlp/p_ART",
-			wantErr: true,
-		},
-		{
-			name:    "Only foundry should fail",
-			input:   "corenlp",
-			wantErr: true,
-		},
-		{
-			name:    "Only foundry and layer should fail",
-			input:   "corenlp/p",
-			wantErr: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := parser.ParseTitleAttribute(tt.input)
-
-			if tt.wantErr {
-				assert.Error(t, err)
-				assert.Nil(t, result)
-			} else {
-				require.NoError(t, err)
-				require.NotNil(t, result)
-				assert.Equal(t, tt.expected.Foundry, result.Foundry)
-				assert.Equal(t, tt.expected.Layer, result.Layer)
-				assert.Equal(t, tt.expected.Key, result.Key)
-				assert.Equal(t, tt.expected.Value, result.Value)
-			}
-		})
-	}
-}
+// TestTitleAttributeParser_ParseTitleAttribute was removed as ParseTitleAttribute is no longer exported
+// The functionality is now only available through ParseTitleAttributesToTerms method
 
 func TestTitleAttributeParser_ParseTitleAttributesToTerms(t *testing.T) {
 	parser := NewTitleAttributeParser()
@@ -177,6 +59,164 @@ func TestTitleAttributeParser_ParseTitleAttributesToTerms(t *testing.T) {
 			input:   []string{"corenlp/p:ART", "invalid_title", "tt/l:die"},
 			wantErr: true,
 		},
+		// Additional tests to cover functionality from removed TestTitleAttributeParser_ParseTitleAttribute
+		{
+			name:  "Parse simple title with key only",
+			input: []string{"corenlp/p:ART"},
+			expected: []ast.Node{
+				&ast.Term{
+					Foundry: "corenlp",
+					Layer:   "p",
+					Key:     "ART",
+					Value:   "",
+					Match:   ast.MatchEqual,
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name:  "Parse title with key and value",
+			input: []string{"marmot/m:case:nom"},
+			expected: []ast.Node{
+				&ast.Term{
+					Foundry: "marmot",
+					Layer:   "m",
+					Key:     "case",
+					Value:   "nom",
+					Match:   ast.MatchEqual,
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name:  "Parse title with colon separator for value",
+			input: []string{"marmot/m:gender:masc"},
+			expected: []ast.Node{
+				&ast.Term{
+					Foundry: "marmot",
+					Layer:   "m",
+					Key:     "gender",
+					Value:   "masc",
+					Match:   ast.MatchEqual,
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name:  "Parse title with equals separator for value",
+			input: []string{"marmot/m:degree:pos"},
+			expected: []ast.Node{
+				&ast.Term{
+					Foundry: "marmot",
+					Layer:   "m",
+					Key:     "degree",
+					Value:   "pos",
+					Match:   ast.MatchEqual,
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name:  "Parse title with lemma layer",
+			input: []string{"tt/l:die"},
+			expected: []ast.Node{
+				&ast.Term{
+					Foundry: "tt",
+					Layer:   "l",
+					Key:     "die",
+					Value:   "",
+					Match:   ast.MatchEqual,
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name:  "Parse title with special characters in value",
+			input: []string{"tt/l:@card@"},
+			expected: []ast.Node{
+				&ast.Term{
+					Foundry: "tt",
+					Layer:   "l",
+					Key:     "@card@",
+					Value:   "",
+					Match:   ast.MatchEqual,
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name:  "Parse complex key-value with colon",
+			input: []string{"opennlp/p:PronType:Ind"},
+			expected: []ast.Node{
+				&ast.Term{
+					Foundry: "opennlp",
+					Layer:   "p",
+					Key:     "PronType",
+					Value:   "Ind",
+					Match:   ast.MatchEqual,
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name:  "Parse complex key-value with equals",
+			input: []string{"opennlp/p:AdjType:Pdt"},
+			expected: []ast.Node{
+				&ast.Term{
+					Foundry: "opennlp",
+					Layer:   "p",
+					Key:     "AdjType",
+					Value:   "Pdt",
+					Match:   ast.MatchEqual,
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name:  "Parse complex nested pattern",
+			input: []string{"stts/p:ADJA"},
+			expected: []ast.Node{
+				&ast.Term{
+					Foundry: "stts",
+					Layer:   "p",
+					Key:     "ADJA",
+					Value:   "",
+					Match:   ast.MatchEqual,
+				},
+			},
+			wantErr: false,
+		},
+		// Error cases
+		{
+			name:    "Empty title should fail",
+			input:   []string{""},
+			wantErr: true,
+		},
+		{
+			name:    "Missing foundry separator should fail",
+			input:   []string{"corenlp_p:ART"},
+			wantErr: true,
+		},
+		{
+			name:    "Missing layer separator should fail",
+			input:   []string{"corenlp/p_ART"},
+			wantErr: true,
+		},
+		{
+			name:    "Only foundry should fail",
+			input:   []string{"corenlp"},
+			wantErr: true,
+		},
+		{
+			name:    "Only foundry and layer should fail",
+			input:   []string{"corenlp/p"},
+			wantErr: true,
+		},
+		{
+			name:    "Missing key should fail",
+			input:   []string{"corenlp/p:"},
+			wantErr: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -204,128 +244,6 @@ func TestTitleAttributeParser_ParseTitleAttributesToTerms(t *testing.T) {
 	}
 }
 
-func TestTitleAttribute_ToAST(t *testing.T) {
-	tests := []struct {
-		name     string
-		attr     *TitleAttribute
-		expected *ast.Term
-	}{
-		{
-			name: "Convert title attribute to AST term",
-			attr: &TitleAttribute{
-				Foundry: "corenlp",
-				Layer:   "p",
-				Key:     "ART",
-				Value:   "",
-			},
-			expected: &ast.Term{
-				Foundry: "corenlp",
-				Layer:   "p",
-				Key:     "ART",
-				Value:   "",
-				Match:   ast.MatchEqual,
-			},
-		},
-		{
-			name: "Convert title attribute with value to AST term",
-			attr: &TitleAttribute{
-				Foundry: "marmot",
-				Layer:   "m",
-				Key:     "case",
-				Value:   "nom",
-			},
-			expected: &ast.Term{
-				Foundry: "marmot",
-				Layer:   "m",
-				Key:     "case",
-				Value:   "nom",
-				Match:   ast.MatchEqual,
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := tt.attr.ToAST()
-
-			termResult := result.(*ast.Term)
-			assert.Equal(t, tt.expected.Foundry, termResult.Foundry)
-			assert.Equal(t, tt.expected.Layer, termResult.Layer)
-			assert.Equal(t, tt.expected.Key, termResult.Key)
-			assert.Equal(t, tt.expected.Value, termResult.Value)
-			assert.Equal(t, tt.expected.Match, termResult.Match)
-		})
-	}
-}
-
-func TestTitleAttribute_String(t *testing.T) {
-	tests := []struct {
-		name     string
-		attr     *TitleAttribute
-		expected string
-	}{
-		{
-			name: "String representation without value",
-			attr: &TitleAttribute{
-				Foundry: "corenlp",
-				Layer:   "p",
-				Key:     "ART",
-				Value:   "",
-			},
-			expected: "corenlp/p:ART",
-		},
-		{
-			name: "String representation with value",
-			attr: &TitleAttribute{
-				Foundry: "marmot",
-				Layer:   "m",
-				Key:     "case",
-				Value:   "nom",
-			},
-			expected: "marmot/m:case=nom",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := tt.attr.String()
-			assert.Equal(t, tt.expected, result)
-		})
-	}
-}
-
-func TestTitleAttributeParser_RealWorldExample(t *testing.T) {
-	parser := NewTitleAttributeParser()
-
-	// Example titles from the response test file
-	titles := []string{
-		"corenlp/p:ART",
-		"marmot/m:case=nom",
-		"marmot/m:gender=masc",
-		"marmot/m:number=sg",
-		"marmot/p:ART",
-		"opennlp/p:ART",
-		"tt/l:die",
-		"tt/p:ART",
-	}
-
-	// Parse each title attribute
-	for _, title := range titles {
-		attr, err := parser.ParseTitleAttribute(title)
-		require.NoError(t, err)
-		require.NotNil(t, attr)
-
-		// Verify the string representation matches
-		assert.Equal(t, title, attr.String())
-
-		// Verify conversion to AST works
-		astNode := attr.ToAST()
-		require.NotNil(t, astNode)
-
-		term := astNode.(*ast.Term)
-		assert.NotEmpty(t, term.Foundry)
-		assert.NotEmpty(t, term.Layer)
-		assert.NotEmpty(t, term.Key)
-		assert.Equal(t, ast.MatchEqual, term.Match)
-	}
-}
+// TestTitleAttribute_ToAST was removed as ToAST method is no longer available
+// TestTitleAttribute_String was removed as String method is no longer available
+// TestTitleAttributeParser_RealWorldExample was removed as it used the removed methods

@@ -141,75 +141,18 @@ func NewGrammarParser(defaultFoundry, defaultLayer string) (*GrammarParser, erro
 	}, nil
 }
 
-// Parse parses a grammar string into an AST node (for backward compatibility)
-func (p *GrammarParser) Parse(input string) (ast.Node, error) {
-	// Remove extra spaces around operators to help the parser
-	input = strings.ReplaceAll(input, " & ", "&")
-	input = strings.ReplaceAll(input, " | ", "|")
-
-	// Add spaces around parentheses that are not escaped
-	// We need to be careful not to break escape sequences like \(
-	result := make([]rune, 0, len(input)*2)
-	runes := []rune(input)
-	for i, r := range runes {
-		if (r == '(' || r == ')') && (i == 0 || runes[i-1] != '\\') {
-			// Only add spaces if the parenthesis is not escaped and not part of an identifier
-			// Check if this parenthesis is inside brackets (part of an identifier)
-			insideBrackets := false
-			bracketDepth := 0
-			for j := 0; j < i; j++ {
-				if runes[j] == '[' {
-					bracketDepth++
-				} else if runes[j] == ']' {
-					bracketDepth--
-				}
-			}
-			insideBrackets = bracketDepth > 0
-
-			if !insideBrackets {
-				result = append(result, ' ', r, ' ')
-			} else {
-				result = append(result, r)
-			}
-		} else {
-			result = append(result, r)
-		}
-	}
-	input = string(result)
-
-	// Remove any extra spaces
-	input = strings.TrimSpace(input)
-
-	grammar, err := p.tokenParser.ParseString("", input)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse grammar: %w", err)
-	}
-
-	if grammar.Token == nil {
-		return nil, fmt.Errorf("expected token expression, got mapping rule")
-	}
-
-	wrap, err := p.parseExpr(grammar.Token.Expr)
-	if err != nil {
-		return nil, err
-	}
-	return &ast.Token{Wrap: wrap}, nil
-}
-
-// ParseMapping parses a mapping rule string into a MappingResult
-func (p *GrammarParser) ParseMapping(input string) (*MappingResult, error) {
+// preprocessInput normalizes the input string by handling operators and parentheses
+func (p *GrammarParser) preprocessInput(input string) string {
 	// Remove extra spaces around operators to help the parser
 	input = strings.ReplaceAll(input, " & ", "&")
 	input = strings.ReplaceAll(input, " | ", "|")
 	input = strings.ReplaceAll(input, " <> ", "<>")
 
 	// Add spaces around parentheses that are not escaped
-	// We need to be careful not to break escape sequences like \(
 	result := make([]rune, 0, len(input)*2)
 	runes := []rune(input)
 	for i, r := range runes {
 		if (r == '(' || r == ')') && (i == 0 || runes[i-1] != '\\') {
-			// Only add spaces if the parenthesis is not escaped and not part of an identifier
 			// Check if this parenthesis is inside brackets (part of an identifier)
 			insideBrackets := false
 			bracketDepth := 0
@@ -231,10 +174,12 @@ func (p *GrammarParser) ParseMapping(input string) (*MappingResult, error) {
 			result = append(result, r)
 		}
 	}
-	input = string(result)
+	return strings.TrimSpace(string(result))
+}
 
-	// Remove any extra spaces
-	input = strings.TrimSpace(input)
+// ParseMapping parses a mapping rule string into a MappingResult
+func (p *GrammarParser) ParseMapping(input string) (*MappingResult, error) {
+	input = p.preprocessInput(input)
 
 	grammar, err := p.mappingParser.ParseString("", input)
 	if err != nil {

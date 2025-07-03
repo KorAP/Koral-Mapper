@@ -242,42 +242,22 @@ func parseNode(raw rawNode) (ast.Node, error) {
 				return nil, fmt.Errorf("failed to parse 'wrap' field in unknown node type '%s': %w", raw.Type, err)
 			}
 
-			// Check if the wrapped node is a known type
-			if wrapRaw.Type == "koral:term" || wrapRaw.Type == "koral:token" || wrapRaw.Type == "koral:termGroup" {
-				wrap, err := parseNode(wrapRaw)
-				if err != nil {
-					return nil, fmt.Errorf("error parsing wrapped node in unknown node type '%s': %w", raw.Type, err)
-				}
-				catchall.Wrap = wrap
-			} else {
-				// For unknown types, recursively parse
-				wrap, err := parseNode(wrapRaw)
-				if err != nil {
-					return nil, fmt.Errorf("error parsing wrapped node in unknown node type '%s': %w", raw.Type, err)
-				}
-				catchall.Wrap = wrap
+			wrap, err := parseNode(wrapRaw)
+			if err != nil {
+				return nil, fmt.Errorf("error parsing wrapped node in unknown node type '%s': %w", raw.Type, err)
 			}
+			catchall.Wrap = wrap
 		}
 
 		// Parse operands if present
 		if len(raw.Operands) > 0 {
 			operands := make([]ast.Node, len(raw.Operands))
 			for i, op := range raw.Operands {
-				// Check if the operand is a known type
-				if op.Type == "koral:term" || op.Type == "koral:token" || op.Type == "koral:termGroup" {
-					node, err := parseNode(op)
-					if err != nil {
-						return nil, fmt.Errorf("error parsing operand %d in unknown node type '%s': %w", i+1, raw.Type, err)
-					}
-					operands[i] = node
-				} else {
-					// For unknown types, recursively parse
-					node, err := parseNode(op)
-					if err != nil {
-						return nil, fmt.Errorf("error parsing operand %d in unknown node type '%s': %w", i+1, raw.Type, err)
-					}
-					operands[i] = node
+				node, err := parseNode(op)
+				if err != nil {
+					return nil, fmt.Errorf("error parsing operand %d in unknown node type '%s': %w", i+1, raw.Type, err)
 				}
+				operands[i] = node
 			}
 			catchall.Operands = operands
 		}
