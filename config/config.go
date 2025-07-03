@@ -125,7 +125,7 @@ func LoadFromSources(configFile string, mappingFiles []string) (*MappingConfig, 
 		return nil, fmt.Errorf("no mapping lists found: provide either a config file (-c) with lists or mapping files (-m)")
 	}
 
-	// Validate all mapping lists
+	// Validate all mapping lists (skip duplicate ID check since we already did it)
 	if err := validateMappingLists(allLists); err != nil {
 		return nil, err
 	}
@@ -146,45 +146,32 @@ func LoadFromSources(configFile string, mappingFiles []string) (*MappingConfig, 
 	return result, nil
 }
 
-// LoadConfig loads a YAML configuration file and returns a Config object
-// Deprecated: Use LoadFromSources for new code
-func LoadConfig(filename string) (*MappingConfig, error) {
-	return LoadFromSources(filename, nil)
-}
-
-// ApplyDefaults sets default values for SDK and Server if they are empty
+// ApplyDefaults sets default values for configuration fields if they are empty
 func ApplyDefaults(config *MappingConfig) {
-	if config.SDK == "" {
-		config.SDK = defaultSDK
+	defaults := map[*string]string{
+		&config.SDK:        defaultSDK,
+		&config.Server:     defaultServer,
+		&config.ServiceURL: defaultServiceURL,
+		&config.LogLevel:   defaultLogLevel,
 	}
-	if config.Server == "" {
-		config.Server = defaultServer
+
+	for field, defaultValue := range defaults {
+		if *field == "" {
+			*field = defaultValue
+		}
 	}
-	if config.ServiceURL == "" {
-		config.ServiceURL = defaultServiceURL
-	}
+
 	if config.Port == 0 {
 		config.Port = defaultPort
 	}
-	if config.LogLevel == "" {
-		config.LogLevel = defaultLogLevel
-	}
 }
 
-// validateMappingLists validates a slice of mapping lists
+// validateMappingLists validates a slice of mapping lists (without duplicate ID checking)
 func validateMappingLists(lists []MappingList) error {
-	// Validate the configuration
-	seenIDs := make(map[string]bool)
 	for i, list := range lists {
 		if list.ID == "" {
 			return fmt.Errorf("mapping list at index %d is missing an ID", i)
 		}
-
-		// Check for duplicate IDs
-		if seenIDs[list.ID] {
-			return fmt.Errorf("duplicate mapping list ID found: %s", list.ID)
-		}
-		seenIDs[list.ID] = true
 
 		if len(list.Mappings) == 0 {
 			return fmt.Errorf("mapping list '%s' has no mapping rules", list.ID)
@@ -239,10 +226,10 @@ func (list *MappingList) ParseMappings() ([]*parser.MappingResult, error) {
 func applyDefaultFoundryAndLayer(node ast.Node, defaultFoundry, defaultLayer string) {
 	switch n := node.(type) {
 	case *ast.Term:
-		if n.Foundry == "" {
+		if n.Foundry == "" && defaultFoundry != "" {
 			n.Foundry = defaultFoundry
 		}
-		if n.Layer == "" {
+		if n.Layer == "" && defaultLayer != "" {
 			n.Layer = defaultLayer
 		}
 	case *ast.TermGroup:

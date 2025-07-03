@@ -37,7 +37,7 @@ func TestLoadConfig(t *testing.T) {
 	require.NoError(t, err)
 
 	// Test loading the configuration
-	config, err := LoadConfig(tmpfile.Name())
+	config, err := LoadFromSources(tmpfile.Name(), nil)
 	require.NoError(t, err)
 
 	// Verify the configuration
@@ -158,7 +158,7 @@ func TestLoadConfigValidation(t *testing.T) {
 			err = tmpfile.Close()
 			require.NoError(t, err)
 
-			_, err = LoadConfig(tmpfile.Name())
+			_, err = LoadFromSources(tmpfile.Name(), nil)
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), tt.wantErr)
 		})
@@ -263,7 +263,7 @@ mappings:
 			err = tmpfile.Close()
 			require.NoError(t, err)
 
-			config, err := LoadConfig(tmpfile.Name())
+			config, err := LoadFromSources(tmpfile.Name(), nil)
 			if tt.wantErr != "" {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), tt.wantErr)
@@ -391,7 +391,7 @@ func TestUserProvidedMappingRules(t *testing.T) {
 	require.NoError(t, err)
 
 	// Test loading the configuration
-	config, err := LoadConfig(tmpfile.Name())
+	config, err := LoadFromSources(tmpfile.Name(), nil)
 	require.NoError(t, err)
 
 	// Verify the configuration loaded correctly
@@ -598,7 +598,7 @@ lists:
 			err = tmpfile.Close()
 			require.NoError(t, err)
 
-			config, err := LoadConfig(tmpfile.Name())
+			config, err := LoadFromSources(tmpfile.Name(), nil)
 			if tt.wantErr {
 				require.Error(t, err)
 				return
