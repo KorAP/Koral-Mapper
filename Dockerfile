@@ -38,7 +38,7 @@ COPY --from=build /etc/ssl/certs /etc/ssl/certs
 COPY --from=build /src/mappings /mappings
 COPY --from=upx   /koralmapper      /koralmapper
 
-ENTRYPOINT [ "/termmapper" ]
+ENTRYPOINT [ "/koralmapper" ]
 
 LABEL maintainer="korap@ids-mannheim.de"
 LABEL description="Docker Image for Koral-Mapper"
