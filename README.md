@@ -45,7 +45,7 @@ Configurations can contain global settings and mapping lists (used with the `-c`
 # Optional: Custom SDK endpoint for Kalamar plugin integration
 sdk: "https://custom.example.com/js/korap-plugin.js"
 
-# Optional: Custom server endpoint for Kalamar plugin integration  
+# Optional: Custom server endpoint for Kalamar plugin integration
 server: "https://custom.example.com/"
 
 # Optional: Port to listen on (default: 5725)
@@ -97,7 +97,7 @@ These values are applied during configuration parsing. When using only individua
 ### Mapping Rules
 
 Each mapping rule consists of two patterns separated by `<>`. The patterns can be:
-- Simple terms: `[key]` or `[foundry/layer=key]` or `[foundry/layer=key:value]`
+- Simple terms (e.g. `[key]`, `[layer=key]`, `[foundry/*=key]`, `[foundry/layer=key]` or `[foundry/layer=key:value]`)
 - Complex terms with AND/OR relations: `[term1 & term2]` or `[term1 | term2]` or `[term1 | (term2 & term3)]`
 
 ### Foundry and Layer Precedence for term mapping
@@ -218,7 +218,7 @@ Example response:
 }
 ```
 
-### GET /
+### GET /:map
 
 Serves the Kalamar plugin integration page. This HTML page includes:
 
@@ -241,18 +241,18 @@ Mapping between STTS and UD part-of-spech tags.
 - [x] Web service
 - [x] JSON script for Kalamar integration
 - [x] Integration of multiple mapping files
+- [x] Response rewriting
 - [ ] Support for negation
-- [ ] Support multiple mappings (by having a check list)
-- [ ] Response rewriting
 - [ ] Support corpus mappings
 - [ ] Support chaining of mappings
 
 ## COPYRIGHT AND LICENSE
+
+*Disclaimer*: This software was developed as an experiment with major assistance by AI (mainly Claude 3.5-sonnet and Claude 4-sonnet).
+The code should not be used as an example on how to create services as Kalamar plugins.
 
 Copyright (C) 2025, [IDS Mannheim](https://www.ids-mannheim.de/)<br>
 Author: [Nils Diewald](https://www.nils-diewald.de/)
 
 Koral-Mapper is free software published under the
 [BSD-2 License](https://opensource.org/licenses/BSD-2-Clause).
-
-*Disclaimer*: This software was developed (as an experiment) with major assistance by AI (mainly Claude 3.5-sonnet and Claude 4-sonnet).
