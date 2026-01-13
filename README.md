@@ -232,7 +232,8 @@ The SDK script and server data-attribute in the HTML are determined by the confi
 
 ### `mappings/stts-upos.yaml`
 
-Mapping between STTS and UD part-of-spech tags.
+Mapping between [STTS and UD part-of-spech tags](https://universaldependencies.org/tagset-conversion/de-stts-uposf.html).
+
 
 ## Progress
 
