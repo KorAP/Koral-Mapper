@@ -868,3 +868,81 @@ mappings:
 	assert.Equal(t, defaultServer, config.Server)
 	assert.Equal(t, defaultServiceURL, config.ServiceURL)
 }
+
+func TestCorpusMappingListType(t *testing.T) {
+	content := `
+lists:
+- id: corpus-class-mapping
+  type: corpus
+  desc: Maps textClass values to genre field
+  mappings:
+    - "textClass=novel <> genre=fiction"
+    - "textClass=science <> genre=nonfiction"
+- id: annotation-mapper
+  mappings:
+    - "[A] <> [B]"
+`
+	tmpfile, err := os.CreateTemp("", "config-corpus-*.yaml")
+	require.NoError(t, err)
+	defer os.Remove(tmpfile.Name())
+
+	_, err = tmpfile.WriteString(content)
+	require.NoError(t, err)
+	err = tmpfile.Close()
+	require.NoError(t, err)
+
+	config, err := LoadFromSources(tmpfile.Name(), nil)
+	require.NoError(t, err)
+	require.Len(t, config.Lists, 2)
+
+	assert.Equal(t, "corpus", config.Lists[0].Type)
+	assert.True(t, config.Lists[0].IsCorpus())
+
+	assert.Equal(t, "", config.Lists[1].Type)
+	assert.False(t, config.Lists[1].IsCorpus())
+}
+
+func TestParseCorpusMappings(t *testing.T) {
+	list := &MappingList{
+		ID:   "test-corpus",
+		Type: "corpus",
+		Mappings: []MappingRule{
+			"textClass=novel <> genre=fiction",
+			"(textClass=novel & pubDate=2020:geq#date) <> genre=recentfiction",
+		},
+	}
+
+	results, err := list.ParseCorpusMappings()
+	require.NoError(t, err)
+	require.Len(t, results, 2)
+
+	// Verify simple field rule
+	require.NotNil(t, results[0].Upper)
+	require.NotNil(t, results[0].Lower)
+
+	// Verify group rule
+	require.NotNil(t, results[1].Upper)
+	require.NotNil(t, results[1].Lower)
+}
+
+func TestParseCorpusMappingsErrors(t *testing.T) {
+	list := &MappingList{
+		ID:       "test-corpus",
+		Type:     "corpus",
+		Mappings: []MappingRule{""},
+	}
+
+	_, err := list.ParseCorpusMappings()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "empty corpus mapping rule")
+
+	list2 := &MappingList{
+		ID:       "test-corpus",
+		Type:     "corpus",
+		Mappings: []MappingRule{"invalid rule without separator"},
+	}
+
+	_, err = list2.ParseCorpusMappings()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to parse corpus mapping rule")
+}

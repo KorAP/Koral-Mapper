@@ -16,8 +16,12 @@ func (m *Mapper) ApplyQueryMappings(mappingID string, opts MappingOptions, jsonD
 		return nil, fmt.Errorf("mapping list with ID %s not found", mappingID)
 	}
 
+	if m.mappingLists[mappingID].IsCorpus() {
+		return m.applyCorpusQueryMappings(mappingID, opts, jsonData)
+	}
+
 	// Get the parsed rules
-	rules := m.parsedRules[mappingID]
+	rules := m.parsedQueryRules[mappingID]
 
 	// Check if we have a wrapper object with a "query" field
 	var queryData any
@@ -184,63 +188,7 @@ func (m *Mapper) ApplyQueryMappings(mappingID string, opts MappingOptions, jsonD
 
 	// Add rewrites if enabled and node was changed
 	if opts.AddRewrites && !ast.NodesEqual(node, originalNode) {
-		// Create rewrite object
-		rewrite := map[string]any{
-			"@type":  "koral:rewrite",
-			"editor": "termMapper",
-		}
-
-		// Check if the node types are different (structural change)
-		if originalNode.Type() != node.Type() {
-			// Full node replacement
-			originalBytes, err := parser.SerializeToJSON(originalNode)
-			if err != nil {
-				return nil, fmt.Errorf("failed to serialize original node for rewrite: %w", err)
-			}
-			var originalJSON any
-			if err := json.Unmarshal(originalBytes, &originalJSON); err != nil {
-				return nil, fmt.Errorf("failed to parse original node JSON for rewrite: %w", err)
-			}
-			rewrite["original"] = originalJSON
-		} else if term, ok := originalNode.(*ast.Term); ok && ast.IsTermNode(node) {
-			// Check which attributes changed
-			newTerm := node.(*ast.Term)
-			if term.Foundry != newTerm.Foundry {
-				rewrite["scope"] = "foundry"
-				rewrite["original"] = term.Foundry
-			} else if term.Layer != newTerm.Layer {
-				rewrite["scope"] = "layer"
-				rewrite["original"] = term.Layer
-			} else if term.Key != newTerm.Key {
-				rewrite["scope"] = "key"
-				rewrite["original"] = term.Key
-			} else if term.Value != newTerm.Value {
-				rewrite["scope"] = "value"
-				rewrite["original"] = term.Value
-			} else {
-				// No specific attribute changed, use full node replacement
-				originalBytes, err := parser.SerializeToJSON(originalNode)
-				if err != nil {
-					return nil, fmt.Errorf("failed to serialize original node for rewrite: %w", err)
-				}
-				var originalJSON any
-				if err := json.Unmarshal(originalBytes, &originalJSON); err != nil {
-					return nil, fmt.Errorf("failed to parse original node JSON for rewrite: %w", err)
-				}
-				rewrite["original"] = originalJSON
-			}
-		} else {
-			// Full node replacement
-			originalBytes, err := parser.SerializeToJSON(originalNode)
-			if err != nil {
-				return nil, fmt.Errorf("failed to serialize original node for rewrite: %w", err)
-			}
-			var originalJSON any
-			if err := json.Unmarshal(originalBytes, &originalJSON); err != nil {
-				return nil, fmt.Errorf("failed to parse original node JSON for rewrite: %w", err)
-			}
-			rewrite["original"] = originalJSON
-		}
+		rewrite := buildQueryRewrite(originalNode, node)
 
 		// Add rewrite to the node
 		if resultMap, ok := resultData.(map[string]any); ok {
@@ -304,6 +252,36 @@ func (m *Mapper) ApplyQueryMappings(mappingID string, opts MappingOptions, jsonD
 	}
 
 	return resultData, nil
+}
+
+// buildQueryRewrite creates a rewrite entry for a query-level transformation
+// by comparing the original and new AST nodes.
+func buildQueryRewrite(originalNode, newNode ast.Node) map[string]any {
+	if term, ok := originalNode.(*ast.Term); ok && ast.IsTermNode(newNode) && originalNode.Type() == newNode.Type() {
+		newTerm := newNode.(*ast.Term)
+		if term.Foundry != newTerm.Foundry {
+			return newRewriteEntry("foundry", term.Foundry)
+		}
+		if term.Layer != newTerm.Layer {
+			return newRewriteEntry("layer", term.Layer)
+		}
+		if term.Key != newTerm.Key {
+			return newRewriteEntry("key", term.Key)
+		}
+		if term.Value != newTerm.Value {
+			return newRewriteEntry("value", term.Value)
+		}
+	}
+
+	originalBytes, err := parser.SerializeToJSON(originalNode)
+	if err != nil {
+		return newRewriteEntry("", nil)
+	}
+	var originalJSON any
+	if err := json.Unmarshal(originalBytes, &originalJSON); err != nil {
+		return newRewriteEntry("", nil)
+	}
+	return newRewriteEntry("", originalJSON)
 }
 
 // isValidQueryObject checks if the query data is a valid object that can be processed

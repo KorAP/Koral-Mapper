@@ -24,12 +24,35 @@ type MappingRule string
 // MappingList represents a list of mapping rules with metadata
 type MappingList struct {
 	ID          string        `yaml:"id"`
+	Type        string        `yaml:"type,omitempty"` // "annotation" (default) or "corpus"
 	Description string        `yaml:"desc,omitempty"`
 	FoundryA    string        `yaml:"foundryA,omitempty"`
 	LayerA      string        `yaml:"layerA,omitempty"`
 	FoundryB    string        `yaml:"foundryB,omitempty"`
 	LayerB      string        `yaml:"layerB,omitempty"`
 	Mappings    []MappingRule `yaml:"mappings"`
+}
+
+// IsCorpus returns true if the mapping list type is "corpus".
+func (list *MappingList) IsCorpus() bool {
+	return list.Type == "corpus"
+}
+
+// ParseCorpusMappings parses all mapping rules as corpus rules.
+func (list *MappingList) ParseCorpusMappings() ([]*parser.CorpusMappingResult, error) {
+	corpusParser := parser.NewCorpusParser()
+	results := make([]*parser.CorpusMappingResult, len(list.Mappings))
+	for i, rule := range list.Mappings {
+		if rule == "" {
+			return nil, fmt.Errorf("empty corpus mapping rule at index %d in list '%s'", i, list.ID)
+		}
+		result, err := corpusParser.ParseMapping(string(rule))
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse corpus mapping rule %d in list '%s': %w", i, list.ID, err)
+		}
+		results[i] = result
+	}
+	return results, nil
 }
 
 // MappingConfig represents the root configuration containing multiple mapping lists

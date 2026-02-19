@@ -94,9 +94,22 @@ The `sdk`, `server`, `port`, and `loglevel` fields in the main configuration fil
 
 These values are applied during configuration parsing. When using only individual mapping files (`-m` flags), default values are used unless overridden by command line arguments.
 
-### Mapping Rules
 
-Each mapping rule consists of two patterns separated by `<>`. The patterns can be:
+### Corpus mapping rules (type: corpus)
+
+Corpus mapping rules use `key=value <> key=value` syntax for rewriting `koral:doc` / `koral:docGroup` structures in the `corpus`/`collection` section of a KoralQuery request, and enriching `fields` arrays in responses.
+
+- Simple fields: `textClass=novel <> genre=fiction`
+- Match types: `pubDate=2020:geq <> yearFrom=2020:geq` (eq, ne, geq, leq, contains, excludes)
+- Value types: `pubDate=2020-01#date <> year=2020#string` (string, regex, date)
+- Regex matching: `textClass=wissenschaft.*#regex <> genre=science`
+- Groups (AND/OR): `(textClass=novel & pubDate=2020) <> genre=fiction`
+
+(Supported `@type` aliases: `koral:field` for `koral:doc`, `koral:fieldGroup` for `koral:docGroup`).
+
+### Annotation mapping rules (type: annotation)
+
+Each annotation mapping rule consists of two patterns separated by `<>`. The patterns can be:
 - Simple terms (e.g. `[key]`, `[layer=key]`, `[foundry/*=key]`, `[foundry/layer=key]` or `[foundry/layer=key:value]`)
 - Complex terms with AND/OR relations: `[term1 & term2]` or `[term1 | term2]` or `[term1 | (term2 & term3)]`
 
@@ -244,15 +257,16 @@ Mapping between [STTS and UD part-of-spech tags](https://universaldependencies.o
 - [x] Integration of multiple mapping files
 - [x] Response rewriting
 - [ ] Support for negation
-- [ ] Support corpus mappings
+- [x] Support corpus mappings
 - [ ] Support chaining of mappings
 
 ## COPYRIGHT AND LICENSE
 
-*Disclaimer*: This software was developed as an experiment with major assistance by AI (mainly Claude 3.5-sonnet and Claude 4-sonnet).
+*Disclaimer*: This software was developed as an experiment with major assistance by AI
+(mainly Claude 3.5-sonnet and Claude 4-sonnet, starting with 0.1.1: Claude 4.6 Opus and GPT 5.3 Codex).
 The code should not be used as an example on how to create services as Kalamar plugins.
 
-Copyright (C) 2025, [IDS Mannheim](https://www.ids-mannheim.de/)<br>
+Copyright (C) 2025-2026, [IDS Mannheim](https://www.ids-mannheim.de/)<br>
 Author: [Nils Diewald](https://www.nils-diewald.de/)
 
 Koral-Mapper is free software published under the

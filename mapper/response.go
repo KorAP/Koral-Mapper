@@ -17,8 +17,12 @@ func (m *Mapper) ApplyResponseMappings(mappingID string, opts MappingOptions, js
 		return nil, fmt.Errorf("mapping list with ID %s not found", mappingID)
 	}
 
+	if m.mappingLists[mappingID].IsCorpus() {
+		return m.applyCorpusResponseMappings(mappingID, opts, jsonData)
+	}
+
 	// Get the parsed rules
-	rules := m.parsedRules[mappingID]
+	rules := m.parsedQueryRules[mappingID]
 
 	// Check if we have a snippet to process
 	jsonMap, ok := jsonData.(map[string]any)

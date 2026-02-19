@@ -120,7 +120,7 @@ func TestMapper(t *testing.T) {
 					"rewrites": [
 						{
 							"@type": "koral:rewrite",
-							"editor": "termMapper",
+							"editor": "Koral-Mapper",
 							"original": {
 								"@type": "koral:term",
 								"foundry": "opennlp",
@@ -176,7 +176,7 @@ func TestMapper(t *testing.T) {
 					"rewrites": [
 						{
 							"@type": "koral:rewrite",
-							"editor": "termMapper",
+							"editor": "Koral-Mapper",
 							"original": {
 								"@type": "koral:term",
 								"foundry": "opennlp",

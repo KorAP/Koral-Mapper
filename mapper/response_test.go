@@ -74,7 +74,7 @@ func TestResponseMappingDebug(t *testing.T) {
 	require.NoError(t, err)
 
 	// Debug: Print what the parsed rules look like
-	rules := m.parsedRules["test-mapper"]
+	rules := m.parsedQueryRules["test-mapper"]
 	t.Logf("Number of parsed rules: %d", len(rules))
 	for i, rule := range rules {
 		t.Logf("Rule %d - Upper: %+v", i, rule.Upper)
