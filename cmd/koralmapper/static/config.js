@@ -6,9 +6,15 @@
 
   var serviceURL = container.dataset.serviceUrl;
   var cookieName = container.dataset.cookieName || "km-config";
-  var mappingDivs = container.querySelectorAll(".mapping");
+  var requestMappingDivs = container.querySelectorAll('.mapping[data-mode="request"]');
+  var responseMappingDivMap = {};
   var requestCfgPreview = container.querySelector(".request-cfg-preview");
   var responseCfgPreview = container.querySelector(".response-cfg-preview");
+
+  var responseMappingDivs = container.querySelectorAll('.mapping[data-mode="response"]');
+  for (var i = 0; i < responseMappingDivs.length; i++) {
+    responseMappingDivMap[responseMappingDivs[i].dataset.id] = responseMappingDivs[i];
+  }
 
   // Cookie helpers
 
@@ -69,18 +75,19 @@
   function getFormState() {
     var state = { mappings: [] };
 
-    for (var i = 0; i < mappingDivs.length; i++) {
-      var div = mappingDivs[i];
+    for (var i = 0; i < requestMappingDivs.length; i++) {
+      var requestDiv = requestMappingDivs[i];
+      var responseDiv = responseMappingDivMap[requestDiv.dataset.id];
       var entry = {
-        id: div.dataset.id
+        id: requestDiv.dataset.id
       };
 
-      if (div.dataset.type !== "corpus") {
-        entry.request = getModeState(div, "request");
-        entry.response = getModeState(div, "response");
+      if (requestDiv.dataset.type !== "corpus") {
+        entry.request = getModeState(requestDiv, "request");
+        entry.response = responseDiv ? getModeState(responseDiv, "response") : { enabled: false };
       } else {
-        entry.request = { enabled: div.querySelector(".request-cb").checked };
-        entry.response = { enabled: div.querySelector(".response-cb").checked };
+        entry.request = { enabled: requestDiv.querySelector(".request-cb").checked };
+        entry.response = { enabled: responseDiv && responseDiv.querySelector(".response-cb").checked };
       }
 
       state.mappings.push(entry);
@@ -124,16 +131,19 @@
       byId[saved.mappings[i].id] = saved.mappings[i];
     }
 
-    for (var i = 0; i < mappingDivs.length; i++) {
-      var div = mappingDivs[i];
-      var entry = byId[div.dataset.id];
+    for (var i = 0; i < requestMappingDivs.length; i++) {
+      var requestDiv = requestMappingDivs[i];
+      var responseDiv = responseMappingDivMap[requestDiv.dataset.id];
+      var entry = byId[requestDiv.dataset.id];
       if (!entry) continue;
 
-      if (div.dataset.type !== "corpus") {
+      if (requestDiv.dataset.type !== "corpus") {
         // Backward compatibility with old cookie schema.
         if (entry.request && typeof entry.request === "object") {
-          restoreModeState(div, "request", entry.request);
-          restoreModeState(div, "response", entry.response);
+          restoreModeState(requestDiv, "request", entry.request);
+          if (responseDiv) {
+            restoreModeState(responseDiv, "response", entry.response);
+          }
         } else {
           var requestLegacy = {
             enabled: !!entry.request,
@@ -151,12 +161,14 @@
             foundryB: entry.foundryB,
             layerB: entry.layerB
           };
-          restoreModeState(div, "request", requestLegacy);
-          restoreModeState(div, "response", responseLegacy);
+          restoreModeState(requestDiv, "request", requestLegacy);
+          if (responseDiv) {
+            restoreModeState(responseDiv, "response", responseLegacy);
+          }
         }
       } else {
-        var requestCb = div.querySelector(".request-cb");
-        var responseCb = div.querySelector(".response-cb");
+        var requestCb = requestDiv.querySelector(".request-cb");
+        var responseCb = responseDiv ? responseDiv.querySelector(".response-cb") : null;
         if (requestCb) {
           requestCb.checked = !!(entry.request && entry.request.enabled);
         }
@@ -181,6 +193,7 @@
   function buildCfgParam(mode) {
     var parts = [];
     var classes = rowFieldClasses(mode);
+    var mappingDivs = mode === "request" ? requestMappingDivs : responseMappingDivs;
 
     for (var i = 0; i < mappingDivs.length; i++) {
       var div = mappingDivs[i];

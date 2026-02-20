@@ -1,5 +1,3 @@
-.mapping-section { padding-top: 0.75rem; margin-top: 1rem; }
-.mapping { margin-bottom: 1rem; }
 .mapping-row { display: flex; align-items: center; gap: 0.75rem; margin: 0.35rem 0; }
 .mapping-fields { display: inline-flex; align-items: center; gap: 0.35rem; }
 .mapping-fields input[type="text"] { font-family: monospace; }
@@ -7,5 +5,4 @@
 .request-dir-arrow, .response-dir-arrow { cursor: pointer; border: 1px solid #bbb; background: #f8f8f8; border-radius: 0.25rem; min-width: 2rem; }
 .cfg-line-label { display: block; margin: 0.35rem 0 0.1rem; }
 .cfg-preview { width: 100%; box-sizing: border-box; font-family: monospace; }
-.desc { color: #555; margin-top: 0; }
 footer { background-color: #aaa; font-size:50%; text-align: right; padding: 0.25rem; }

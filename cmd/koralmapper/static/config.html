@@ -15,25 +15,39 @@
             <p>{{.Description}}</p>
         </section>
 
-        {{if .AnnotationMappings}}
         <section class="mapping-section">
-            <h2>Query</h2>
+            <h2>Request</h2>
             {{range .AnnotationMappings}}
-            <div class="mapping" data-id="{{.ID}}" data-type="annotation"
+            <div class="mapping" data-id="{{.ID}}" data-type="annotation" data-mode="request"
                  data-default-foundry-a="{{.FoundryA}}" data-default-layer-a="{{.LayerA}}"
                  data-default-foundry-b="{{.FoundryB}}" data-default-layer-b="{{.LayerB}}">
-                <h3>{{.ID}}</h3>
-                {{if .Description}}<p class="desc">{{.Description}}</p>{{end}}
                 <div class="mapping-row">
-                    <label><input type="checkbox" class="request-cb" name="request"> Request</label>
+                    <label><input type="checkbox" class="request-cb" name="request"> (query) {{.ID}}</label>
                     <div class="mapping-fields request-fields">
                         <input type="text" class="request-foundryA" value="{{.FoundryA}}" placeholder="{{.FoundryA}}" size="8">/<input type="text" class="request-layerA" value="{{.LayerA}}" placeholder="{{.LayerA}}" size="4">
                         <button type="button" class="request-dir-arrow" data-dir="atob">&rarr;</button>
                         <input type="text" class="request-foundryB" value="{{.FoundryB}}" placeholder="{{.FoundryB}}" size="8">/<input type="text" class="request-layerB" value="{{.LayerB}}" placeholder="{{.LayerB}}" size="4">
                     </div>
                 </div>
+            </div>
+            {{end}}
+            {{range .CorpusMappings}}
+            <div class="mapping" data-id="{{.ID}}" data-type="corpus" data-mode="request">
                 <div class="mapping-row">
-                    <label><input type="checkbox" class="response-cb" name="response"> Response</label>
+                    <label><input type="checkbox" class="request-cb" name="request"> (corpus) {{.ID}}</label>
+                </div>
+            </div>
+            {{end}}
+        </section>
+
+        <section class="mapping-section">
+            <h2>Response</h2>
+            {{range .AnnotationMappings}}
+            <div class="mapping" data-id="{{.ID}}" data-type="annotation" data-mode="response"
+                 data-default-foundry-a="{{.FoundryA}}" data-default-layer-a="{{.LayerA}}"
+                 data-default-foundry-b="{{.FoundryB}}" data-default-layer-b="{{.LayerB}}">
+                <div class="mapping-row">
+                    <label><input type="checkbox" class="response-cb" name="response"> (query) {{.ID}}</label>
                     <div class="mapping-fields response-fields">
                         <input type="text" class="response-foundryA" value="{{.FoundryA}}" placeholder="{{.FoundryA}}" size="8">/<input type="text" class="response-layerA" value="{{.LayerA}}" placeholder="{{.LayerA}}" size="4">
                         <button type="button" class="response-dir-arrow" data-dir="btoa">&larr;</button>
@@ -42,32 +56,33 @@
                 </div>
             </div>
             {{end}}
-        </section>
-        {{end}}
-
-        {{if .CorpusMappings}}
-        <section class="mapping-section">
-            <h2>Corpus</h2>
             {{range .CorpusMappings}}
-            <div class="mapping" data-id="{{.ID}}" data-type="corpus">
-                <h3>{{.ID}}</h3>
-                {{if .Description}}<p class="desc">{{.Description}}</p>{{end}}
+            <div class="mapping" data-id="{{.ID}}" data-type="corpus" data-mode="response">
                 <div class="mapping-row">
-                    <label><input type="checkbox" class="request-cb" name="request"> Request</label>
-                </div>
-                <div class="mapping-row">
-                    <label><input type="checkbox" class="response-cb" name="response"> Response</label>
+                    <label><input type="checkbox" class="response-cb" name="response"> (corpus) {{.ID}}</label>
                 </div>
             </div>
             {{end}}
         </section>
-        {{end}}
+
+        <section>
+          <h2>Available Mappings</h2>
+          <dl>
+            {{range .AnnotationMappings}}
+            <dt>{{.ID}}</dt>
+            {{if .Description}}<dd>{{.Description}}</dd>{{end}}
+            {{end}}
+            {{range .CorpusMappings}}
+            <dt>{{.ID}}</dt>
+            {{if .Description}}<dd>{{.Description}}</dd>{{end}}
+            {{end}}
+          </dl>
+        </section>
 
         <section class="mapping-section">
-            <h2>Pipe Configuration</h2>
-            <label class="cfg-line-label" for="request-cfg-preview">Request cfg</label>
+            <label class="cfg-line-label" for="request-cfg-preview">Request:</label>
             <input type="text" id="request-cfg-preview" class="cfg-preview request-cfg-preview" readonly value="">
-            <label class="cfg-line-label" for="response-cfg-preview">Response cfg</label>
+            <label class="cfg-line-label" for="response-cfg-preview">Response:</label>
             <input type="text" id="response-cfg-preview" class="cfg-preview response-cfg-preview" readonly value="">
         </section>
 

@@ -1937,16 +1937,20 @@ func TestConfigPageRendering(t *testing.T) {
 	assert.Contains(t, htmlContent, `/static/style.css`)
 	assert.Contains(t, htmlContent, `/static/config.js`)
 
-	// Annotation mapping section
-	assert.Contains(t, htmlContent, "Query")
+	// Request/response sections
+	assert.Contains(t, htmlContent, "<h2>Request</h2>")
+	assert.Contains(t, htmlContent, "<h2>Response</h2>")
+
+	// Annotation mapping entries
+	assert.Contains(t, htmlContent, "(query) anno-mapper")
 	assert.Contains(t, htmlContent, `data-id="anno-mapper"`)
 	assert.Contains(t, htmlContent, `data-type="annotation"`)
 	assert.Contains(t, htmlContent, `value="opennlp"`)
 	assert.Contains(t, htmlContent, `value="upos"`)
 	assert.Contains(t, htmlContent, "Annotation mapping")
 
-	// Corpus mapping section
-	assert.Contains(t, htmlContent, "Corpus")
+	// Corpus mapping entries
+	assert.Contains(t, htmlContent, "(corpus) corpus-mapper")
 	assert.Contains(t, htmlContent, `data-id="corpus-mapper"`)
 	assert.Contains(t, htmlContent, `data-type="corpus"`)
 	assert.Contains(t, htmlContent, "Corpus mapping")
