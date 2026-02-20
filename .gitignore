@@ -1,6 +1,7 @@
 .*
 !.gitignore
 !.dockerignore
+!.github
 testdata/sandbox
 examples/
 todo.txt
@@ -15,3 +16,5 @@ todo.txt
 *.tar
 !/cmd/termmapper/
 !/cmd/koralmapper/
+*-plan.md
+overview.md
