@@ -1,14 +1,20 @@
 package main
 
 import (
+	"bytes"
+	"embed"
 	"fmt"
+	"html/template"
+	"io/fs"
 	"net/url"
 	"os"
 	"os/signal"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
+	texttemplate "text/template"
 	"time"
 
 	"github.com/KorAP/Koral-Mapper/config"
@@ -18,6 +24,9 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
+
+//go:embed static/*
+var staticFS embed.FS
 
 const (
 	maxInputLength = 1024 * 1024 // 1MB
@@ -31,13 +40,7 @@ type appConfig struct {
 	LogLevel *string  `kong:"short='l',help='Log level (debug, info, warn, error)'"`
 }
 
-type TemplateMapping struct {
-	ID          string
-	Description string
-}
-
-// TemplateData holds data for the Kalamar plugin template
-type TemplateData struct {
+type BasePageData struct {
 	Title       string
 	Version     string
 	Hash        string
@@ -46,8 +49,14 @@ type TemplateData struct {
 	Server      string
 	SDK         string
 	ServiceURL  string
+}
+
+type SingleMappingPageData struct {
+	BasePageData
 	MapID       string
-	Mappings    []TemplateMapping
+	Mappings    []config.MappingList
+	QueryURL    string
+	ResponseURL string
 }
 
 type QueryParams struct {
@@ -66,6 +75,13 @@ type requestParams struct {
 	FoundryB string
 	LayerA   string
 	LayerB   string
+}
+
+// ConfigPageData holds all data passed to the configuration page template.
+type ConfigPageData struct {
+	BasePageData
+	AnnotationMappings []config.MappingList
+	CorpusMappings     []config.MappingList
 }
 
 func parseConfig() *appConfig {
@@ -240,9 +256,14 @@ func main() {
 	// Start server
 	go func() {
 		log.Info().Int("port", finalPort).Msg("Starting server")
+		fmt.Printf("Starting server port=%d\n", finalPort)
 
 		for _, list := range yamlConfig.Lists {
 			log.Info().Str("id", list.ID).Str("desc", list.Description).Msg("Loaded mapping")
+			fmt.Printf("Loaded mapping desc=%s id=%s\n",
+				formatConsoleField(list.Description),
+				list.ID,
+			)
 		}
 
 		if err := app.Listen(fmt.Sprintf(":%d", finalPort)); err != nil {
@@ -263,10 +284,16 @@ func main() {
 }
 
 func setupRoutes(app *fiber.App, m *mapper.Mapper, yamlConfig *config.MappingConfig) {
+	configTmpl := template.Must(template.ParseFS(staticFS, "static/config.html"))
+	pluginTmpl := texttemplate.Must(texttemplate.ParseFS(staticFS, "static/plugin.html"))
+
 	// Health check endpoint
 	app.Get("/health", func(c *fiber.Ctx) error {
 		return c.SendString("OK")
 	})
+
+	// Static file serving from embedded FS
+	app.Get("/static/*", handleStaticFile())
 
 	// Composite cascade transformation endpoints
 	app.Post("/query", handleCompositeQueryTransform(m, yamlConfig.Lists))
@@ -279,8 +306,59 @@ func setupRoutes(app *fiber.App, m *mapper.Mapper, yamlConfig *config.MappingCon
 	app.Post("/:map/response", handleResponseTransform(m))
 
 	// Kalamar plugin endpoint
-	app.Get("/", handleKalamarPlugin(yamlConfig))
-	app.Get("/:map", handleKalamarPlugin(yamlConfig))
+	app.Get("/", handleKalamarPlugin(yamlConfig, configTmpl, pluginTmpl))
+	app.Get("/:map", handleKalamarPlugin(yamlConfig, configTmpl, pluginTmpl))
+}
+
+func handleStaticFile() fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		name := c.Params("*")
+		data, err := fs.ReadFile(staticFS, "static/"+name)
+		if err != nil {
+			return c.Status(fiber.StatusNotFound).SendString("not found")
+		}
+		switch {
+		case strings.HasSuffix(name, ".js"):
+			c.Set("Content-Type", "text/javascript; charset=utf-8")
+		case strings.HasSuffix(name, ".css"):
+			c.Set("Content-Type", "text/css; charset=utf-8")
+		case strings.HasSuffix(name, ".html"):
+			c.Set("Content-Type", "text/html; charset=utf-8")
+		}
+		return c.Send(data)
+	}
+}
+
+func buildBasePageData(yamlConfig *config.MappingConfig) BasePageData {
+	return BasePageData{
+		Title:       config.Title,
+		Version:     config.Version,
+		Hash:        config.Buildhash,
+		Date:        config.Buildtime,
+		Description: config.Description,
+		Server:      yamlConfig.Server,
+		SDK:         yamlConfig.SDK,
+		ServiceURL:  yamlConfig.ServiceURL,
+	}
+}
+
+func buildConfigPageData(yamlConfig *config.MappingConfig) ConfigPageData {
+	data := ConfigPageData{
+		BasePageData: buildBasePageData(yamlConfig),
+	}
+
+	for _, list := range yamlConfig.Lists {
+		normalized := list
+		if normalized.Type == "" {
+			normalized.Type = "annotation"
+		}
+		if list.IsCorpus() {
+			data.CorpusMappings = append(data.CorpusMappings, normalized)
+		} else {
+			data.AnnotationMappings = append(data.AnnotationMappings, normalized)
+		}
+	}
+	return data
 }
 
 func handleCompositeQueryTransform(m *mapper.Mapper, lists []config.MappingList) fiber.Handler {
@@ -513,10 +591,23 @@ func validateInput(mapID, dir, foundryA, foundryB, layerA, layerB string, body [
 	return nil
 }
 
-func handleKalamarPlugin(yamlConfig *config.MappingConfig) fiber.Handler {
+func handleKalamarPlugin(yamlConfig *config.MappingConfig, configTmpl *template.Template, pluginTmpl *texttemplate.Template) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		mapID := c.Params("map")
 
+		// Config page (GET /)
+		if mapID == "" {
+			data := buildConfigPageData(yamlConfig)
+			var buf bytes.Buffer
+			if err := configTmpl.Execute(&buf, data); err != nil {
+				log.Error().Err(err).Msg("Failed to execute config template")
+				return c.Status(fiber.StatusInternalServerError).SendString("internal error")
+			}
+			c.Set("Content-Type", "text/html")
+			return c.Send(buf.Bytes())
+		}
+
+		// Single-mapping page (GET /:map) — existing behavior
 		// Get query parameters
 		dir := c.Query("dir", "atob")
 		foundryA := c.Query("foundryA", "")
@@ -537,30 +628,6 @@ func handleKalamarPlugin(yamlConfig *config.MappingConfig) fiber.Handler {
 			})
 		}
 
-		// Get list of available mappings
-		var mappings []TemplateMapping
-		for _, list := range yamlConfig.Lists {
-			mappings = append(mappings, TemplateMapping{
-				ID:          list.ID,
-				Description: list.Description,
-			})
-		}
-
-		// Prepare template data
-		data := TemplateData{
-			Title:       config.Title,
-			Version:     config.Version,
-			Hash:        config.Buildhash,
-			Date:        config.Buildtime,
-			Description: config.Description,
-			Server:      yamlConfig.Server,
-			SDK:         yamlConfig.SDK,
-			ServiceURL:  yamlConfig.ServiceURL,
-			MapID:       mapID,
-			Mappings:    mappings,
-		}
-
-		// Add query parameters to template data
 		queryParams := QueryParams{
 			Dir:      dir,
 			FoundryA: foundryA,
@@ -569,136 +636,56 @@ func handleKalamarPlugin(yamlConfig *config.MappingConfig) fiber.Handler {
 			LayerB:   layerB,
 		}
 
-		// Generate HTML
-		html := generateKalamarPluginHTML(data, queryParams)
+		queryURL, err := buildMapServiceURL(yamlConfig.ServiceURL, mapID, "query", queryParams)
+		if err != nil {
+			log.Warn().Err(err).Msg("Failed to build query service URL")
+			return c.Status(fiber.StatusInternalServerError).SendString("internal error")
+		}
+		reversed := queryParams
+		if queryParams.Dir == "btoa" {
+			reversed.Dir = "atob"
+		} else {
+			reversed.Dir = "btoa"
+		}
+		responseURL, err := buildMapServiceURL(yamlConfig.ServiceURL, mapID, "response", reversed)
+		if err != nil {
+			log.Warn().Err(err).Msg("Failed to build response service URL")
+			return c.Status(fiber.StatusInternalServerError).SendString("internal error")
+		}
 
+		data := SingleMappingPageData{
+			BasePageData: buildBasePageData(yamlConfig),
+			MapID:        mapID,
+			Mappings:     yamlConfig.Lists,
+			QueryURL:     queryURL,
+			ResponseURL:  responseURL,
+		}
+
+		var buf bytes.Buffer
+		if err := pluginTmpl.Execute(&buf, data); err != nil {
+			log.Error().Err(err).Msg("Failed to execute plugin template")
+			return c.Status(fiber.StatusInternalServerError).SendString("internal error")
+		}
 		c.Set("Content-Type", "text/html")
-		return c.SendString(html)
+		return c.Send(buf.Bytes())
 	}
 }
 
-// generateKalamarPluginHTML creates the HTML template for the Kalamar plugin page
-// This function can be easily modified to change the appearance and content
-func generateKalamarPluginHTML(data TemplateData, queryParams QueryParams) string {
-	html := `<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>` + data.Title + `</title>
-    <script src="` + data.SDK + `"
-            data-server="` + data.Server + `"></script>
-</head>
-<body>
-    <div class="container">
-        <h1>` + data.Title + `</h1>
-		<p>` + data.Description + `</p>`
-
-	if data.MapID != "" {
-		html += `<p>Map ID: ` + data.MapID + `</p>`
+func buildMapServiceURL(serviceURL, mapID, endpoint string, params QueryParams) (string, error) {
+	service, err := url.Parse(serviceURL)
+	if err != nil {
+		return "", err
 	}
+	service.Path = path.Join(service.Path, mapID, endpoint)
+	service.RawQuery = buildQueryParams(params.Dir, params.FoundryA, params.FoundryB, params.LayerA, params.LayerB)
+	return service.String(), nil
+}
 
-	html += `		<h2>Plugin Information</h2>
-        <p><strong>Version:</strong> <tt>` + data.Version + `</tt></p>
-		<p><strong>Build Date:</strong> <tt>` + data.Date + `</tt></p>
-		<p><strong>Build Hash:</strong> <tt>` + data.Hash + `</tt></p>
-
-        <h2>Available API Endpoints</h2>
-        <dl>
-
-		    <dt><tt><strong>GET</strong> /:map</tt></dt>
-            <dd><small>Kalamar integration</small></dd>
-
-			<dt><tt><strong>POST</strong> /:map/query</tt></dt>
-            <dd><small>Transform JSON query objects using term mapping rules</small></dd>
-
-			<dt><tt><strong>POST</strong> /:map/response</tt></dt>
-            <dd><small>Transform JSON response objects using term mapping rules</small></dd>
-			
-        </dl>
-		
-		<h2>Available Term Mappings</h2>
-	    <dl>`
-
-	for _, m := range data.Mappings {
-		html += `<dt><tt>` + m.ID + `</tt></dt>`
-		html += `<dd>` + m.Description + `</dd>`
+func formatConsoleField(value string) string {
+	if strings.ContainsAny(value, " \t") {
+		return strconv.Quote(value)
 	}
-
-	html += `
-    </dl></div>`
-
-	if data.MapID != "" {
-
-		queryServiceURL, err := url.Parse(data.ServiceURL)
-		if err != nil {
-			log.Warn().Err(err).Msg("Failed to join URL path")
-		}
-
-		// Use path.Join to normalize the path part
-		queryServiceURL.Path = path.Join(queryServiceURL.Path, data.MapID+"/query")
-
-		// Build query parameters for query URL
-		queryParamString := buildQueryParams(queryParams.Dir, queryParams.FoundryA, queryParams.FoundryB, queryParams.LayerA, queryParams.LayerB)
-		queryServiceURL.RawQuery = queryParamString
-
-		responseServiceURL, err := url.Parse(data.ServiceURL)
-		if err != nil {
-			log.Warn().Err(err).Msg("Failed to join URL path")
-		}
-
-		// Use path.Join to normalize the path part
-		responseServiceURL.Path = path.Join(responseServiceURL.Path, data.MapID+"/response")
-
-		reversedDir := "btoa"
-		if queryParams.Dir == "btoa" {
-			reversedDir = "atob"
-		}
-
-		// Build query parameters for response URL (with reversed direction)
-		responseParamString := buildQueryParams(reversedDir, queryParams.FoundryA, queryParams.FoundryB, queryParams.LayerA, queryParams.LayerB)
-		responseServiceURL.RawQuery = responseParamString
-
-		html += `<script>
-  		<!-- activates/deactivates Mapper. -->
-  		  
-        let qdata = {
-          'action'  : 'pipe',
-          'service' : '` + queryServiceURL.String() + `'
-        };
-
-        let rdata = {
-          'action'  : 'pipe',
-          'service' : '` + responseServiceURL.String() + `'
-        };
-
-
-        function pluginit (p) {
-          p.onMessage = function(msg) {
-            if (msg.key == 'koralmapper') {
-              if (msg.value) {
-                qdata['job'] = 'add';
-              }
-              else {
-                qdata['job'] = 'del';
-              };
-              KorAPlugin.sendMsg(qdata);
-			 if (msg.value) {
-                rdata['job'] = 'add-after';
-              }
-              else {
-                rdata['job'] = 'del-after';
-              };  
-              KorAPlugin.sendMsg(rdata);
-            };
-          };
-        };
-     </script>`
-	}
-
-	html += `  </body>
-</html>`
-
-	return html
+	return value
 }
 
 // buildQueryParams builds a query string from the provided parameters

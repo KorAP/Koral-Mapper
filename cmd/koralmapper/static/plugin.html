@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>{{.Title}}</title>
+    <script src="{{.SDK}}"
+            data-server="{{.Server}}"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>{{.Title}}</h1>
+        <p>{{.Description}}</p>
+
+        <p>Map ID: {{.MapID}}</p>
+
+        <h2>Plugin Information</h2>
+        <p><strong>Version:</strong> <tt>{{.Version}}</tt></p>
+        <p><strong>Build Date:</strong> <tt>{{.Date}}</tt></p>
+        <p><strong>Build Hash:</strong> <tt>{{.Hash}}</tt></p>
+
+        <h2>Available API Endpoints</h2>
+        <dl>
+            <dt><tt><strong>GET</strong> /:map</tt></dt>
+            <dd><small>Kalamar integration</small></dd>
+
+            <dt><tt><strong>POST</strong> /:map/query</tt></dt>
+            <dd><small>Transform JSON query objects using term mapping rules</small></dd>
+
+            <dt><tt><strong>POST</strong> /:map/response</tt></dt>
+            <dd><small>Transform JSON response objects using term mapping rules</small></dd>
+        </dl>
+
+        <h2>Available Term Mappings</h2>
+        <dl>
+            {{range .Mappings}}
+            <dt><tt>{{.ID}}</tt></dt>
+            <dd>{{.Description}}</dd>
+            {{end}}
+        </dl>
+    </div>
+
+    <script>
+      <!-- activates/deactivates Mapper. -->
+      let qdata = {
+        'action'  : 'pipe',
+        'service' : '{{.QueryURL}}'
+      };
+
+      let rdata = {
+        'action'  : 'pipe',
+        'service' : '{{.ResponseURL}}'
+      };
+
+      function pluginit (p) {
+        p.onMessage = function(msg) {
+          if (msg.key == 'koralmapper') {
+            if (msg.value) {
+              qdata['job'] = 'add';
+            }
+            else {
+              qdata['job'] = 'del';
+            };
+            KorAPlugin.sendMsg(qdata);
+            if (msg.value) {
+              rdata['job'] = 'add-after';
+            }
+            else {
+              rdata['job'] = 'del-after';
+            };
+            KorAPlugin.sendMsg(rdata);
+          };
+        };
+      };
+    </script>
+</body>
+</html>

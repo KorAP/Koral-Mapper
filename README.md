@@ -256,9 +256,9 @@ Mapping between [STTS and UD part-of-spech tags](https://universaldependencies.o
 - [x] JSON script for Kalamar integration
 - [x] Integration of multiple mapping files
 - [x] Response rewriting
-- [ ] Support for negation
 - [x] Support corpus mappings
-- [ ] Support chaining of mappings
+- [x] Support chaining of mappings
+- [ ] Support for negation
 
 ## COPYRIGHT AND LICENSE
 

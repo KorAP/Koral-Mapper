@@ -3,7 +3,9 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"html/template"
 	"io"
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -19,32 +21,56 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestTransformEndpoint(t *testing.T) {
-	// Create test mapping list
-	mappingList := tmconfig.MappingList{
-		ID:       "test-mapper",
-		FoundryA: "opennlp",
-		LayerA:   "p",
-		FoundryB: "upos",
-		LayerB:   "p",
-		Mappings: []tmconfig.MappingRule{
-			"[PIDAT] <> [opennlp/p=PIDAT & opennlp/p=AdjType:Pdt]",
-			"[DET] <> [opennlp/p=DET]",
-		},
+func loadConfigFromYAML(t *testing.T, configYAML string, mappingYAMLs ...string) *tmconfig.MappingConfig {
+	t.Helper()
+
+	configPath := ""
+	if configYAML != "" {
+		cfgFile, err := os.CreateTemp("", "koralmapper-config-*.yaml")
+		require.NoError(t, err)
+		t.Cleanup(func() { _ = os.Remove(cfgFile.Name()) })
+		_, err = cfgFile.WriteString(configYAML)
+		require.NoError(t, err)
+		require.NoError(t, cfgFile.Close())
+		configPath = cfgFile.Name()
 	}
+
+	mappingPaths := make([]string, 0, len(mappingYAMLs))
+	for _, content := range mappingYAMLs {
+		mapFile, err := os.CreateTemp("", "koralmapper-mapping-*.yaml")
+		require.NoError(t, err)
+		t.Cleanup(func() { _ = os.Remove(mapFile.Name()) })
+		_, err = mapFile.WriteString(content)
+		require.NoError(t, err)
+		require.NoError(t, mapFile.Close())
+		mappingPaths = append(mappingPaths, mapFile.Name())
+	}
+
+	cfg, err := tmconfig.LoadFromSources(configPath, mappingPaths)
+	require.NoError(t, err)
+	return cfg
+}
+
+func TestTransformEndpoint(t *testing.T) {
+	cfg := loadConfigFromYAML(t, `
+lists:
+  - id: test-mapper
+    foundryA: opennlp
+    layerA: p
+    foundryB: upos
+    layerB: p
+    mappings:
+      - "[PIDAT] <> [opennlp/p=PIDAT & opennlp/p=AdjType:Pdt]"
+      - "[DET] <> [opennlp/p=DET]"
+`)
 
 	// Create mapper
-	m, err := mapper.NewMapper([]tmconfig.MappingList{mappingList})
+	m, err := mapper.NewMapper(cfg.Lists)
 	require.NoError(t, err)
-
-	// Create mock config for testing
-	mockConfig := &tmconfig.MappingConfig{
-		Lists: []tmconfig.MappingList{mappingList},
-	}
 
 	// Create fiber app
 	app := fiber.New()
-	setupRoutes(app, m, mockConfig)
+	setupRoutes(app, m, cfg)
 
 	tests := []struct {
 		name          string
@@ -260,30 +286,24 @@ func TestTransformEndpoint(t *testing.T) {
 }
 
 func TestResponseTransformEndpoint(t *testing.T) {
-	// Create test mapping list
-	mappingList := tmconfig.MappingList{
-		ID:       "test-response-mapper",
-		FoundryA: "marmot",
-		LayerA:   "m",
-		FoundryB: "opennlp",
-		LayerB:   "p",
-		Mappings: []tmconfig.MappingRule{
-			"[gender:masc] <> [p=M & m=M]",
-		},
-	}
+	cfg := loadConfigFromYAML(t, `
+lists:
+  - id: test-response-mapper
+    foundryA: marmot
+    layerA: m
+    foundryB: opennlp
+    layerB: p
+    mappings:
+      - "[gender:masc] <> [p=M & m=M]"
+`)
 
 	// Create mapper
-	m, err := mapper.NewMapper([]tmconfig.MappingList{mappingList})
+	m, err := mapper.NewMapper(cfg.Lists)
 	require.NoError(t, err)
-
-	// Create mock config for testing
-	mockConfig := &tmconfig.MappingConfig{
-		Lists: []tmconfig.MappingList{mappingList},
-	}
 
 	// Create fiber app
 	app := fiber.New()
-	setupRoutes(app, m, mockConfig)
+	setupRoutes(app, m, cfg)
 
 	tests := []struct {
 		name          string
@@ -1292,71 +1312,62 @@ func TestServiceURLWithExampleConfig(t *testing.T) {
 	assert.Contains(t, htmlContent, "'service' : '"+expectedJSURL)
 }
 
-func TestGenerateKalamarPluginHTMLWithURLJoining(t *testing.T) {
+func TestBuildMapServiceURLWithURLJoining(t *testing.T) {
 	tests := []struct {
 		name       string
 		serviceURL string
 		mapID      string
+		endpoint   string
 		expected   string
 	}{
 		{
 			name:       "Service URL without trailing slash",
 			serviceURL: "https://example.com/plugin/koralmapper",
 			mapID:      "test-mapper",
-			expected:   "'service' : 'https://example.com/plugin/koralmapper/test-mapper/query",
+			endpoint:   "query",
+			expected:   "https://example.com/plugin/koralmapper/test-mapper/query?dir=atob",
 		},
 		{
 			name:       "Service URL with trailing slash",
 			serviceURL: "https://example.com/plugin/koralmapper/",
 			mapID:      "test-mapper",
-			expected:   "'service' : 'https://example.com/plugin/koralmapper/test-mapper/query",
+			endpoint:   "query",
+			expected:   "https://example.com/plugin/koralmapper/test-mapper/query?dir=atob",
 		},
 		{
 			name:       "Map ID with leading slash",
 			serviceURL: "https://example.com/plugin/koralmapper",
 			mapID:      "/test-mapper",
-			expected:   "'service' : 'https://example.com/plugin/koralmapper/test-mapper/query",
+			endpoint:   "query",
+			expected:   "https://example.com/plugin/koralmapper/test-mapper/query?dir=atob",
 		},
 		{
 			name:       "Both with slashes",
 			serviceURL: "https://example.com/plugin/koralmapper/",
 			mapID:      "/test-mapper",
-			expected:   "'service' : 'https://example.com/plugin/koralmapper/test-mapper/query",
+			endpoint:   "query",
+			expected:   "https://example.com/plugin/koralmapper/test-mapper/query?dir=atob",
 		},
 		{
 			name:       "Complex map ID",
 			serviceURL: "https://example.com/api/v1/",
 			mapID:      "complex-mapper-name_123",
-			expected:   "'service' : 'https://example.com/api/v1/complex-mapper-name_123/query",
+			endpoint:   "query",
+			expected:   "https://example.com/api/v1/complex-mapper-name_123/query?dir=atob",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			data := TemplateData{
-				Title:       "Test Mapper",
-				Version:     "1.0.0",
-				Hash:        "abcd1234",
-				Date:        "2024-01-01",
-				Description: "Test description",
-				Server:      "https://example.com/",
-				SDK:         "https://example.com/js/sdk.js",
-				ServiceURL:  tt.serviceURL,
-				MapID:       tt.mapID,
-				Mappings:    []TemplateMapping{},
-			}
-
-			// Use default query parameters for this test
-			queryParams := QueryParams{
+			got, err := buildMapServiceURL(tt.serviceURL, tt.mapID, tt.endpoint, QueryParams{
 				Dir:      "atob",
 				FoundryA: "",
 				FoundryB: "",
 				LayerA:   "",
 				LayerB:   "",
-			}
-
-			html := generateKalamarPluginHTML(data, queryParams)
-			assert.Contains(t, html, tt.expected)
+			})
+			require.NoError(t, err)
+			assert.Equal(t, tt.expected, got)
 		})
 	}
 }
@@ -1550,33 +1561,28 @@ func TestBuildQueryParams(t *testing.T) {
 }
 
 func TestCompositeQueryEndpoint(t *testing.T) {
-	lists := []tmconfig.MappingList{
-		{
-			ID:       "step1",
-			FoundryA: "opennlp",
-			LayerA:   "p",
-			FoundryB: "opennlp",
-			LayerB:   "p",
-			Mappings: []tmconfig.MappingRule{
-				"[PIDAT] <> [DET]",
-			},
-		},
-		{
-			ID:       "step2",
-			FoundryA: "opennlp",
-			LayerA:   "p",
-			FoundryB: "upos",
-			LayerB:   "p",
-			Mappings: []tmconfig.MappingRule{
-				"[DET] <> [PRON]",
-			},
-		},
-	}
-	m, err := mapper.NewMapper(lists)
+	cfg := loadConfigFromYAML(t, `
+lists:
+  - id: step1
+    foundryA: opennlp
+    layerA: p
+    foundryB: opennlp
+    layerB: p
+    mappings:
+      - "[PIDAT] <> [DET]"
+  - id: step2
+    foundryA: opennlp
+    layerA: p
+    foundryB: upos
+    layerB: p
+    mappings:
+      - "[DET] <> [PRON]"
+`)
+	m, err := mapper.NewMapper(cfg.Lists)
 	require.NoError(t, err)
 
 	app := fiber.New()
-	setupRoutes(app, m, &tmconfig.MappingConfig{Lists: lists})
+	setupRoutes(app, m, cfg)
 
 	tests := []struct {
 		name         string
@@ -1669,23 +1675,22 @@ func TestCompositeQueryEndpoint(t *testing.T) {
 }
 
 func TestCompositeResponseEndpoint(t *testing.T) {
-	lists := []tmconfig.MappingList{
-		{
-			ID:       "resp-step1",
-			Type:     "corpus",
-			Mappings: []tmconfig.MappingRule{"textClass=novel <> genre=fiction"},
-		},
-		{
-			ID:       "resp-step2",
-			Type:     "corpus",
-			Mappings: []tmconfig.MappingRule{"genre=fiction <> category=lit"},
-		},
-	}
-	m, err := mapper.NewMapper(lists)
+	cfg := loadConfigFromYAML(t, `
+lists:
+  - id: resp-step1
+    type: corpus
+    mappings:
+      - "textClass=novel <> genre=fiction"
+  - id: resp-step2
+    type: corpus
+    mappings:
+      - "genre=fiction <> category=lit"
+`)
+	m, err := mapper.NewMapper(cfg.Lists)
 	require.NoError(t, err)
 
 	app := fiber.New()
-	setupRoutes(app, m, &tmconfig.MappingConfig{Lists: lists})
+	setupRoutes(app, m, cfg)
 
 	tests := []struct {
 		name         string
@@ -1766,4 +1771,411 @@ func TestCompositeResponseEndpoint(t *testing.T) {
 			tt.assertBody(t, actual)
 		})
 	}
+}
+
+func TestEmbeddedFilesExist(t *testing.T) {
+	files := []string{"static/config.html", "static/plugin.html", "static/config.js", "static/style.css"}
+	for _, f := range files {
+		t.Run(f, func(t *testing.T) {
+			data, err := fs.ReadFile(staticFS, f)
+			require.NoError(t, err, "embedded file %s should exist", f)
+			assert.NotEmpty(t, data, "embedded file %s should not be empty", f)
+		})
+	}
+}
+
+func TestConfigTemplateParsesSuccessfully(t *testing.T) {
+	tmpl, err := template.ParseFS(staticFS, "static/config.html")
+	require.NoError(t, err, "config template should parse without error")
+	require.NotNil(t, tmpl)
+}
+
+func TestStaticFileServing(t *testing.T) {
+	mappingList := tmconfig.MappingList{
+		ID:       "test-mapper",
+		Mappings: []tmconfig.MappingRule{"[A] <> [B]"},
+	}
+	m, err := mapper.NewMapper([]tmconfig.MappingList{mappingList})
+	require.NoError(t, err)
+	mockConfig := &tmconfig.MappingConfig{Lists: []tmconfig.MappingList{mappingList}}
+	tmconfig.ApplyDefaults(mockConfig)
+
+	app := fiber.New()
+	setupRoutes(app, m, mockConfig)
+
+	tests := []struct {
+		name          string
+		url           string
+		expectedCode  int
+		expectedCType string
+	}{
+		{
+			name:          "config.js is served with correct content type",
+			url:           "/static/config.js",
+			expectedCode:  http.StatusOK,
+			expectedCType: "text/javascript",
+		},
+		{
+			name:          "style.css is served with correct content type",
+			url:           "/static/style.css",
+			expectedCode:  http.StatusOK,
+			expectedCType: "text/css",
+		},
+		{
+			name:         "non-existent static file returns 404",
+			url:          "/static/nonexistent.txt",
+			expectedCode: http.StatusNotFound,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, tt.url, nil)
+			resp, err := app.Test(req)
+			require.NoError(t, err)
+			defer resp.Body.Close()
+
+			assert.Equal(t, tt.expectedCode, resp.StatusCode)
+			if tt.expectedCType != "" {
+				assert.Contains(t, resp.Header.Get("Content-Type"), tt.expectedCType)
+			}
+		})
+	}
+}
+
+func TestStaticFileContent(t *testing.T) {
+	mappingList := tmconfig.MappingList{
+		ID:       "test-mapper",
+		Mappings: []tmconfig.MappingRule{"[A] <> [B]"},
+	}
+	m, err := mapper.NewMapper([]tmconfig.MappingList{mappingList})
+	require.NoError(t, err)
+	mockConfig := &tmconfig.MappingConfig{Lists: []tmconfig.MappingList{mappingList}}
+	tmconfig.ApplyDefaults(mockConfig)
+
+	app := fiber.New()
+	setupRoutes(app, m, mockConfig)
+
+	// Verify served content matches embedded content
+	files := []string{"config.js", "style.css"}
+	for _, f := range files {
+		t.Run(f, func(t *testing.T) {
+			embedded, err := fs.ReadFile(staticFS, "static/"+f)
+			require.NoError(t, err)
+
+			req := httptest.NewRequest(http.MethodGet, "/static/"+f, nil)
+			resp, err := app.Test(req)
+			require.NoError(t, err)
+			defer resp.Body.Close()
+
+			body, err := io.ReadAll(resp.Body)
+			require.NoError(t, err)
+			assert.Equal(t, embedded, body, "served content should match embedded content for %s", f)
+		})
+	}
+}
+
+func TestConfigPageRendering(t *testing.T) {
+	lists := []tmconfig.MappingList{
+		{
+			ID:          "anno-mapper",
+			Description: "Annotation mapping",
+			FoundryA:    "opennlp",
+			LayerA:      "p",
+			FoundryB:    "upos",
+			LayerB:      "p",
+			Mappings:    []tmconfig.MappingRule{"[A] <> [B]"},
+		},
+		{
+			ID:          "corpus-mapper",
+			Type:        "corpus",
+			Description: "Corpus mapping",
+			Mappings:    []tmconfig.MappingRule{"textClass=science <> textClass=akademisch"},
+		},
+	}
+	m, err := mapper.NewMapper(lists)
+	require.NoError(t, err)
+
+	mockConfig := &tmconfig.MappingConfig{
+		SDK:        "https://example.com/sdk.js",
+		Server:     "https://example.com/",
+		ServiceURL: "https://example.com/plugin/koralmapper",
+		Lists:      lists,
+	}
+
+	app := fiber.New()
+	setupRoutes(app, m, mockConfig)
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	resp, err := app.Test(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	htmlContent := string(body)
+
+	// HTML structure
+	assert.Contains(t, htmlContent, "<!DOCTYPE html>")
+	assert.Contains(t, htmlContent, `<meta charset="UTF-8">`)
+	assert.Contains(t, htmlContent, "Koral-Mapper")
+
+	// SDK and server
+	assert.Contains(t, htmlContent, `src="https://example.com/sdk.js"`)
+	assert.Contains(t, htmlContent, `data-server="https://example.com/"`)
+
+	// ServiceURL as data attribute
+	assert.Contains(t, htmlContent, `data-service-url="https://example.com/plugin/koralmapper"`)
+
+	// Static file references
+	assert.Contains(t, htmlContent, `/static/style.css`)
+	assert.Contains(t, htmlContent, `/static/config.js`)
+
+	// Annotation mapping section
+	assert.Contains(t, htmlContent, "Query")
+	assert.Contains(t, htmlContent, `data-id="anno-mapper"`)
+	assert.Contains(t, htmlContent, `data-type="annotation"`)
+	assert.Contains(t, htmlContent, `value="opennlp"`)
+	assert.Contains(t, htmlContent, `value="upos"`)
+	assert.Contains(t, htmlContent, "Annotation mapping")
+
+	// Corpus mapping section
+	assert.Contains(t, htmlContent, "Corpus")
+	assert.Contains(t, htmlContent, `data-id="corpus-mapper"`)
+	assert.Contains(t, htmlContent, `data-type="corpus"`)
+	assert.Contains(t, htmlContent, "Corpus mapping")
+}
+
+func TestConfigPageAnnotationMappingHasFoundryInputs(t *testing.T) {
+	lists := []tmconfig.MappingList{
+		{
+			ID:       "anno-mapper",
+			FoundryA: "opennlp",
+			LayerA:   "p",
+			FoundryB: "upos",
+			LayerB:   "pos",
+			Mappings: []tmconfig.MappingRule{"[A] <> [B]"},
+		},
+	}
+	m, err := mapper.NewMapper(lists)
+	require.NoError(t, err)
+
+	mockConfig := &tmconfig.MappingConfig{Lists: lists}
+	tmconfig.ApplyDefaults(mockConfig)
+
+	app := fiber.New()
+	setupRoutes(app, m, mockConfig)
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	resp, err := app.Test(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	htmlContent := string(body)
+
+	// Data attributes for default values
+	assert.Contains(t, htmlContent, `data-default-foundry-a="opennlp"`)
+	assert.Contains(t, htmlContent, `data-default-layer-a="p"`)
+	assert.Contains(t, htmlContent, `data-default-foundry-b="upos"`)
+	assert.Contains(t, htmlContent, `data-default-layer-b="pos"`)
+
+	// Input fields with correct CSS classes
+	assert.Contains(t, htmlContent, `class="foundryA"`)
+	assert.Contains(t, htmlContent, `class="layerA"`)
+	assert.Contains(t, htmlContent, `class="foundryB"`)
+	assert.Contains(t, htmlContent, `class="layerB"`)
+
+	// Direction arrow
+	assert.Contains(t, htmlContent, `class="dir-arrow"`)
+	assert.Contains(t, htmlContent, `data-dir="atob"`)
+
+	// Request and response checkboxes
+	assert.Contains(t, htmlContent, `class="request-cb"`)
+	assert.Contains(t, htmlContent, `class="response-cb"`)
+}
+
+func TestConfigPageCorpusMappingHasNoFoundryInputs(t *testing.T) {
+	lists := []tmconfig.MappingList{
+		{
+			ID:       "corpus-mapper",
+			Type:     "corpus",
+			Mappings: []tmconfig.MappingRule{"textClass=science <> textClass=akademisch"},
+		},
+	}
+
+	m, err := mapper.NewMapper(lists)
+	require.NoError(t, err)
+
+	mockConfig := &tmconfig.MappingConfig{Lists: lists}
+	tmconfig.ApplyDefaults(mockConfig)
+
+	app := fiber.New()
+	setupRoutes(app, m, mockConfig)
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	resp, err := app.Test(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	htmlContent := string(body)
+
+	// Corpus section exists
+	assert.Contains(t, htmlContent, `data-id="corpus-mapper"`)
+	assert.Contains(t, htmlContent, `data-type="corpus"`)
+
+	// Checkboxes present
+	assert.Contains(t, htmlContent, `class="request-cb"`)
+	assert.Contains(t, htmlContent, `class="response-cb"`)
+
+	// No foundry/layer inputs (only corpus mappings, no annotation section)
+	assert.NotContains(t, htmlContent, `class="foundryA"`)
+	assert.NotContains(t, htmlContent, `class="dir-arrow"`)
+}
+
+func TestConfigPageBackwardCompatibility(t *testing.T) {
+	lists := []tmconfig.MappingList{
+		{
+			ID:       "test-mapper",
+			Mappings: []tmconfig.MappingRule{"[A] <> [B]"},
+		},
+	}
+
+	m, err := mapper.NewMapper(lists)
+	require.NoError(t, err)
+
+	mockConfig := &tmconfig.MappingConfig{
+		ServiceURL: "https://example.com/plugin/koralmapper",
+		Lists:      lists,
+	}
+	tmconfig.ApplyDefaults(mockConfig)
+
+	app := fiber.New()
+	setupRoutes(app, m, mockConfig)
+
+	req := httptest.NewRequest(http.MethodGet, "/test-mapper", nil)
+	resp, err := app.Test(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	htmlContent := string(body)
+
+	// Old-style single-mapping page behavior
+	assert.Contains(t, htmlContent, "<!DOCTYPE html>")
+	assert.Contains(t, htmlContent, "Koral-Mapper")
+	assert.Contains(t, htmlContent, "Map ID: test-mapper")
+	assert.Contains(t, htmlContent, "KorAPlugin.sendMsg")
+	assert.Contains(t, htmlContent, "test-mapper/query")
+}
+
+func TestBuildConfigPageData(t *testing.T) {
+	lists := []tmconfig.MappingList{
+		{
+			ID:          "anno1",
+			Description: "First annotation",
+			FoundryA:    "f1a",
+			LayerA:      "l1a",
+			FoundryB:    "f1b",
+			LayerB:      "l1b",
+			Mappings:    []tmconfig.MappingRule{"[A] <> [B]"},
+		},
+		{
+			ID:          "corpus1",
+			Type:        "corpus",
+			Description: "First corpus",
+			Mappings:    []tmconfig.MappingRule{"textClass=a <> textClass=b"},
+		},
+		{
+			ID:          "anno2",
+			Type:        "annotation",
+			Description: "Second annotation",
+			FoundryA:    "f2a",
+			LayerA:      "l2a",
+			FoundryB:    "f2b",
+			LayerB:      "l2b",
+			Mappings:    []tmconfig.MappingRule{"[C] <> [D]"},
+		},
+	}
+
+	mockConfig := &tmconfig.MappingConfig{
+		SDK:        "https://example.com/sdk.js",
+		Server:     "https://example.com/",
+		ServiceURL: "https://example.com/service",
+		Lists:      lists,
+	}
+
+	data := buildConfigPageData(mockConfig)
+
+	assert.Equal(t, "https://example.com/sdk.js", data.SDK)
+	assert.Equal(t, "https://example.com/", data.Server)
+	assert.Equal(t, "https://example.com/service", data.ServiceURL)
+
+	require.Len(t, data.AnnotationMappings, 2)
+	assert.Equal(t, "anno1", data.AnnotationMappings[0].ID)
+	assert.Equal(t, "annotation", data.AnnotationMappings[0].Type)
+	assert.Equal(t, "f1a", data.AnnotationMappings[0].FoundryA)
+	assert.Equal(t, "First annotation", data.AnnotationMappings[0].Description)
+	assert.Equal(t, "anno2", data.AnnotationMappings[1].ID)
+	assert.Equal(t, "annotation", data.AnnotationMappings[1].Type)
+
+	require.Len(t, data.CorpusMappings, 1)
+	assert.Equal(t, "corpus1", data.CorpusMappings[0].ID)
+	assert.Equal(t, "corpus", data.CorpusMappings[0].Type)
+	assert.Equal(t, "First corpus", data.CorpusMappings[0].Description)
+}
+
+func TestConfigPagePreservesOrderOfMappings(t *testing.T) {
+	lists := []tmconfig.MappingList{
+		{
+			ID:       "mapper-z",
+			FoundryA: "fa",
+			FoundryB: "fb",
+			Mappings: []tmconfig.MappingRule{"[A] <> [B]"},
+		},
+		{
+			ID:       "mapper-a",
+			FoundryA: "fa",
+			FoundryB: "fb",
+			Mappings: []tmconfig.MappingRule{"[C] <> [D]"},
+		},
+		{
+			ID:       "mapper-m",
+			FoundryA: "fa",
+			FoundryB: "fb",
+			Mappings: []tmconfig.MappingRule{"[E] <> [F]"},
+		},
+	}
+	m, err := mapper.NewMapper(lists)
+	require.NoError(t, err)
+
+	mockConfig := &tmconfig.MappingConfig{Lists: lists}
+	tmconfig.ApplyDefaults(mockConfig)
+
+	app := fiber.New()
+	setupRoutes(app, m, mockConfig)
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	resp, err := app.Test(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	htmlContent := string(body)
+
+	// Verify the order is preserved (z before a before m)
+	idxZ := strings.Index(htmlContent, `data-id="mapper-z"`)
+	idxA := strings.Index(htmlContent, `data-id="mapper-a"`)
+	idxM := strings.Index(htmlContent, `data-id="mapper-m"`)
+	assert.Greater(t, idxA, idxZ, "mapper-a should appear after mapper-z")
+	assert.Greater(t, idxM, idxA, "mapper-m should appear after mapper-a")
 }

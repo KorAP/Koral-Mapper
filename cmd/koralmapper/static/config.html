@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>{{.Title}}</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="{{.SDK}}"
+            data-server="{{.Server}}"></script>
+</head>
+<body>
+    <div class="container" data-service-url="{{.ServiceURL}}">
+        <h1>{{.Title}}</h1>
+        <p>{{.Description}}</p>
+
+        {{if .AnnotationMappings}}
+        <section class="mapping-section">
+            <h2>Query</h2>
+            {{range .AnnotationMappings}}
+            <div class="mapping" data-id="{{.ID}}" data-type="annotation"
+                 data-default-foundry-a="{{.FoundryA}}" data-default-layer-a="{{.LayerA}}"
+                 data-default-foundry-b="{{.FoundryB}}" data-default-layer-b="{{.LayerB}}">
+                <h3>{{.ID}}</h3>
+                {{if .Description}}<p class="desc">{{.Description}}</p>{{end}}
+                <div class="mapping-row">
+                    <label><input type="checkbox" class="request-cb" name="request"> Request:</label>
+                    <input type="text" class="foundryA" value="{{.FoundryA}}" size="8">/<input type="text" class="layerA" value="{{.LayerA}}" size="4">
+                    <button type="button" class="dir-arrow" data-dir="atob">&rarr;</button>
+                    <input type="text" class="foundryB" value="{{.FoundryB}}" size="8">/<input type="text" class="layerB" value="{{.LayerB}}" size="4">
+                </div>
+                <div class="mapping-row">
+                    <label><input type="checkbox" class="response-cb" name="response"> Response:</label>
+                    <input type="text" class="foundryA" value="{{.FoundryA}}" size="8">/<input type="text" class="layerA" value="{{.LayerA}}" size="4">
+                    <button type="button" class="dir-arrow" data-dir="atob">&rarr;</button>
+                    <input type="text" class="foundryB" value="{{.FoundryB}}" size="8">/<input type="text" class="layerB" value="{{.LayerB}}" size="4">
+                </div>
+            </div>
+            {{end}}
+        </section>
+        {{end}}
+
+        {{if .CorpusMappings}}
+        <section class="mapping-section">
+            <h2>Corpus</h2>
+            {{range .CorpusMappings}}
+            <div class="mapping" data-id="{{.ID}}" data-type="corpus">
+                <h3>{{.ID}}</h3>
+                {{if .Description}}<p class="desc">{{.Description}}</p>{{end}}
+                <div class="mapping-row">
+                    <label><input type="checkbox" class="request-cb" name="request"> Request</label>
+                </div>
+                <div class="mapping-row">
+                    <label><input type="checkbox" class="response-cb" name="response"> Response</label>
+                </div>
+            </div>
+            {{end}}
+        </section>
+        {{end}}
+
+        <h2>Plugin Information</h2>
+        <p><strong>Version:</strong> <tt>{{.Version}}</tt></p>
+        <p><strong>Build Date:</strong> <tt>{{.Date}}</tt></p>
+        <p><strong>Build Hash:</strong> <tt>{{.Hash}}</tt></p>
+    </div>
+    <script src="/static/config.js"></script>
+</body>
+</html>
