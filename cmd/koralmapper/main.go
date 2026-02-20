@@ -268,6 +268,10 @@ func setupRoutes(app *fiber.App, m *mapper.Mapper, yamlConfig *config.MappingCon
 		return c.SendString("OK")
 	})
 
+	// Composite cascade transformation endpoints
+	app.Post("/query", handleCompositeQueryTransform(m, yamlConfig.Lists))
+	app.Post("/response", handleCompositeResponseTransform(m, yamlConfig.Lists))
+
 	// Transformation endpoint
 	app.Post("/:map/query", handleTransform(m))
 
@@ -277,6 +281,120 @@ func setupRoutes(app *fiber.App, m *mapper.Mapper, yamlConfig *config.MappingCon
 	// Kalamar plugin endpoint
 	app.Get("/", handleKalamarPlugin(yamlConfig))
 	app.Get("/:map", handleKalamarPlugin(yamlConfig))
+}
+
+func handleCompositeQueryTransform(m *mapper.Mapper, lists []config.MappingList) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		cfgRaw := c.Query("cfg", "")
+		if len(cfgRaw) > maxParamLength {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": fmt.Sprintf("cfg too long (max %d bytes)", maxParamLength),
+			})
+		}
+
+		var jsonData any
+		if err := c.BodyParser(&jsonData); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "invalid JSON in request body",
+			})
+		}
+
+		entries, err := ParseCfgParam(cfgRaw, lists)
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": err.Error(),
+			})
+		}
+
+		if len(entries) == 0 {
+			return c.JSON(jsonData)
+		}
+
+		orderedIDs := make([]string, 0, len(entries))
+		opts := make([]mapper.MappingOptions, 0, len(entries))
+		for _, entry := range entries {
+			dir := mapper.AtoB
+			if entry.Direction == "btoa" {
+				dir = mapper.BtoA
+			}
+
+			orderedIDs = append(orderedIDs, entry.ID)
+			opts = append(opts, mapper.MappingOptions{
+				Direction: dir,
+				FoundryA:  entry.FoundryA,
+				LayerA:    entry.LayerA,
+				FoundryB:  entry.FoundryB,
+				LayerB:    entry.LayerB,
+			})
+		}
+
+		result, err := m.CascadeQueryMappings(orderedIDs, opts, jsonData)
+		if err != nil {
+			log.Error().Err(err).Str("cfg", cfgRaw).Msg("Failed to apply composite query mappings")
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": err.Error(),
+			})
+		}
+
+		return c.JSON(result)
+	}
+}
+
+func handleCompositeResponseTransform(m *mapper.Mapper, lists []config.MappingList) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		cfgRaw := c.Query("cfg", "")
+		if len(cfgRaw) > maxParamLength {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": fmt.Sprintf("cfg too long (max %d bytes)", maxParamLength),
+			})
+		}
+
+		var jsonData any
+		if err := c.BodyParser(&jsonData); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "invalid JSON in request body",
+			})
+		}
+
+		entries, err := ParseCfgParam(cfgRaw, lists)
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": err.Error(),
+			})
+		}
+
+		if len(entries) == 0 {
+			return c.JSON(jsonData)
+		}
+
+		orderedIDs := make([]string, 0, len(entries))
+		opts := make([]mapper.MappingOptions, 0, len(entries))
+		for _, entry := range entries {
+			dir := mapper.AtoB
+			if entry.Direction == "btoa" {
+				dir = mapper.BtoA
+			}
+
+			orderedIDs = append(orderedIDs, entry.ID)
+			opts = append(opts, mapper.MappingOptions{
+				Direction: dir,
+				FoundryA:  entry.FoundryA,
+				LayerA:    entry.LayerA,
+				FoundryB:  entry.FoundryB,
+				LayerB:    entry.LayerB,
+			})
+		}
+
+		result, err := m.CascadeResponseMappings(orderedIDs, opts, jsonData)
+		if err != nil {
+			log.Error().Err(err).Str("cfg", cfgRaw).Msg("Failed to apply composite response mappings")
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": err.Error(),
+			})
+		}
+
+		return c.JSON(result)
+	}
 }
 
 func handleTransform(m *mapper.Mapper) fiber.Handler {

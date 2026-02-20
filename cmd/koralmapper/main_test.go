@@ -1548,3 +1548,222 @@ func TestBuildQueryParams(t *testing.T) {
 		})
 	}
 }
+
+func TestCompositeQueryEndpoint(t *testing.T) {
+	lists := []tmconfig.MappingList{
+		{
+			ID:       "step1",
+			FoundryA: "opennlp",
+			LayerA:   "p",
+			FoundryB: "opennlp",
+			LayerB:   "p",
+			Mappings: []tmconfig.MappingRule{
+				"[PIDAT] <> [DET]",
+			},
+		},
+		{
+			ID:       "step2",
+			FoundryA: "opennlp",
+			LayerA:   "p",
+			FoundryB: "upos",
+			LayerB:   "p",
+			Mappings: []tmconfig.MappingRule{
+				"[DET] <> [PRON]",
+			},
+		},
+	}
+	m, err := mapper.NewMapper(lists)
+	require.NoError(t, err)
+
+	app := fiber.New()
+	setupRoutes(app, m, &tmconfig.MappingConfig{Lists: lists})
+
+	tests := []struct {
+		name         string
+		url          string
+		input        string
+		expectedCode int
+		expected     any
+	}{
+		{
+			name:         "cascades two query mappings",
+			url:          "/query?cfg=step1:atob;step2:atob",
+			expectedCode: http.StatusOK,
+			input: `{
+				"@type": "koral:token",
+				"wrap": {
+					"@type": "koral:term",
+					"foundry": "opennlp",
+					"key": "PIDAT",
+					"layer": "p",
+					"match": "match:eq"
+				}
+			}`,
+			expected: map[string]any{
+				"@type": "koral:token",
+				"wrap": map[string]any{
+					"@type":   "koral:term",
+					"foundry": "upos",
+					"key":     "PRON",
+					"layer":   "p",
+					"match":   "match:eq",
+				},
+			},
+		},
+		{
+			name:         "empty cfg returns input unchanged",
+			url:          "/query?cfg=",
+			expectedCode: http.StatusOK,
+			input: `{
+				"@type": "koral:token",
+				"wrap": {
+					"@type": "koral:term",
+					"foundry": "opennlp",
+					"key": "PIDAT",
+					"layer": "p",
+					"match": "match:eq"
+				}
+			}`,
+			expected: map[string]any{
+				"@type": "koral:token",
+				"wrap": map[string]any{
+					"@type":   "koral:term",
+					"foundry": "opennlp",
+					"key":     "PIDAT",
+					"layer":   "p",
+					"match":   "match:eq",
+				},
+			},
+		},
+		{
+			name:         "invalid cfg returns bad request",
+			url:          "/query?cfg=missing:atob",
+			expectedCode: http.StatusBadRequest,
+			input:        `{"@type": "koral:token"}`,
+			expected: map[string]any{
+				"error": `unknown mapping ID "missing"`,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, tt.url, bytes.NewBufferString(tt.input))
+			req.Header.Set("Content-Type", "application/json")
+
+			resp, err := app.Test(req)
+			require.NoError(t, err)
+			defer resp.Body.Close()
+
+			assert.Equal(t, tt.expectedCode, resp.StatusCode)
+
+			body, err := io.ReadAll(resp.Body)
+			require.NoError(t, err)
+
+			var actual any
+			err = json.Unmarshal(body, &actual)
+			require.NoError(t, err)
+			assert.Equal(t, tt.expected, actual)
+		})
+	}
+}
+
+func TestCompositeResponseEndpoint(t *testing.T) {
+	lists := []tmconfig.MappingList{
+		{
+			ID:       "resp-step1",
+			Type:     "corpus",
+			Mappings: []tmconfig.MappingRule{"textClass=novel <> genre=fiction"},
+		},
+		{
+			ID:       "resp-step2",
+			Type:     "corpus",
+			Mappings: []tmconfig.MappingRule{"genre=fiction <> category=lit"},
+		},
+	}
+	m, err := mapper.NewMapper(lists)
+	require.NoError(t, err)
+
+	app := fiber.New()
+	setupRoutes(app, m, &tmconfig.MappingConfig{Lists: lists})
+
+	tests := []struct {
+		name         string
+		url          string
+		input        string
+		expectedCode int
+		assertBody   func(t *testing.T, actual map[string]any)
+	}{
+		{
+			name:         "cascades two response mappings",
+			url:          "/response?cfg=resp-step1:atob;resp-step2:atob",
+			expectedCode: http.StatusOK,
+			input: `{
+				"fields": [{
+					"@type": "koral:field",
+					"key": "textClass",
+					"value": "novel",
+					"type": "type:string"
+				}]
+			}`,
+			assertBody: func(t *testing.T, actual map[string]any) {
+				fields := actual["fields"].([]any)
+				require.Len(t, fields, 3)
+				assert.Equal(t, "textClass", fields[0].(map[string]any)["key"])
+				assert.Equal(t, "genre", fields[1].(map[string]any)["key"])
+				assert.Equal(t, "fiction", fields[1].(map[string]any)["value"])
+				assert.Equal(t, "category", fields[2].(map[string]any)["key"])
+				assert.Equal(t, "lit", fields[2].(map[string]any)["value"])
+			},
+		},
+		{
+			name:         "empty cfg returns input unchanged",
+			url:          "/response?cfg=",
+			expectedCode: http.StatusOK,
+			input: `{
+				"fields": [{
+					"@type": "koral:field",
+					"key": "textClass",
+					"value": "novel",
+					"type": "type:string"
+				}]
+			}`,
+			assertBody: func(t *testing.T, actual map[string]any) {
+				fields := actual["fields"].([]any)
+				require.Len(t, fields, 1)
+				assert.Equal(t, "textClass", fields[0].(map[string]any)["key"])
+				assert.Equal(t, "novel", fields[0].(map[string]any)["value"])
+			},
+		},
+		{
+			name:         "invalid cfg returns bad request",
+			url:          "/response?cfg=resp-step1",
+			expectedCode: http.StatusBadRequest,
+			input:        `{"fields": []}`,
+			assertBody: func(t *testing.T, actual map[string]any) {
+				assert.Contains(t, actual["error"], "expected 2 or 6 colon-separated fields")
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, tt.url, bytes.NewBufferString(tt.input))
+			req.Header.Set("Content-Type", "application/json")
+
+			resp, err := app.Test(req)
+			require.NoError(t, err)
+			defer resp.Body.Close()
+
+			assert.Equal(t, tt.expectedCode, resp.StatusCode)
+
+			body, err := io.ReadAll(resp.Body)
+			require.NoError(t, err)
+
+			var actual map[string]any
+			err = json.Unmarshal(body, &actual)
+			require.NoError(t, err)
+			tt.assertBody(t, actual)
+		})
+	}
+}
