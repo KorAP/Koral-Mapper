@@ -493,6 +493,444 @@ func TestResponseMappingNestedSpans(t *testing.T) {
 	assert.Equal(t, "John Doe", author)
 }
 
+// TestResponseAnnotationDuplicateTokenText tests that when the same token text
+// appears multiple times, only the correct occurrence is annotated based on its
+// annotation context (not string position).
+func TestResponseAnnotationDuplicateTokenText(t *testing.T) {
+	// "Der" appears twice: first as NN (no match), then as DET (match).
+	// The old string-heuristic would annotate the first "Der" because it
+	// finds the first occurrence preceded by ">".
+	responseSnippet := `{
+		"snippet": "<span title=\"marmot/p:NN\">Der</span> <span title=\"marmot/p:DET\">Der</span>"
+	}`
+
+	mappingList := config.MappingList{
+		ID:       "test-dup-mapper",
+		FoundryA: "marmot",
+		LayerA:   "p",
+		FoundryB: "opennlp",
+		LayerB:   "p",
+		Mappings: []config.MappingRule{
+			"[DET] <> [DT]",
+		},
+	}
+
+	m, err := NewMapper([]config.MappingList{mappingList})
+	require.NoError(t, err)
+
+	var inputData any
+	err = json.Unmarshal([]byte(responseSnippet), &inputData)
+	require.NoError(t, err)
+
+	result, err := m.ApplyResponseMappings("test-dup-mapper", MappingOptions{Direction: AtoB}, inputData)
+	require.NoError(t, err)
+
+	resultMap := result.(map[string]any)
+	snippet := resultMap["snippet"].(string)
+
+	// Only the second "Der" (DET) should be annotated
+	expected := `<span title="marmot/p:NN">Der</span> <span title="marmot/p:DET"><span title="opennlp/p:DT" class="notinindex">Der</span></span>`
+	assert.Equal(t, expected, snippet)
+}
+
+// TestResponseAnnotationTextInTitle verifies that the SAX rewriter only wraps
+// text nodes, not content inside title attributes, even when the token text
+// matches part of an attribute value.
+func TestResponseAnnotationTextInTitle(t *testing.T) {
+	responseSnippet := `{
+		"snippet": "<span title=\"marmot/p:NN\">NN</span>"
+	}`
+
+	mappingList := config.MappingList{
+		ID:       "test-title-mapper",
+		FoundryA: "marmot",
+		LayerA:   "p",
+		FoundryB: "opennlp",
+		LayerB:   "p",
+		Mappings: []config.MappingRule{
+			"[NN] <> [NOUN]",
+		},
+	}
+
+	m, err := NewMapper([]config.MappingList{mappingList})
+	require.NoError(t, err)
+
+	var inputData any
+	err = json.Unmarshal([]byte(responseSnippet), &inputData)
+	require.NoError(t, err)
+
+	result, err := m.ApplyResponseMappings("test-title-mapper", MappingOptions{Direction: AtoB}, inputData)
+	require.NoError(t, err)
+
+	resultMap := result.(map[string]any)
+	snippet := resultMap["snippet"].(string)
+
+	expected := `<span title="marmot/p:NN"><span title="opennlp/p:NOUN" class="notinindex">NN</span></span>`
+	assert.Equal(t, expected, snippet)
+}
+
+// TestResponseAnnotationWhitespaceAroundText tests that annotations are applied
+// even when there is whitespace between the enclosing tag and the text content.
+// The old string-heuristic fails because it requires ">" immediately before the text.
+func TestResponseAnnotationWhitespaceAroundText(t *testing.T) {
+	responseSnippet := `{
+		"snippet": "<span title=\"marmot/p:DET\"> Der </span>"
+	}`
+
+	mappingList := config.MappingList{
+		ID:       "test-ws-mapper",
+		FoundryA: "marmot",
+		LayerA:   "p",
+		FoundryB: "opennlp",
+		LayerB:   "p",
+		Mappings: []config.MappingRule{
+			"[DET] <> [DT]",
+		},
+	}
+
+	m, err := NewMapper([]config.MappingList{mappingList})
+	require.NoError(t, err)
+
+	var inputData any
+	err = json.Unmarshal([]byte(responseSnippet), &inputData)
+	require.NoError(t, err)
+
+	result, err := m.ApplyResponseMappings("test-ws-mapper", MappingOptions{Direction: AtoB}, inputData)
+	require.NoError(t, err)
+
+	resultMap := result.(map[string]any)
+	snippet := resultMap["snippet"].(string)
+
+	// Whitespace should be preserved, annotation wraps only the token text
+	expected := `<span title="marmot/p:DET"> <span title="opennlp/p:DT" class="notinindex">Der</span> </span>`
+	assert.Equal(t, expected, snippet)
+}
+
+// TestResponseAnnotationCrossElementText tests annotation of individual tokens
+// whose text spans across sibling/child elements.
+func TestResponseAnnotationCrossElementText(t *testing.T) {
+	responseSnippet := `{
+		"snippet": "<span title=\"marmot/p:DET\">Die</span> <span title=\"base/s:s\"><span title=\"marmot/p:NN\">Sonne</span></span>"
+	}`
+
+	mappingList := config.MappingList{
+		ID:       "test-cross-mapper",
+		FoundryA: "marmot",
+		LayerA:   "p",
+		FoundryB: "opennlp",
+		LayerB:   "p",
+		Mappings: []config.MappingRule{
+			"[DET] <> [DT]",
+			"[NN] <> [NOUN]",
+		},
+	}
+
+	m, err := NewMapper([]config.MappingList{mappingList})
+	require.NoError(t, err)
+
+	var inputData any
+	err = json.Unmarshal([]byte(responseSnippet), &inputData)
+	require.NoError(t, err)
+
+	result, err := m.ApplyResponseMappings("test-cross-mapper", MappingOptions{Direction: AtoB}, inputData)
+	require.NoError(t, err)
+
+	resultMap := result.(map[string]any)
+	snippet := resultMap["snippet"].(string)
+
+	assert.Contains(t, snippet, `<span title="opennlp/p:DT" class="notinindex">Die</span>`)
+	assert.Contains(t, snippet, `<span title="opennlp/p:NOUN" class="notinindex">Sonne</span>`)
+	assert.Contains(t, snippet, `title="base/s:s"`)
+}
+
+// TestResponseAnnotationSubstringToken tests that a short token ("er") is
+// annotated only in its own text node and not when it appears as a prefix of
+// another word ("er Mann") in an earlier text node.
+func TestResponseAnnotationSubstringToken(t *testing.T) {
+	// "er" appears at the start of "er Mann" (NN span) and as standalone (PPER span).
+	// The old heuristic matches the first occurrence because "er" is preceded by ">"
+	// and followed by " ".
+	responseSnippet := `{
+		"snippet": "<span title=\"marmot/p:NN\">er Mann</span> <span title=\"marmot/p:PPER\">er</span>"
+	}`
+
+	mappingList := config.MappingList{
+		ID:       "test-sub-mapper",
+		FoundryA: "marmot",
+		LayerA:   "p",
+		FoundryB: "opennlp",
+		LayerB:   "p",
+		Mappings: []config.MappingRule{
+			"[PPER] <> [PRP]",
+		},
+	}
+
+	m, err := NewMapper([]config.MappingList{mappingList})
+	require.NoError(t, err)
+
+	var inputData any
+	err = json.Unmarshal([]byte(responseSnippet), &inputData)
+	require.NoError(t, err)
+
+	result, err := m.ApplyResponseMappings("test-sub-mapper", MappingOptions{Direction: AtoB}, inputData)
+	require.NoError(t, err)
+
+	resultMap := result.(map[string]any)
+	snippet := resultMap["snippet"].(string)
+
+	// The NN "er Mann" must remain unchanged; only the PPER "er" gets annotated
+	expected := `<span title="marmot/p:NN">er Mann</span> <span title="marmot/p:PPER"><span title="opennlp/p:PRP" class="notinindex">er</span></span>`
+	assert.Equal(t, expected, snippet)
+}
+
+// TestResponseAnnotationSelfClosingTags verifies that self-closing tags like
+// <br/> are preserved and do not interfere with annotation insertion.
+func TestResponseAnnotationSelfClosingTags(t *testing.T) {
+	responseSnippet := `{
+		"snippet": "<span title=\"marmot/p:DET\">Der</span><br/><span title=\"marmot/p:NN\">Mann</span>"
+	}`
+
+	mappingList := config.MappingList{
+		ID:       "test-br-mapper",
+		FoundryA: "marmot",
+		LayerA:   "p",
+		FoundryB: "opennlp",
+		LayerB:   "p",
+		Mappings: []config.MappingRule{
+			"[DET] <> [DT]",
+			"[NN]  <> [NOUN]",
+		},
+	}
+
+	m, err := NewMapper([]config.MappingList{mappingList})
+	require.NoError(t, err)
+
+	var inputData any
+	err = json.Unmarshal([]byte(responseSnippet), &inputData)
+	require.NoError(t, err)
+
+	result, err := m.ApplyResponseMappings("test-br-mapper", MappingOptions{Direction: AtoB}, inputData)
+	require.NoError(t, err)
+
+	snippet := result.(map[string]any)["snippet"].(string)
+
+	assert.Contains(t, snippet, "<br/>")
+	assert.Contains(t, snippet, `<span title="opennlp/p:DT" class="notinindex">Der</span>`)
+	assert.Contains(t, snippet, `<span title="opennlp/p:NOUN" class="notinindex">Mann</span>`)
+}
+
+// TestResponseAnnotationEntityReferences verifies that entity references
+// (&amp;, &lt;, etc.) are correctly preserved in output.
+func TestResponseAnnotationEntityReferences(t *testing.T) {
+	responseSnippet := `{
+		"snippet": "<span title=\"marmot/p:NN\">Haus &amp; Hof</span>"
+	}`
+
+	mappingList := config.MappingList{
+		ID:       "test-entity-mapper",
+		FoundryA: "marmot",
+		LayerA:   "p",
+		FoundryB: "opennlp",
+		LayerB:   "p",
+		Mappings: []config.MappingRule{
+			"[NN] <> [NOUN]",
+		},
+	}
+
+	m, err := NewMapper([]config.MappingList{mappingList})
+	require.NoError(t, err)
+
+	var inputData any
+	err = json.Unmarshal([]byte(responseSnippet), &inputData)
+	require.NoError(t, err)
+
+	result, err := m.ApplyResponseMappings("test-entity-mapper", MappingOptions{Direction: AtoB}, inputData)
+	require.NoError(t, err)
+
+	snippet := result.(map[string]any)["snippet"].(string)
+
+	// Entity reference must be preserved (re-encoded) in the annotated output
+	expected := `<span title="marmot/p:NN"><span title="opennlp/p:NOUN" class="notinindex">Haus &amp; Hof</span></span>`
+	assert.Equal(t, expected, snippet)
+}
+
+// TestResponseAnnotationEntityLtGt verifies &lt; and &gt; are re-encoded.
+func TestResponseAnnotationEntityLtGt(t *testing.T) {
+	responseSnippet := `{
+		"snippet": "<span title=\"marmot/p:SYM\">&lt;tag&gt;</span>"
+	}`
+
+	mappingList := config.MappingList{
+		ID:       "test-ltgt-mapper",
+		FoundryA: "marmot",
+		LayerA:   "p",
+		FoundryB: "opennlp",
+		LayerB:   "p",
+		Mappings: []config.MappingRule{
+			"[SYM] <> [PUNCT]",
+		},
+	}
+
+	m, err := NewMapper([]config.MappingList{mappingList})
+	require.NoError(t, err)
+
+	var inputData any
+	err = json.Unmarshal([]byte(responseSnippet), &inputData)
+	require.NoError(t, err)
+
+	result, err := m.ApplyResponseMappings("test-ltgt-mapper", MappingOptions{Direction: AtoB}, inputData)
+	require.NoError(t, err)
+
+	snippet := result.(map[string]any)["snippet"].(string)
+
+	expected := `<span title="marmot/p:SYM"><span title="opennlp/p:PUNCT" class="notinindex">&lt;tag&gt;</span></span>`
+	assert.Equal(t, expected, snippet)
+}
+
+// TestResponseAnnotationCDATAGraceful verifies that a CDATA section in the
+// snippet does not cause errors and is passed through unchanged.
+func TestResponseAnnotationCDATAGraceful(t *testing.T) {
+	responseSnippet := `{
+		"snippet": "<span title=\"marmot/p:DET\">Der</span><![CDATA[ raw ]]><span title=\"marmot/p:NN\">Mann</span>"
+	}`
+
+	mappingList := config.MappingList{
+		ID:       "test-cdata-mapper",
+		FoundryA: "marmot",
+		LayerA:   "p",
+		FoundryB: "opennlp",
+		LayerB:   "p",
+		Mappings: []config.MappingRule{
+			"[NN] <> [NOUN]",
+		},
+	}
+
+	m, err := NewMapper([]config.MappingList{mappingList})
+	require.NoError(t, err)
+
+	var inputData any
+	err = json.Unmarshal([]byte(responseSnippet), &inputData)
+	require.NoError(t, err)
+
+	result, err := m.ApplyResponseMappings("test-cdata-mapper", MappingOptions{Direction: AtoB}, inputData)
+	require.NoError(t, err)
+
+	snippet := result.(map[string]any)["snippet"].(string)
+
+	assert.Contains(t, snippet, "<![CDATA[ raw ]]>")
+	assert.Contains(t, snippet, `<span title="opennlp/p:NOUN" class="notinindex">Mann</span>`)
+}
+
+// TestResponseAnnotationOverlappingSpans verifies that when two independent
+// rules match the same token, both annotations are applied.
+func TestResponseAnnotationOverlappingSpans(t *testing.T) {
+	responseSnippet := `{
+		"snippet": "<span title=\"marmot/p:DET\"><span title=\"marmot/m:case:nom\">Der</span></span>"
+	}`
+
+	mappingList := config.MappingList{
+		ID:       "test-overlap-mapper",
+		FoundryA: "marmot",
+		LayerA:   "p",
+		FoundryB: "opennlp",
+		LayerB:   "p",
+		Mappings: []config.MappingRule{
+			"[DET] <> [DT]",
+		},
+	}
+
+	m, err := NewMapper([]config.MappingList{mappingList})
+	require.NoError(t, err)
+
+	var inputData any
+	err = json.Unmarshal([]byte(responseSnippet), &inputData)
+	require.NoError(t, err)
+
+	result, err := m.ApplyResponseMappings("test-overlap-mapper", MappingOptions{Direction: AtoB}, inputData)
+	require.NoError(t, err)
+
+	snippet := result.(map[string]any)["snippet"].(string)
+
+	// The existing nested structure must be preserved, with new annotation added
+	assert.Contains(t, snippet, `title="marmot/p:DET"`)
+	assert.Contains(t, snippet, `title="marmot/m:case:nom"`)
+	assert.Contains(t, snippet, `title="opennlp/p:DT" class="notinindex"`)
+	assert.Contains(t, snippet, "Der")
+}
+
+// TestResponseAnnotationEmptyTextNodes verifies that empty or whitespace-only
+// text nodes are passed through without errors and without spurious annotations.
+func TestResponseAnnotationEmptyTextNodes(t *testing.T) {
+	responseSnippet := `{
+		"snippet": "<span title=\"marmot/p:DET\"></span> <span title=\"marmot/p:NN\">Mann</span>"
+	}`
+
+	mappingList := config.MappingList{
+		ID:       "test-empty-mapper",
+		FoundryA: "marmot",
+		LayerA:   "p",
+		FoundryB: "opennlp",
+		LayerB:   "p",
+		Mappings: []config.MappingRule{
+			"[DET] <> [DT]",
+			"[NN]  <> [NOUN]",
+		},
+	}
+
+	m, err := NewMapper([]config.MappingList{mappingList})
+	require.NoError(t, err)
+
+	var inputData any
+	err = json.Unmarshal([]byte(responseSnippet), &inputData)
+	require.NoError(t, err)
+
+	result, err := m.ApplyResponseMappings("test-empty-mapper", MappingOptions{Direction: AtoB}, inputData)
+	require.NoError(t, err)
+
+	snippet := result.(map[string]any)["snippet"].(string)
+
+	// The empty DET span should not get an annotation
+	// The NN token "Mann" should be annotated
+	assert.Contains(t, snippet, `<span title="marmot/p:DET"></span>`)
+	assert.Contains(t, snippet, `<span title="opennlp/p:NOUN" class="notinindex">Mann</span>`)
+}
+
+// TestResponseAnnotationWhitespaceOnlyNodes verifies that whitespace-only text
+// nodes are preserved without annotations.
+func TestResponseAnnotationWhitespaceOnlyNodes(t *testing.T) {
+	responseSnippet := `{
+		"snippet": "<span title=\"marmot/p:DET\">   </span><span title=\"marmot/p:NN\">Mann</span>"
+	}`
+
+	mappingList := config.MappingList{
+		ID:       "test-wsonly-mapper",
+		FoundryA: "marmot",
+		LayerA:   "p",
+		FoundryB: "opennlp",
+		LayerB:   "p",
+		Mappings: []config.MappingRule{
+			"[DET] <> [DT]",
+			"[NN]  <> [NOUN]",
+		},
+	}
+
+	m, err := NewMapper([]config.MappingList{mappingList})
+	require.NoError(t, err)
+
+	var inputData any
+	err = json.Unmarshal([]byte(responseSnippet), &inputData)
+	require.NoError(t, err)
+
+	result, err := m.ApplyResponseMappings("test-wsonly-mapper", MappingOptions{Direction: AtoB}, inputData)
+	require.NoError(t, err)
+
+	snippet := result.(map[string]any)["snippet"].(string)
+
+	// Whitespace-only text should not be annotated
+	assert.Contains(t, snippet, `<span title="marmot/p:DET">   </span>`)
+	assert.Contains(t, snippet, `<span title="opennlp/p:NOUN" class="notinindex">Mann</span>`)
+}
+
 // TestResponseMappingWithLayerOverride tests layer precedence rules
 func TestResponseMappingWithLayerOverride(t *testing.T) {
 	// Test 1: Explicit layer in mapping rule should take precedence over MappingOptions

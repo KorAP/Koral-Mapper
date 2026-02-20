@@ -7,6 +7,7 @@ import (
 	"github.com/KorAP/Koral-Mapper/ast"
 	"github.com/KorAP/Koral-Mapper/matcher"
 	"github.com/KorAP/Koral-Mapper/parser"
+	"github.com/orisano/gosax"
 	"github.com/rs/zerolog/log"
 )
 
@@ -195,55 +196,83 @@ func (m *Mapper) generateAnnotationStrings(node ast.Node) ([]string, error) {
 }
 
 // addAnnotationsToSnippet adds new annotations to matching tokens in the snippet
+// using SAX-based parsing for structural identification of text nodes.
 func (m *Mapper) addAnnotationsToSnippet(snippet string, matchingTokens []matcher.TokenSpan, annotationStrings []string) (string, error) {
 	if len(matchingTokens) == 0 || len(annotationStrings) == 0 {
 		return snippet, nil
 	}
 
-	result := snippet
+	tokenByStartPos := make(map[int]matcher.TokenSpan)
+	for _, tok := range matchingTokens {
+		tokenByStartPos[tok.StartPos] = tok
+	}
 
-	// Process each matching token
-	for _, token := range matchingTokens {
-		// For nested span structure, we need to find the innermost text and wrap it
-		// Look for the actual token text within span tags
-		tokenText := token.Text
+	reader := strings.NewReader(snippet)
+	r := gosax.NewReader(reader)
 
-		// Find all occurrences of the token text in the current snippet
-		// We need to be careful about which occurrence to replace
-		startPos := 0
-		for {
-			tokenStart := strings.Index(result[startPos:], tokenText)
-			if tokenStart == -1 {
-				break // No more occurrences
+	var result strings.Builder
+	result.Grow(len(snippet) + len(matchingTokens)*100)
+
+	var textPos int
+
+	for {
+		e, err := r.Event()
+		if err != nil {
+			return "", fmt.Errorf("failed to parse snippet for annotation: %w", err)
+		}
+		if e.Type() == gosax.EventEOF {
+			break
+		}
+
+		switch e.Type() {
+		case gosax.EventStart:
+			result.Write(e.Bytes)
+
+		case gosax.EventEnd:
+			result.Write(e.Bytes)
+
+		case gosax.EventText:
+			charData, err := gosax.CharData(e.Bytes)
+			if err != nil {
+				result.Write(e.Bytes)
+				break
 			}
-			tokenStart += startPos
-			tokenEnd := tokenStart + len(tokenText)
 
-			// Check if this token text is within the expected context
-			// Look backwards and forwards to see if we're in the right span context
-			beforeContext := result[:tokenStart]
-			afterContext := result[tokenEnd:]
+			text := string(charData)
+			trimmed := strings.TrimSpace(text)
 
-			// Simple heuristic: if we're immediately preceded by a > and followed by a <
-			// then we're likely at the innermost text node
-			if strings.HasSuffix(beforeContext, ">") && (strings.HasPrefix(afterContext, "<") || len(afterContext) == 0 || afterContext[0] == ' ') {
-				// Build the replacement with nested spans for each annotation
-				replacement := tokenText
+			if token, ok := tokenByStartPos[textPos]; ok && trimmed != "" && trimmed == token.Text {
+				trimStart := strings.Index(text, trimmed)
+				leadingWS := text[:trimStart]
+				trailingWS := text[trimStart+len(trimmed):]
+
+				result.WriteString(leadingWS)
+
+				annotated := escapeXMLText(trimmed)
 				for i := len(annotationStrings) - 1; i >= 0; i-- {
-					replacement = fmt.Sprintf(`<span title="%s" class="notinindex">%s</span>`, annotationStrings[i], replacement)
+					annotated = fmt.Sprintf(`<span title="%s" class="notinindex">%s</span>`, annotationStrings[i], annotated)
 				}
-
-				// Replace this occurrence
-				result = result[:tokenStart] + replacement + result[tokenEnd:]
-				break // Only replace the first appropriate occurrence for this token
+				result.WriteString(annotated)
+				result.WriteString(trailingWS)
+			} else {
+				result.Write(e.Bytes)
 			}
 
-			// Move past this occurrence
-			startPos = tokenEnd
+			textPos += len(text)
+
+		default:
+			result.Write(e.Bytes)
 		}
 	}
 
-	return result, nil
+	return result.String(), nil
+}
+
+func escapeXMLText(s string) string {
+	s = strings.ReplaceAll(s, "&", "&amp;")
+	s = strings.ReplaceAll(s, "<", "&lt;")
+	s = strings.ReplaceAll(s, ">", "&gt;")
+	return s
 }
 
 // applyReplacementWithLayerPrecedence applies RestrictToObligatory with proper layer precedence

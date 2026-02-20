@@ -141,6 +141,41 @@ func BenchmarkApplyQueryMappings(b *testing.B) {
 	}
 }
 
+// BenchmarkApplyResponseMappings benchmarks the SAX-based response annotation
+func BenchmarkApplyResponseMappings(b *testing.B) {
+	mappingList := config.MappingList{
+		ID:       "bench-response",
+		FoundryA: "marmot",
+		LayerA:   "p",
+		FoundryB: "opennlp",
+		LayerB:   "p",
+		Mappings: []config.MappingRule{
+			"[DET] <> [DT]",
+			"[NN] <> [NOUN]",
+			"[ADJA] <> [ADJ]",
+		},
+	}
+
+	mapper, err := NewMapper([]config.MappingList{mappingList})
+	if err != nil {
+		b.Fatalf("Failed to create mapper: %v", err)
+	}
+
+	responseData := map[string]any{
+		"snippet": `<span title="marmot/p:DET">Der</span> <span title="marmot/p:ADJA">alte</span> <span title="marmot/p:NN">Mann</span>`,
+	}
+
+	opts := MappingOptions{Direction: AtoB}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := mapper.ApplyResponseMappings("bench-response", opts, responseData)
+		if err != nil {
+			b.Fatalf("ApplyResponseMappings failed: %v", err)
+		}
+	}
+}
+
 // BenchmarkApplyQueryMappingsWorstCase benchmarks the worst case scenario
 // where we have many rules but no matches (tests optimization effectiveness)
 func BenchmarkApplyQueryMappingsWorstCase(b *testing.B) {
