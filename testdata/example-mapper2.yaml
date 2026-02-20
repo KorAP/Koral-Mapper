@@ -1,0 +1,9 @@
+id: example-mapper-2
+foundryA: stts
+layerA: p
+foundryB: upos
+layerB: p
+mappings:
+  - "[DET] <> [PRON]"
+  - "[ADJ] <> [NOUN]"
+  - "[VFIN] <> [VERB & VerbForm=Fin]" 

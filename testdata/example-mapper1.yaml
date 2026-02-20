@@ -1,0 +1,9 @@
+id: example-mapper-1
+foundryA: opennlp
+layerA: p
+foundryB: upos
+layerB: p
+mappings:
+  - "[PIDAT] <> [DET & AdjType=Pdt]"
+  - "[PAV] <> [ADV & PronType=Dem]"
+  - "[ADJA] <> [ADJ]" 

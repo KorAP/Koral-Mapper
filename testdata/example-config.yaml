@@ -1,0 +1,11 @@
+sdk: "https://korap.ids-mannheim.de/js/korap-plugin-latest.js"
+server: "https://korap.ids-mannheim.de/"
+lists:
+- id: main-config-mapper
+  foundryA: opennlp
+  layerA: p
+  foundryB: upos
+  layerB: p
+  mappings:
+    - "[NN] <> [NOUN]"
+    - "[NE] <> [PROPN]" 

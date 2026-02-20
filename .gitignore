@@ -2,7 +2,7 @@
 !.gitignore
 !.dockerignore
 !.github
-testdata/sandbox
+/testdata/sandbox
 examples/
 todo.txt
 /vendor
@@ -12,6 +12,7 @@ todo.txt
 /cmd/termmapper/termmapper
 *.yaml
 !/mappings/*.yaml
+!/testdata/*.yaml
 \#*
 *.tar
 !/cmd/termmapper/
