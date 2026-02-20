@@ -48,7 +48,9 @@ type BasePageData struct {
 	Description string
 	Server      string
 	SDK         string
+	Stylesheet  string
 	ServiceURL  string
+	CookieName  string
 }
 
 type SingleMappingPageData struct {
@@ -338,7 +340,9 @@ func buildBasePageData(yamlConfig *config.MappingConfig) BasePageData {
 		Description: config.Description,
 		Server:      yamlConfig.Server,
 		SDK:         yamlConfig.SDK,
+		Stylesheet:  yamlConfig.Stylesheet,
 		ServiceURL:  yamlConfig.ServiceURL,
+		CookieName:  yamlConfig.CookieName,
 	}
 }
 

@@ -1269,6 +1269,7 @@ func TestServiceURLDefaults(t *testing.T) {
 	// Check that other defaults were also applied
 	assert.Equal(t, "https://korap.ids-mannheim.de/", config.Server)
 	assert.Equal(t, "https://korap.ids-mannheim.de/js/korap-plugin-latest.js", config.SDK)
+	assert.Equal(t, "https://korap.ids-mannheim.de/css/kalamar-plugin-latest.css", config.Stylesheet)
 	assert.Equal(t, 5725, config.Port)
 	assert.Equal(t, "warn", config.LogLevel)
 }
@@ -1285,6 +1286,7 @@ func TestServiceURLWithExampleConfig(t *testing.T) {
 
 	// Verify other values from the example config are preserved
 	assert.Equal(t, "https://korap.ids-mannheim.de/js/korap-plugin-latest.js", config.SDK)
+	assert.Equal(t, "https://korap.ids-mannheim.de/css/kalamar-plugin-latest.css", config.Stylesheet)
 	assert.Equal(t, "https://korap.ids-mannheim.de/", config.Server)
 
 	// Verify the mapper was loaded correctly
@@ -1898,6 +1900,7 @@ func TestConfigPageRendering(t *testing.T) {
 
 	mockConfig := &tmconfig.MappingConfig{
 		SDK:        "https://example.com/sdk.js",
+		Stylesheet: "https://example.com/kalamar.css",
 		Server:     "https://example.com/",
 		ServiceURL: "https://example.com/plugin/koralmapper",
 		Lists:      lists,
@@ -1924,6 +1927,7 @@ func TestConfigPageRendering(t *testing.T) {
 
 	// SDK and server
 	assert.Contains(t, htmlContent, `src="https://example.com/sdk.js"`)
+	assert.Contains(t, htmlContent, `href="https://example.com/kalamar.css"`)
 	assert.Contains(t, htmlContent, `data-server="https://example.com/"`)
 
 	// ServiceURL as data attribute
@@ -1983,15 +1987,21 @@ func TestConfigPageAnnotationMappingHasFoundryInputs(t *testing.T) {
 	assert.Contains(t, htmlContent, `data-default-foundry-b="upos"`)
 	assert.Contains(t, htmlContent, `data-default-layer-b="pos"`)
 
-	// Input fields with correct CSS classes
-	assert.Contains(t, htmlContent, `class="foundryA"`)
-	assert.Contains(t, htmlContent, `class="layerA"`)
-	assert.Contains(t, htmlContent, `class="foundryB"`)
-	assert.Contains(t, htmlContent, `class="layerB"`)
+	// Input fields with request/response-specific CSS classes
+	assert.Contains(t, htmlContent, `class="request-foundryA"`)
+	assert.Contains(t, htmlContent, `class="request-layerA"`)
+	assert.Contains(t, htmlContent, `class="request-foundryB"`)
+	assert.Contains(t, htmlContent, `class="request-layerB"`)
+	assert.Contains(t, htmlContent, `class="response-foundryA"`)
+	assert.Contains(t, htmlContent, `class="response-layerA"`)
+	assert.Contains(t, htmlContent, `class="response-foundryB"`)
+	assert.Contains(t, htmlContent, `class="response-layerB"`)
 
-	// Direction arrow
-	assert.Contains(t, htmlContent, `class="dir-arrow"`)
+	// Direction arrows are independent for request/response
+	assert.Contains(t, htmlContent, `class="request-dir-arrow"`)
+	assert.Contains(t, htmlContent, `class="response-dir-arrow"`)
 	assert.Contains(t, htmlContent, `data-dir="atob"`)
+	assert.Contains(t, htmlContent, `data-dir="btoa"`)
 
 	// Request and response checkboxes
 	assert.Contains(t, htmlContent, `class="request-cb"`)
@@ -2034,8 +2044,8 @@ func TestConfigPageCorpusMappingHasNoFoundryInputs(t *testing.T) {
 	assert.Contains(t, htmlContent, `class="response-cb"`)
 
 	// No foundry/layer inputs (only corpus mappings, no annotation section)
-	assert.NotContains(t, htmlContent, `class="foundryA"`)
-	assert.NotContains(t, htmlContent, `class="dir-arrow"`)
+	assert.NotContains(t, htmlContent, `class="request-foundryA"`)
+	assert.NotContains(t, htmlContent, `class="request-dir-arrow"`)
 }
 
 func TestConfigPageBackwardCompatibility(t *testing.T) {
@@ -2108,6 +2118,7 @@ func TestBuildConfigPageData(t *testing.T) {
 
 	mockConfig := &tmconfig.MappingConfig{
 		SDK:        "https://example.com/sdk.js",
+		Stylesheet: "https://example.com/kalamar.css",
 		Server:     "https://example.com/",
 		ServiceURL: "https://example.com/service",
 		Lists:      lists,
@@ -2116,6 +2127,7 @@ func TestBuildConfigPageData(t *testing.T) {
 	data := buildConfigPageData(mockConfig)
 
 	assert.Equal(t, "https://example.com/sdk.js", data.SDK)
+	assert.Equal(t, "https://example.com/kalamar.css", data.Stylesheet)
 	assert.Equal(t, "https://example.com/", data.Server)
 	assert.Equal(t, "https://example.com/service", data.ServiceURL)
 

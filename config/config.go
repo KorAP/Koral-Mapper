@@ -13,7 +13,9 @@ import (
 const (
 	defaultServer     = "https://korap.ids-mannheim.de/"
 	defaultSDK        = "https://korap.ids-mannheim.de/js/korap-plugin-latest.js"
+	defaultStylesheet = "https://korap.ids-mannheim.de/css/kalamar-plugin-latest.css"
 	defaultServiceURL = "https://korap.ids-mannheim.de/plugin/koralmapper"
+	defaultCookieName = "km-config"
 	defaultPort       = 5725
 	defaultLogLevel   = "warn"
 )
@@ -58,8 +60,10 @@ func (list *MappingList) ParseCorpusMappings() ([]*parser.CorpusMappingResult, e
 // MappingConfig represents the root configuration containing multiple mapping lists
 type MappingConfig struct {
 	SDK        string        `yaml:"sdk,omitempty"`
+	Stylesheet string        `yaml:"stylesheet,omitempty"`
 	Server     string        `yaml:"server,omitempty"`
 	ServiceURL string        `yaml:"serviceURL,omitempty"`
+	CookieName string        `yaml:"cookieName,omitempty"`
 	Port       int           `yaml:"port,omitempty"`
 	LogLevel   string        `yaml:"loglevel,omitempty"`
 	Lists      []MappingList `yaml:"lists,omitempty"`
@@ -156,6 +160,7 @@ func LoadFromSources(configFile string, mappingFiles []string) (*MappingConfig, 
 	// Create final configuration
 	result := &MappingConfig{
 		SDK:        globalConfig.SDK,
+		Stylesheet: globalConfig.Stylesheet,
 		Server:     globalConfig.Server,
 		ServiceURL: globalConfig.ServiceURL,
 		Port:       globalConfig.Port,
@@ -173,8 +178,10 @@ func LoadFromSources(configFile string, mappingFiles []string) (*MappingConfig, 
 func ApplyDefaults(config *MappingConfig) {
 	defaults := map[*string]string{
 		&config.SDK:        defaultSDK,
+		&config.Stylesheet: defaultStylesheet,
 		&config.Server:     defaultServer,
 		&config.ServiceURL: defaultServiceURL,
+		&config.CookieName: defaultCookieName,
 		&config.LogLevel:   defaultLogLevel,
 	}
 

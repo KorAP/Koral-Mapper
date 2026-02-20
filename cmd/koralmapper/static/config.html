@@ -3,14 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <title>{{.Title}}</title>
+    <link rel="stylesheet" href="{{.Stylesheet}}">
     <link rel="stylesheet" href="/static/style.css">
     <script src="{{.SDK}}"
             data-server="{{.Server}}"></script>
 </head>
 <body>
-    <div class="container" data-service-url="{{.ServiceURL}}">
+    <div class="container" data-service-url="{{.ServiceURL}}" data-cookie-name="{{.CookieName}}">
         <h1>{{.Title}}</h1>
-        <p>{{.Description}}</p>
+        <section>
+            <p>{{.Description}}</p>
+        </section>
 
         {{if .AnnotationMappings}}
         <section class="mapping-section">
@@ -22,16 +25,20 @@
                 <h3>{{.ID}}</h3>
                 {{if .Description}}<p class="desc">{{.Description}}</p>{{end}}
                 <div class="mapping-row">
-                    <label><input type="checkbox" class="request-cb" name="request"> Request:</label>
-                    <input type="text" class="foundryA" value="{{.FoundryA}}" size="8">/<input type="text" class="layerA" value="{{.LayerA}}" size="4">
-                    <button type="button" class="dir-arrow" data-dir="atob">&rarr;</button>
-                    <input type="text" class="foundryB" value="{{.FoundryB}}" size="8">/<input type="text" class="layerB" value="{{.LayerB}}" size="4">
+                    <label><input type="checkbox" class="request-cb" name="request"> Request</label>
+                    <div class="mapping-fields request-fields">
+                        <input type="text" class="request-foundryA" value="{{.FoundryA}}" placeholder="{{.FoundryA}}" size="8">/<input type="text" class="request-layerA" value="{{.LayerA}}" placeholder="{{.LayerA}}" size="4">
+                        <button type="button" class="request-dir-arrow" data-dir="atob">&rarr;</button>
+                        <input type="text" class="request-foundryB" value="{{.FoundryB}}" placeholder="{{.FoundryB}}" size="8">/<input type="text" class="request-layerB" value="{{.LayerB}}" placeholder="{{.LayerB}}" size="4">
+                    </div>
                 </div>
                 <div class="mapping-row">
-                    <label><input type="checkbox" class="response-cb" name="response"> Response:</label>
-                    <input type="text" class="foundryA" value="{{.FoundryA}}" size="8">/<input type="text" class="layerA" value="{{.LayerA}}" size="4">
-                    <button type="button" class="dir-arrow" data-dir="atob">&rarr;</button>
-                    <input type="text" class="foundryB" value="{{.FoundryB}}" size="8">/<input type="text" class="layerB" value="{{.LayerB}}" size="4">
+                    <label><input type="checkbox" class="response-cb" name="response"> Response</label>
+                    <div class="mapping-fields response-fields">
+                        <input type="text" class="response-foundryA" value="{{.FoundryA}}" placeholder="{{.FoundryA}}" size="8">/<input type="text" class="response-layerA" value="{{.LayerA}}" placeholder="{{.LayerA}}" size="4">
+                        <button type="button" class="response-dir-arrow" data-dir="btoa">&larr;</button>
+                        <input type="text" class="response-foundryB" value="{{.FoundryB}}" placeholder="{{.FoundryB}}" size="8">/<input type="text" class="response-layerB" value="{{.LayerB}}" placeholder="{{.LayerB}}" size="4">
+                    </div>
                 </div>
             </div>
             {{end}}
@@ -56,10 +63,17 @@
         </section>
         {{end}}
 
-        <h2>Plugin Information</h2>
-        <p><strong>Version:</strong> <tt>{{.Version}}</tt></p>
-        <p><strong>Build Date:</strong> <tt>{{.Date}}</tt></p>
-        <p><strong>Build Hash:</strong> <tt>{{.Hash}}</tt></p>
+        <section class="mapping-section">
+            <h2>Pipe Configuration</h2>
+            <label class="cfg-line-label" for="request-cfg-preview">Request cfg</label>
+            <input type="text" id="request-cfg-preview" class="cfg-preview request-cfg-preview" readonly value="">
+            <label class="cfg-line-label" for="response-cfg-preview">Response cfg</label>
+            <input type="text" id="response-cfg-preview" class="cfg-preview response-cfg-preview" readonly value="">
+        </section>
+
+        <footer class="version">
+            <p><tt>v{{.Version}} - {{.Date}} {{.Hash}}</tt></p>
+        </footer>
     </div>
     <script src="/static/config.js"></script>
 </body>

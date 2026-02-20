@@ -733,6 +733,7 @@ mappings:
 
 			// Check that SDK and Server are set (either from config or defaults)
 			assert.NotEmpty(t, config.SDK)
+			assert.NotEmpty(t, config.Stylesheet)
 			assert.NotEmpty(t, config.Server)
 		})
 	}
@@ -759,6 +760,7 @@ mappings:
 
 	// Check that defaults are applied
 	assert.Equal(t, defaultSDK, config.SDK)
+	assert.Equal(t, defaultStylesheet, config.Stylesheet)
 	assert.Equal(t, defaultServer, config.Server)
 	require.Len(t, config.Lists, 1)
 	assert.Equal(t, "test-mapper", config.Lists[0].ID)
@@ -865,6 +867,7 @@ mappings:
 
 	// Check that defaults are applied for other fields
 	assert.Equal(t, defaultSDK, config.SDK)
+	assert.Equal(t, defaultStylesheet, config.Stylesheet)
 	assert.Equal(t, defaultServer, config.Server)
 	assert.Equal(t, defaultServiceURL, config.ServiceURL)
 }

@@ -48,6 +48,9 @@ sdk: "https://custom.example.com/js/korap-plugin.js"
 # Optional: Custom server endpoint for Kalamar plugin integration
 server: "https://custom.example.com/"
 
+# Optional: Custom Kalamar stylesheet URL for the configuration page
+stylesheet: "https://korap.ids-mannheim.de/css/kalamar-plugin-latest.css"
+
 # Optional: Port to listen on (default: 5725)
 port: 8080
 
@@ -84,9 +87,10 @@ mappings:
 
 Command line arguments take precedence over configuration file values:
 
-The `sdk`, `server`, `port`, and `loglevel` fields in the main configuration file are optional and override the following default values:
+The `sdk`, `stylesheet`, `server`, `port`, and `loglevel` fields in the main configuration file are optional and override the following default values:
 
 - **`sdk`**: Custom SDK JavaScript file URL (default: `https://korap.ids-mannheim.de/js/korap-plugin-latest.js`)
+- **`stylesheet`**: Kalamar stylesheet URL for the config page (default: `https://korap.ids-mannheim.de/css/kalamar-plugin-latest.css`)
 - **`server`**: Custom server endpoint URL (default: `https://korap.ids-mannheim.de/`)
 - **`port`**: Server port (default: `5725`)
 - **`loglevel`**: Log level (default: `warn`)
