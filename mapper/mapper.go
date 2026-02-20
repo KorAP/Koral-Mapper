@@ -103,3 +103,43 @@ type MappingOptions struct {
 	Direction   Direction
 	AddRewrites bool
 }
+
+// CascadeQueryMappings applies multiple mapping lists sequentially,
+// feeding the output of each into the next. orderedIDs and
+// perMappingOpts must have the same length. An empty list returns
+// jsonData unchanged.
+func (m *Mapper) CascadeQueryMappings(orderedIDs []string, perMappingOpts []MappingOptions, jsonData any) (any, error) {
+	if len(orderedIDs) != len(perMappingOpts) {
+		return nil, fmt.Errorf("orderedIDs length (%d) must match perMappingOpts length (%d)", len(orderedIDs), len(perMappingOpts))
+	}
+
+	result := jsonData
+	for i, id := range orderedIDs {
+		var err error
+		result, err = m.ApplyQueryMappings(id, perMappingOpts[i], result)
+		if err != nil {
+			return nil, fmt.Errorf("cascade step %d (mapping %q): %w", i, id, err)
+		}
+	}
+	return result, nil
+}
+
+// CascadeResponseMappings applies multiple mapping lists sequentially
+// to a response object, feeding the output of each into the next.
+// orderedIDs and perMappingOpts must have the same length. An empty
+// list returns jsonData unchanged.
+func (m *Mapper) CascadeResponseMappings(orderedIDs []string, perMappingOpts []MappingOptions, jsonData any) (any, error) {
+	if len(orderedIDs) != len(perMappingOpts) {
+		return nil, fmt.Errorf("orderedIDs length (%d) must match perMappingOpts length (%d)", len(orderedIDs), len(perMappingOpts))
+	}
+
+	result := jsonData
+	for i, id := range orderedIDs {
+		var err error
+		result, err = m.ApplyResponseMappings(id, perMappingOpts[i], result)
+		if err != nil {
+			return nil, fmt.Errorf("cascade step %d (mapping %q): %w", i, id, err)
+		}
+	}
+	return result, nil
+}
