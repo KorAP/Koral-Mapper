@@ -39,7 +39,8 @@ vet: 	## Run `go vet` on the code.
 	go vet ./...
 
 fuzz:
-	go test -fuzz=FuzzTransformEndpoint -fuzztime=1m ./cmd/koralmapper
+	# go test -fuzz=FuzzTransformEndpoint -fuzztime=1m ./cmd/koralmapper
+	go test -fuzz=FuzzParseCfgParam -fuzztime=1m ./cmd/koralmapper
 
 docker:
 	docker build -f Dockerfile -t korap/koral-mapper:latest .
