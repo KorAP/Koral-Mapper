@@ -79,11 +79,26 @@ type requestParams struct {
 	LayerB   string
 }
 
+// MappingSectionData contains per-section UI metadata so request and response
+// rows can be rendered from one shared template block.
+type MappingSectionData struct {
+	Title           string
+	Mode            string
+	CheckboxClass   string
+	CheckboxName    string
+	FieldsClass     string
+	ArrowClass      string
+	ArrowDirection  string
+	ArrowLabel      string
+	AnnotationLabel string
+}
+
 // ConfigPageData holds all data passed to the configuration page template.
 type ConfigPageData struct {
 	BasePageData
 	AnnotationMappings []config.MappingList
 	CorpusMappings     []config.MappingList
+	MappingSections    []MappingSectionData
 }
 
 func parseConfig() *appConfig {
@@ -362,6 +377,32 @@ func buildConfigPageData(yamlConfig *config.MappingConfig) ConfigPageData {
 			data.AnnotationMappings = append(data.AnnotationMappings, normalized)
 		}
 	}
+
+	data.MappingSections = []MappingSectionData{
+		{
+			Title:           "Request",
+			Mode:            "request",
+			CheckboxClass:   "request-cb",
+			CheckboxName:    "request",
+			FieldsClass:     "request-fields",
+			ArrowClass:      "request-dir-arrow",
+			ArrowDirection:  "atob",
+			ArrowLabel:      "\u2192",
+			AnnotationLabel: "(query)",
+		},
+		{
+			Title:           "Response",
+			Mode:            "response",
+			CheckboxClass:   "response-cb",
+			CheckboxName:    "response",
+			FieldsClass:     "response-fields",
+			ArrowClass:      "response-dir-arrow",
+			ArrowDirection:  "btoa",
+			ArrowLabel:      "\u2190",
+			AnnotationLabel: "(query)",
+		},
+	}
+
 	return data
 }
 

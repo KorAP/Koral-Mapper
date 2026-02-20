@@ -1938,11 +1938,12 @@ func TestConfigPageRendering(t *testing.T) {
 	assert.Contains(t, htmlContent, `/static/config.js`)
 
 	// Request/response sections
-	assert.Contains(t, htmlContent, "<h2>Request</h2>")
-	assert.Contains(t, htmlContent, "<h2>Response</h2>")
+	assert.Contains(t, htmlContent, "<legend>Request</legend>")
+	assert.Contains(t, htmlContent, "<legend>Response</legend>")
 
 	// Annotation mapping entries
-	assert.Contains(t, htmlContent, "(query) anno-mapper")
+	assert.Contains(t, htmlContent, "(query)")
+	assert.Contains(t, htmlContent, "anno-mapper")
 	assert.Contains(t, htmlContent, `data-id="anno-mapper"`)
 	assert.Contains(t, htmlContent, `data-type="annotation"`)
 	assert.Contains(t, htmlContent, `value="opennlp"`)
@@ -2008,8 +2009,8 @@ func TestConfigPageAnnotationMappingHasFoundryInputs(t *testing.T) {
 	assert.Contains(t, htmlContent, `data-dir="btoa"`)
 
 	// Request and response checkboxes
-	assert.Contains(t, htmlContent, `class="request-cb"`)
-	assert.Contains(t, htmlContent, `class="response-cb"`)
+	assert.Contains(t, htmlContent, `class="checkbox request-cb"`)
+	assert.Contains(t, htmlContent, `class="checkbox response-cb"`)
 }
 
 func TestConfigPageCorpusMappingHasNoFoundryInputs(t *testing.T) {

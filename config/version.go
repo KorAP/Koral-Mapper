@@ -6,7 +6,7 @@ const (
 	Title string = "Koral-Mapper"
 
 	// Description represents a short description of this tool.
-	Description string = "A KoralPipe web service for transforming JSON objects using mapping rules."
+	Description string = "A KoralPipe web service for transforming JSON objects using mapping rules"
 )
 
 // Version represents the SemVer of the server.

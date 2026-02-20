@@ -10,60 +10,38 @@
 </head>
 <body>
     <div class="container" data-service-url="{{.ServiceURL}}" data-cookie-name="{{.CookieName}}">
-        <h1>{{.Title}}</h1>
-        <section>
-            <p>{{.Description}}</p>
-        </section>
+        <h1>{{.Title}} - <span style="font-size: 0.8em;">{{.Description}}</span></h1>
 
+        {{range .MappingSections}}
         <section class="mapping-section">
-            <h2>Request</h2>
-            {{range .AnnotationMappings}}
-            <div class="mapping" data-id="{{.ID}}" data-type="annotation" data-mode="request"
+        <fieldset>
+            <legend>{{.Title}}</legend>
+            {{$section := .}}
+            {{range $.AnnotationMappings}}
+            <div class="mapping" data-id="{{.ID}}" data-type="annotation" data-mode="{{$section.Mode}}"
                  data-default-foundry-a="{{.FoundryA}}" data-default-layer-a="{{.LayerA}}"
                  data-default-foundry-b="{{.FoundryB}}" data-default-layer-b="{{.LayerB}}">
                 <div class="mapping-row">
-                    <label><input type="checkbox" class="request-cb" name="request"> (query) {{.ID}}</label>
-                    <div class="mapping-fields request-fields">
-                        <input type="text" class="request-foundryA" value="{{.FoundryA}}" placeholder="{{.FoundryA}}" size="8">/<input type="text" class="request-layerA" value="{{.LayerA}}" placeholder="{{.LayerA}}" size="4">
-                        <button type="button" class="request-dir-arrow" data-dir="atob">&rarr;</button>
-                        <input type="text" class="request-foundryB" value="{{.FoundryB}}" placeholder="{{.FoundryB}}" size="8">/<input type="text" class="request-layerB" value="{{.LayerB}}" placeholder="{{.LayerB}}" size="4">
+                    <input type="checkbox" id="check-{{.ID}}-{{$section.Mode}}" class="checkbox {{$section.CheckboxClass}}" name="{{$section.CheckboxName}}">
+                    <label for="check-{{.ID}}-{{$section.Mode}}"><span></span>{{$section.AnnotationLabel}} <strong>{{.ID}}</strong></label>
+                    <div class="mapping-fields {{$section.FieldsClass}}">
+                        <input type="text" class="{{$section.Mode}}-foundryA" value="{{.FoundryA}}" placeholder="{{.FoundryA}}" size="8">/<input type="text" class="{{$section.Mode}}-layerA" value="{{.LayerA}}" placeholder="{{.LayerA}}" size="4">
+                        <button type="button" class="{{$section.ArrowClass}}" data-dir="{{$section.ArrowDirection}}">{{$section.ArrowLabel}}</button>
+                        <input type="text" class="{{$section.Mode}}-foundryB" value="{{.FoundryB}}" placeholder="{{.FoundryB}}" size="8">/<input type="text" class="{{$section.Mode}}-layerB" value="{{.LayerB}}" placeholder="{{.LayerB}}" size="4">
                     </div>
                 </div>
             </div>
             {{end}}
-            {{range .CorpusMappings}}
-            <div class="mapping" data-id="{{.ID}}" data-type="corpus" data-mode="request">
+            {{range $.CorpusMappings}}
+            <div class="mapping" data-id="{{.ID}}" data-type="corpus" data-mode="{{$section.Mode}}">
                 <div class="mapping-row">
-                    <label><input type="checkbox" class="request-cb" name="request"> (corpus) {{.ID}}</label>
+                    <label><input type="checkbox" class="{{$section.CheckboxClass}}" name="{{$section.CheckboxName}}"> (corpus) {{.ID}}</label>
                 </div>
             </div>
             {{end}}
+        </fieldset>
         </section>
-
-        <section class="mapping-section">
-            <h2>Response</h2>
-            {{range .AnnotationMappings}}
-            <div class="mapping" data-id="{{.ID}}" data-type="annotation" data-mode="response"
-                 data-default-foundry-a="{{.FoundryA}}" data-default-layer-a="{{.LayerA}}"
-                 data-default-foundry-b="{{.FoundryB}}" data-default-layer-b="{{.LayerB}}">
-                <div class="mapping-row">
-                    <label><input type="checkbox" class="response-cb" name="response"> (query) {{.ID}}</label>
-                    <div class="mapping-fields response-fields">
-                        <input type="text" class="response-foundryA" value="{{.FoundryA}}" placeholder="{{.FoundryA}}" size="8">/<input type="text" class="response-layerA" value="{{.LayerA}}" placeholder="{{.LayerA}}" size="4">
-                        <button type="button" class="response-dir-arrow" data-dir="btoa">&larr;</button>
-                        <input type="text" class="response-foundryB" value="{{.FoundryB}}" placeholder="{{.FoundryB}}" size="8">/<input type="text" class="response-layerB" value="{{.LayerB}}" placeholder="{{.LayerB}}" size="4">
-                    </div>
-                </div>
-            </div>
-            {{end}}
-            {{range .CorpusMappings}}
-            <div class="mapping" data-id="{{.ID}}" data-type="corpus" data-mode="response">
-                <div class="mapping-row">
-                    <label><input type="checkbox" class="response-cb" name="response"> (corpus) {{.ID}}</label>
-                </div>
-            </div>
-            {{end}}
-        </section>
+        {{end}}
 
         <section>
           <h2>Available Mappings</h2>
@@ -80,11 +58,13 @@
         </section>
 
         <section class="mapping-section">
-            <label class="cfg-line-label" for="request-cfg-preview">Request:</label>
+            <fieldset style="font-size: 0.8em;">
+                <label class="cfg-line-label" for="request-cfg-preview">Request:</label>
             <input type="text" id="request-cfg-preview" class="cfg-preview request-cfg-preview" readonly value="">
             <label class="cfg-line-label" for="response-cfg-preview">Response:</label>
-            <input type="text" id="response-cfg-preview" class="cfg-preview response-cfg-preview" readonly value="">
-        </section>
+            <input type="text" id="response-cfg-preview" class="cfg-preview response-cfg-preview" readonly="readonly" value="">
+        </fieldset>
+    </section>
 
         <footer class="version">
             <p><tt>v{{.Version}} - {{.Date}} {{.Hash}}</tt></p>
