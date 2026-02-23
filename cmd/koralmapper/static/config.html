@@ -33,9 +33,16 @@
             </div>
             {{end}}
             {{range $.CorpusMappings}}
-            <div class="mapping" data-id="{{.ID}}" data-type="corpus" data-mode="{{$section.Mode}}">
+            <div class="mapping" data-id="{{.ID}}" data-type="corpus" data-mode="{{$section.Mode}}"
+                 data-default-field-a="{{.FieldA}}" data-default-field-b="{{.FieldB}}">
                 <div class="mapping-row">
-                    <label><input type="checkbox" class="{{$section.CheckboxClass}}" name="{{$section.CheckboxName}}"> (corpus) {{.ID}}</label>
+                    <input type="checkbox" id="check-{{.ID}}-{{$section.Mode}}" class="checkbox {{$section.CheckboxClass}}" name="{{$section.CheckboxName}}">
+                    <label for="check-{{.ID}}-{{$section.Mode}}"><span></span>(corpus) <strong>{{.ID}}</strong></label>
+                    <div class="mapping-fields {{$section.FieldsClass}}">
+                        <input type="text" class="{{$section.Mode}}-fieldA" value="{{.FieldA}}" placeholder="{{.FieldA}}" size="10">
+                        <button type="button" class="{{$section.ArrowClass}}" data-dir="{{$section.ArrowDirection}}">{{$section.ArrowLabel}}</button>
+                        <input type="text" class="{{$section.Mode}}-fieldB" value="{{.FieldB}}" placeholder="{{.FieldB}}" size="10">
+                    </div>
                 </div>
             </div>
             {{end}}

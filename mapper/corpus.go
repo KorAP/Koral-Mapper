@@ -10,7 +10,7 @@ import (
 // Rules are applied iteratively: each rule is applied to the entire tree,
 // and subsequent rules see the transformed result.
 func (m *Mapper) applyCorpusQueryMappings(mappingID string, opts MappingOptions, jsonData any) (any, error) {
-	rules := m.parsedCorpusRules[mappingID]
+	rules := m.rulesWithFieldOverrides(m.parsedCorpusRules[mappingID], opts)
 
 	jsonMap, ok := jsonData.(map[string]any)
 	if !ok {
@@ -383,7 +383,7 @@ func addCorpusRewrite(replaced any, original map[string]any) {
 
 // applyCorpusResponseMappings processes fields arrays with corpus rules.
 func (m *Mapper) applyCorpusResponseMappings(mappingID string, opts MappingOptions, jsonData any) (any, error) {
-	rules := m.parsedCorpusRules[mappingID]
+	rules := m.rulesWithFieldOverrides(m.parsedCorpusRules[mappingID], opts)
 
 	jsonMap, ok := jsonData.(map[string]any)
 	if !ok {
@@ -533,5 +533,42 @@ func shallowCopyMap(m map[string]any) map[string]any {
 		result[k] = v
 	}
 	return result
+}
+
+func (m *Mapper) rulesWithFieldOverrides(rules []*parser.CorpusMappingResult, opts MappingOptions) []*parser.CorpusMappingResult {
+	if opts.FieldA == "" && opts.FieldB == "" {
+		return rules
+	}
+
+	result := make([]*parser.CorpusMappingResult, len(rules))
+	for i, rule := range rules {
+		upper := rule.Upper.Clone()
+		lower := rule.Lower.Clone()
+
+		if opts.FieldA != "" {
+			applyCorpusKeyOverride(upper, opts.FieldA)
+		}
+		if opts.FieldB != "" {
+			applyCorpusKeyOverride(lower, opts.FieldB)
+		}
+
+		result[i] = &parser.CorpusMappingResult{
+			Upper: upper,
+			Lower: lower,
+		}
+	}
+
+	return result
+}
+
+func applyCorpusKeyOverride(node parser.CorpusNode, key string) {
+	switch n := node.(type) {
+	case *parser.CorpusField:
+		n.Key = key
+	case *parser.CorpusGroup:
+		for _, op := range n.Operands {
+			applyCorpusKeyOverride(op, key)
+		}
+	}
 }
 

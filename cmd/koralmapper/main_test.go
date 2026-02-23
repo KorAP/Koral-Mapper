@@ -1748,7 +1748,7 @@ lists:
 			expectedCode: http.StatusBadRequest,
 			input:        `{"fields": []}`,
 			assertBody: func(t *testing.T, actual map[string]any) {
-				assert.Contains(t, actual["error"], "expected 2 or 6 colon-separated fields")
+				assert.Contains(t, actual["error"], "expected at least 2 colon-separated fields")
 			},
 		},
 	}
@@ -1892,6 +1892,8 @@ func TestConfigPageRendering(t *testing.T) {
 			ID:          "corpus-mapper",
 			Type:        "corpus",
 			Description: "Corpus mapping",
+			FieldA:      "wikiCat",
+			FieldB:      "textClass",
 			Mappings:    []tmconfig.MappingRule{"textClass=science <> textClass=akademisch"},
 		},
 	}
@@ -1951,9 +1953,16 @@ func TestConfigPageRendering(t *testing.T) {
 	assert.Contains(t, htmlContent, "Annotation mapping")
 
 	// Corpus mapping entries
-	assert.Contains(t, htmlContent, "(corpus) corpus-mapper")
+	assert.Contains(t, htmlContent, "(corpus)")
+	assert.Contains(t, htmlContent, "<strong>corpus-mapper</strong>")
 	assert.Contains(t, htmlContent, `data-id="corpus-mapper"`)
 	assert.Contains(t, htmlContent, `data-type="corpus"`)
+	assert.Contains(t, htmlContent, `data-default-field-a="wikiCat"`)
+	assert.Contains(t, htmlContent, `data-default-field-b="textClass"`)
+	assert.Contains(t, htmlContent, `class="request-fieldA"`)
+	assert.Contains(t, htmlContent, `class="request-fieldB"`)
+	assert.Contains(t, htmlContent, `class="response-fieldA"`)
+	assert.Contains(t, htmlContent, `class="response-fieldB"`)
 	assert.Contains(t, htmlContent, "Corpus mapping")
 }
 
@@ -2013,11 +2022,13 @@ func TestConfigPageAnnotationMappingHasFoundryInputs(t *testing.T) {
 	assert.Contains(t, htmlContent, `class="checkbox response-cb"`)
 }
 
-func TestConfigPageCorpusMappingHasNoFoundryInputs(t *testing.T) {
+func TestConfigPageCorpusMappingHasFieldAndDirectionInputs(t *testing.T) {
 	lists := []tmconfig.MappingList{
 		{
 			ID:       "corpus-mapper",
 			Type:     "corpus",
+			FieldA:   "genre",
+			FieldB:   "topic",
 			Mappings: []tmconfig.MappingRule{"textClass=science <> textClass=akademisch"},
 		},
 	}
@@ -2045,12 +2056,20 @@ func TestConfigPageCorpusMappingHasNoFoundryInputs(t *testing.T) {
 	assert.Contains(t, htmlContent, `data-type="corpus"`)
 
 	// Checkboxes present
-	assert.Contains(t, htmlContent, `class="request-cb"`)
-	assert.Contains(t, htmlContent, `class="response-cb"`)
+	assert.Contains(t, htmlContent, `class="checkbox request-cb"`)
+	assert.Contains(t, htmlContent, `class="checkbox response-cb"`)
 
-	// No foundry/layer inputs (only corpus mappings, no annotation section)
+	// No annotation foundry/layer inputs (only corpus mappings)
 	assert.NotContains(t, htmlContent, `class="request-foundryA"`)
-	assert.NotContains(t, htmlContent, `class="request-dir-arrow"`)
+	assert.NotContains(t, htmlContent, `class="request-layerA"`)
+	assert.Contains(t, htmlContent, `class="request-dir-arrow"`)
+	assert.Contains(t, htmlContent, `class="response-dir-arrow"`)
+	assert.Contains(t, htmlContent, `class="request-fieldA"`)
+	assert.Contains(t, htmlContent, `class="request-fieldB"`)
+	assert.Contains(t, htmlContent, `class="response-fieldA"`)
+	assert.Contains(t, htmlContent, `class="response-fieldB"`)
+	assert.Contains(t, htmlContent, `value="genre"`)
+	assert.Contains(t, htmlContent, `value="topic"`)
 }
 
 func TestConfigPageBackwardCompatibility(t *testing.T) {

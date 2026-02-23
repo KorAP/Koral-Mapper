@@ -50,6 +50,8 @@
       layerA: "." + mode + "-layerA",
       foundryB: "." + mode + "-foundryB",
       layerB: "." + mode + "-layerB",
+      fieldA: "." + mode + "-fieldA",
+      fieldB: "." + mode + "-fieldB",
       dirArrow: "." + mode + "-dir-arrow"
     };
   }
@@ -68,7 +70,9 @@
       foundryA: inputValue(div, classes.foundryA),
       layerA: inputValue(div, classes.layerA),
       foundryB: inputValue(div, classes.foundryB),
-      layerB: inputValue(div, classes.layerB)
+      layerB: inputValue(div, classes.layerB),
+      fieldA: inputValue(div, classes.fieldA),
+      fieldB: inputValue(div, classes.fieldB)
     };
   }
 
@@ -82,13 +86,8 @@
         id: requestDiv.dataset.id
       };
 
-      if (requestDiv.dataset.type !== "corpus") {
-        entry.request = getModeState(requestDiv, "request");
-        entry.response = responseDiv ? getModeState(responseDiv, "response") : { enabled: false };
-      } else {
-        entry.request = { enabled: requestDiv.querySelector(".request-cb").checked };
-        entry.response = { enabled: responseDiv && responseDiv.querySelector(".response-cb").checked };
-      }
+      entry.request = getModeState(requestDiv, "request");
+      entry.response = responseDiv ? getModeState(responseDiv, "response") : { enabled: false };
 
       state.mappings.push(entry);
     }
@@ -121,6 +120,8 @@
     setInputValue(div, classes.layerA, modeState.layerA);
     setInputValue(div, classes.foundryB, modeState.foundryB);
     setInputValue(div, classes.layerB, modeState.layerB);
+    setInputValue(div, classes.fieldA, modeState.fieldA);
+    setInputValue(div, classes.fieldB, modeState.fieldB);
   }
 
   function restoreFormState(saved) {
@@ -167,13 +168,21 @@
           }
         }
       } else {
-        var requestCb = requestDiv.querySelector(".request-cb");
-        var responseCb = responseDiv ? responseDiv.querySelector(".response-cb") : null;
-        if (requestCb) {
-          requestCb.checked = !!(entry.request && entry.request.enabled);
-        }
-        if (responseCb) {
-          responseCb.checked = !!(entry.response && entry.response.enabled);
+        // Backward compatibility with old cookie schema.
+        if (entry.request && typeof entry.request === "object") {
+          restoreModeState(requestDiv, "request", entry.request);
+          if (responseDiv) {
+            restoreModeState(responseDiv, "response", entry.response);
+          }
+        } else {
+          var requestCb = requestDiv.querySelector(".request-cb");
+          var responseCb = responseDiv ? responseDiv.querySelector(".response-cb") : null;
+          if (requestCb) {
+            requestCb.checked = !!entry.request;
+          }
+          if (responseCb) {
+            responseCb.checked = !!entry.response;
+          }
         }
       }
     }
@@ -221,7 +230,13 @@
           parts.push(id + ":" + dir);
         }
       } else {
-        parts.push(id + ":" + dir);
+        var fieldA = cfgFieldValue(div, classes.fieldA, "defaultFieldA");
+        var fieldB = cfgFieldValue(div, classes.fieldB, "defaultFieldB");
+        if (fieldA || fieldB) {
+          parts.push(id + ":" + dir + ":" + fieldA + ":" + fieldB);
+        } else {
+          parts.push(id + ":" + dir);
+        }
       }
     }
 
@@ -250,18 +265,21 @@
     if (newQueryPipe === lastQueryPipe && newResponsePipe === lastResponsePipe) return;
 
     if (typeof KorAPlugin !== "undefined") {
-      if (lastQueryPipe) {
-        KorAPlugin.sendMsg({ action: "pipe", job: "del", service: lastQueryPipe });
+      if (newQueryPipe !== lastQueryPipe) {
+        if (lastQueryPipe) {
+          KorAPlugin.sendMsg({ action: "pipe", job: "del", service: lastQueryPipe });
+        }
+        if (newQueryPipe) {
+          KorAPlugin.sendMsg({ action: "pipe", job: "add", service: newQueryPipe });
+        }
       }
-      if (lastResponsePipe) {
-        KorAPlugin.sendMsg({ action: "pipe", job: "del-after", service: lastResponsePipe });
-      }
-
-      if (newQueryPipe) {
-        KorAPlugin.sendMsg({ action: "pipe", job: "add", service: newQueryPipe });
-      }
-      if (newResponsePipe) {
-        KorAPlugin.sendMsg({ action: "pipe", job: "add-after", service: newResponsePipe });
+      if (newResponsePipe !== lastResponsePipe) {
+        if (lastResponsePipe) {
+          KorAPlugin.sendMsg({ action: "pipe", job: "del-after", service: lastResponsePipe });
+        }
+        if (newResponsePipe) {
+          KorAPlugin.sendMsg({ action: "pipe", job: "add-after", service: newResponsePipe });
+        }
       }
     }
 

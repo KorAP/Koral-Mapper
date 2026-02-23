@@ -28,6 +28,8 @@ var cfgTestLists = []tmconfig.MappingList{
 	{
 		ID:       "corpus-map",
 		Type:     "corpus",
+		FieldA:   "wikiCat",
+		FieldB:   "textClass",
 		Mappings: []tmconfig.MappingRule{"textClass=science <> textClass=akademisch"},
 	},
 }
@@ -91,17 +93,17 @@ func TestParseCfgParam(t *testing.T) {
 		{
 			name:    "Malformed entry with 3 fields",
 			raw:     "stts-upos:atob:extra",
-			wantErr: "invalid entry",
+			wantErr: "invalid annotation entry",
 		},
 		{
 			name:    "Malformed entry with 4 fields",
 			raw:     "stts-upos:atob:a:b",
-			wantErr: "invalid entry",
+			wantErr: "invalid annotation entry",
 		},
 		{
 			name:    "Malformed entry with 5 fields",
 			raw:     "stts-upos:atob:a:b:c",
-			wantErr: "invalid entry",
+			wantErr: "invalid annotation entry",
 		},
 		{
 			name: "Empty override fields fall back to YAML defaults",
@@ -118,11 +120,23 @@ func TestParseCfgParam(t *testing.T) {
 			},
 		},
 		{
-			name: "Corpus mapping 2-field entry has no foundry/layer defaults",
+			name: "Corpus mapping 2-field entry uses field defaults",
 			raw:  "corpus-map:atob",
 			expected: []CascadeEntry{
-				{ID: "corpus-map", Direction: "atob"},
+				{ID: "corpus-map", Direction: "atob", FieldA: "wikiCat", FieldB: "textClass"},
 			},
+		},
+		{
+			name: "Corpus mapping 4-field entry overrides defaults",
+			raw:  "corpus-map:btoa:genre:topic",
+			expected: []CascadeEntry{
+				{ID: "corpus-map", Direction: "btoa", FieldA: "genre", FieldB: "topic"},
+			},
+		},
+		{
+			name:    "Annotation mapping 4-field entry is invalid",
+			raw:     "stts-upos:atob:foo:bar",
+			wantErr: "invalid annotation entry",
 		},
 		{
 			name:    "Invalid direction",
@@ -134,7 +148,7 @@ func TestParseCfgParam(t *testing.T) {
 			raw:  "stts-upos:atob;corpus-map:atob;other-mapper:btoa",
 			expected: []CascadeEntry{
 				{ID: "stts-upos", Direction: "atob", FoundryA: "opennlp", LayerA: "p", FoundryB: "upos", LayerB: "p"},
-				{ID: "corpus-map", Direction: "atob"},
+				{ID: "corpus-map", Direction: "atob", FieldA: "wikiCat", FieldB: "textClass"},
 				{ID: "other-mapper", Direction: "btoa", FoundryA: "stts", LayerA: "p", FoundryB: "ud", LayerB: "pos"},
 			},
 		},
@@ -173,6 +187,13 @@ func TestBuildCfgParam(t *testing.T) {
 				{ID: "corpus-map", Direction: "atob"},
 			},
 			expected: "corpus-map:atob",
+		},
+		{
+			name: "Corpus entry with field overrides uses 4-field format",
+			entries: []CascadeEntry{
+				{ID: "corpus-map", Direction: "atob", FieldA: "genre", FieldB: "topic"},
+			},
+			expected: "corpus-map:atob:genre:topic",
 		},
 		{
 			name: "Multiple entries",
@@ -218,7 +239,7 @@ func TestBuildCfgParam(t *testing.T) {
 }
 
 func TestBuildAndParseCfgParamRoundTrip(t *testing.T) {
-	original := "stts-upos:atob:opennlp:p:upos:p;corpus-map:btoa"
+	original := "stts-upos:atob:opennlp:p:upos:p;corpus-map:btoa:wikiCat:textClass"
 	entries, err := ParseCfgParam(original, cfgTestLists)
 	require.NoError(t, err)
 

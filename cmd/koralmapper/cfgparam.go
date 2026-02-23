@@ -17,6 +17,8 @@ type CascadeEntry struct {
 	LayerA    string
 	FoundryB  string
 	LayerB    string
+	FieldA    string
+	FieldB    string
 }
 
 // ParseCfgParam parses the compact cfg URL parameter into a slice of
@@ -26,9 +28,12 @@ type CascadeEntry struct {
 // Format: entry (";" entry)*
 //
 //	entry = id ":" dir [ ":" foundryA ":" layerA ":" foundryB ":" layerB ]
+//	      | id ":" dir [ ":" fieldA ":" fieldB ]
 //
-// An entry has either 2 fields (all foundry/layer use defaults) or
-// 6 fields (explicit values, empty means use default).
+// Annotation entries have either 2 fields (all foundry/layer use defaults)
+// or 6 fields (explicit values, empty means use default).
+// Corpus entries have either 2 fields (all field overrides use defaults)
+// or 4 fields (explicit values, empty means use default).
 func ParseCfgParam(raw string, lists []config.MappingList) ([]CascadeEntry, error) {
 	if raw == "" {
 		return nil, nil
@@ -45,9 +50,8 @@ func ParseCfgParam(raw string, lists []config.MappingList) ([]CascadeEntry, erro
 	for _, part := range parts {
 		fields := strings.Split(part, ":")
 		n := len(fields)
-
-		if n != 2 && n != 6 {
-			return nil, fmt.Errorf("invalid entry %q: expected 2 or 6 colon-separated fields, got %d", part, n)
+		if n < 2 {
+			return nil, fmt.Errorf("invalid entry %q: expected at least 2 colon-separated fields, got %d", part, n)
 		}
 
 		id := fields[0]
@@ -61,30 +65,52 @@ func ParseCfgParam(raw string, lists []config.MappingList) ([]CascadeEntry, erro
 		if !ok {
 			return nil, fmt.Errorf("unknown mapping ID %q", id)
 		}
+		isCorpus := list.IsCorpus()
+
+		if isCorpus {
+			if n != 2 && n != 4 {
+				return nil, fmt.Errorf("invalid corpus entry %q: expected 2 or 4 colon-separated fields, got %d", part, n)
+			}
+		} else if n != 2 && n != 6 {
+			return nil, fmt.Errorf("invalid annotation entry %q: expected 2 or 6 colon-separated fields, got %d", part, n)
+		}
 
 		ce := CascadeEntry{
 			ID:        id,
 			Direction: dir,
 		}
 
-		if n == 6 {
-			ce.FoundryA = fields[2]
-			ce.LayerA = fields[3]
-			ce.FoundryB = fields[4]
-			ce.LayerB = fields[5]
-		}
+		if isCorpus {
+			if n == 4 {
+				ce.FieldA = fields[2]
+				ce.FieldB = fields[3]
+			}
+			if ce.FieldA == "" {
+				ce.FieldA = list.FieldA
+			}
+			if ce.FieldB == "" {
+				ce.FieldB = list.FieldB
+			}
+		} else {
+			if n == 6 {
+				ce.FoundryA = fields[2]
+				ce.LayerA = fields[3]
+				ce.FoundryB = fields[4]
+				ce.LayerB = fields[5]
+			}
 
-		if ce.FoundryA == "" {
-			ce.FoundryA = list.FoundryA
-		}
-		if ce.LayerA == "" {
-			ce.LayerA = list.LayerA
-		}
-		if ce.FoundryB == "" {
-			ce.FoundryB = list.FoundryB
-		}
-		if ce.LayerB == "" {
-			ce.LayerB = list.LayerB
+			if ce.FoundryA == "" {
+				ce.FoundryA = list.FoundryA
+			}
+			if ce.LayerA == "" {
+				ce.LayerA = list.LayerA
+			}
+			if ce.FoundryB == "" {
+				ce.FoundryB = list.FoundryB
+			}
+			if ce.LayerB == "" {
+				ce.LayerB = list.LayerB
+			}
 		}
 
 		result = append(result, ce)
@@ -94,9 +120,11 @@ func ParseCfgParam(raw string, lists []config.MappingList) ([]CascadeEntry, erro
 }
 
 // BuildCfgParam serialises a slice of CascadeEntry back to the compact
-// cfg string format. Entries with all foundry/layer fields empty use
-// the short 2-field format (id:dir). Entries with any non-empty
-// foundry/layer field use the full 6-field format.
+// cfg string format. Entries with all override fields empty use the
+// short 2-field format (id:dir). Entries with any non-empty
+// foundry/layer field use the full 6-field annotation format.
+// Entries with any non-empty fieldA/fieldB use the full 4-field
+// corpus format.
 func BuildCfgParam(entries []CascadeEntry) string {
 	if len(entries) == 0 {
 		return ""
@@ -104,8 +132,10 @@ func BuildCfgParam(entries []CascadeEntry) string {
 
 	parts := make([]string, len(entries))
 	for i, e := range entries {
-		if e.FoundryA == "" && e.LayerA == "" && e.FoundryB == "" && e.LayerB == "" {
+		if e.FoundryA == "" && e.LayerA == "" && e.FoundryB == "" && e.LayerB == "" && e.FieldA == "" && e.FieldB == "" {
 			parts[i] = e.ID + ":" + e.Direction
+		} else if e.FoundryA == "" && e.LayerA == "" && e.FoundryB == "" && e.LayerB == "" {
+			parts[i] = e.ID + ":" + e.Direction + ":" + e.FieldA + ":" + e.FieldB
 		} else {
 			parts[i] = e.ID + ":" + e.Direction + ":" + e.FoundryA + ":" + e.LayerA + ":" + e.FoundryB + ":" + e.LayerB
 		}

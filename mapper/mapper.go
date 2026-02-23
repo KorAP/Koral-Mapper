@@ -100,6 +100,8 @@ type MappingOptions struct {
 	LayerA      string
 	FoundryB    string
 	LayerB      string
+	FieldA      string
+	FieldB      string
 	Direction   Direction
 	AddRewrites bool
 }

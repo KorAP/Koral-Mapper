@@ -448,6 +448,8 @@ func handleCompositeQueryTransform(m *mapper.Mapper, lists []config.MappingList)
 				LayerA:    entry.LayerA,
 				FoundryB:  entry.FoundryB,
 				LayerB:    entry.LayerB,
+				FieldA:    entry.FieldA,
+				FieldB:    entry.FieldB,
 			})
 		}
 
@@ -505,6 +507,8 @@ func handleCompositeResponseTransform(m *mapper.Mapper, lists []config.MappingLi
 				LayerA:    entry.LayerA,
 				FoundryB:  entry.FoundryB,
 				LayerB:    entry.LayerB,
+				FieldA:    entry.FieldA,
+				FieldB:    entry.FieldB,
 			})
 		}
 

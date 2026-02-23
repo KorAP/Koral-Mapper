@@ -162,6 +162,66 @@ func TestCorpusQueryFieldAlias(t *testing.T) {
 	assert.Equal(t, "fiction", corpus["value"])
 }
 
+func TestCorpusQueryFieldOverridesAtoB(t *testing.T) {
+	m, err := NewMapper([]config.MappingList{{
+		ID:       "corpus-test",
+		Type:     "corpus",
+		FieldA:   "textClass",
+		FieldB:   "genre",
+		Mappings: []config.MappingRule{"novel <> fiction"},
+	}})
+	require.NoError(t, err)
+
+	input := map[string]any{
+		"corpus": map[string]any{
+			"@type": "koral:doc",
+			"key":   "domain",
+			"value": "novel",
+			"match": "match:eq",
+		},
+	}
+	result, err := m.ApplyQueryMappings("corpus-test", MappingOptions{
+		Direction: AtoB,
+		FieldA:    "domain",
+		FieldB:    "subject",
+	}, input)
+	require.NoError(t, err)
+
+	corpus := result.(map[string]any)["corpus"].(map[string]any)
+	assert.Equal(t, "subject", corpus["key"])
+	assert.Equal(t, "fiction", corpus["value"])
+}
+
+func TestCorpusQueryFieldOverridesBtoA(t *testing.T) {
+	m, err := NewMapper([]config.MappingList{{
+		ID:       "corpus-test",
+		Type:     "corpus",
+		FieldA:   "textClass",
+		FieldB:   "genre",
+		Mappings: []config.MappingRule{"novel <> fiction"},
+	}})
+	require.NoError(t, err)
+
+	input := map[string]any{
+		"corpus": map[string]any{
+			"@type": "koral:doc",
+			"key":   "subject",
+			"value": "fiction",
+			"match": "match:eq",
+		},
+	}
+	result, err := m.ApplyQueryMappings("corpus-test", MappingOptions{
+		Direction: BtoA,
+		FieldA:    "domain",
+		FieldB:    "subject",
+	}, input)
+	require.NoError(t, err)
+
+	corpus := result.(map[string]any)["corpus"].(map[string]any)
+	assert.Equal(t, "domain", corpus["key"])
+	assert.Equal(t, "novel", corpus["value"])
+}
+
 func TestCorpusQueryFieldGroupAlias(t *testing.T) {
 	m := newCorpusMapper(t, "textClass=novel <> genre=fiction")
 
