@@ -1,0 +1,98 @@
+id: wiki-dereko
+type: corpus
+desc: Mapping between Wikipedia and DeReKo textClass categories
+fieldA: wikiCat
+fieldB: textClass
+mappings:
+  # Academic_disciplines (7171 files): wissenschaft.populaerwissenschaft=30.6%, kultur.literatur=24.2%
+  - "Academic_disciplines <> ((wissenschaft & populaerwissenschaft) | (kultur & literatur))"
+  # Communication (2568 files): technik-industrie.edv-elektronik=31.0%, wissenschaft.populaerwissenschaft=25.1%
+  - "Communication <> ((technik-industrie & edv-elektronik) | (wissenschaft & populaerwissenschaft))"
+  # Concepts (2646 files): freizeit-unterhaltung.reisen=23.9%, wissenschaft.populaerwissenschaft=21.7%
+  - "Concepts <> ((freizeit-unterhaltung & reisen) | (wissenschaft & populaerwissenschaft))"
+  # Entities (13372 files): wissenschaft.populaerwissenschaft=30.4%, technik-industrie.edv-elektronik=21.9%
+  - "Entities <> ((wissenschaft & populaerwissenschaft) | (technik-industrie & edv-elektronik))"
+  # Food_drink (4456 files): freizeit-unterhaltung.reisen=37.9%, wissenschaft.populaerwissenschaft=23.2%
+  - "Food_drink <> ((freizeit-unterhaltung & reisen) | (wissenschaft & populaerwissenschaft))"
+  # Health (1952 files): wissenschaft.populaerwissenschaft=30.0%, gesundheit-ernaehrung.gesundheit=28.7%
+  - "Health <> ((wissenschaft & populaerwissenschaft) | (gesundheit-ernaehrung & gesundheit))"
+  # History (59767 files): freizeit-unterhaltung.reisen=22.6%, kultur.literatur=20.6%
+  - "History <> ((freizeit-unterhaltung & reisen) | (kultur & literatur))"
+  # Mathematics (10035 files): wissenschaft.populaerwissenschaft=54.1%, kultur.literatur=24.1%
+  - "Mathematics <> ((wissenschaft & populaerwissenschaft) | (kultur & literatur))"
+  # Philosophy (10961 files): kultur.literatur=51.8%, wissenschaft.populaerwissenschaft=27.3%
+  - "Philosophy <> ((kultur & literatur) | (wissenschaft & populaerwissenschaft))"
+  # Religion (7875 files): staat-gesellschaft.kirche=37.1%, freizeit-unterhaltung.reisen=31.0%
+  - "Religion <> ((staat-gesellschaft & kirche) | (freizeit-unterhaltung & reisen))"
+  # Science (31185 files): wissenschaft.populaerwissenschaft=42.3%, kultur.literatur=21.8%
+  - "Science <> ((wissenschaft & populaerwissenschaft) | (kultur & literatur))"
+  # Sports (49599 files): sport.vermischtes=37.5%, sport.fussball=28.8%
+  - "Sports <> ((sport & vermischtes) | (sport & fussball))"
+  # Time (1023 files): wissenschaft.populaerwissenschaft=29.8%, kultur.film=27.2%
+  - "Time <> ((wissenschaft & populaerwissenschaft) | (kultur & film))"
+  # Culture (21448 files): freizeit-unterhaltung.reisen=37.1%
+  - "Culture <> (freizeit-unterhaltung & reisen)"
+  # Economy (13283 files): wissenschaft.populaerwissenschaft=20.0%
+  - "Economy <> (wissenschaft & populaerwissenschaft)"
+  # Education (7560 files): staat-gesellschaft.bildung=37.1%
+  - "Education <> (staat-gesellschaft & bildung)"
+  # Energy (1642 files): wissenschaft.populaerwissenschaft=41.8%
+  - "Energy <> (wissenschaft & populaerwissenschaft)"
+  # Engineering (10318 files): wissenschaft.populaerwissenschaft=33.6%
+  - "Engineering <> (wissenschaft & populaerwissenschaft)"
+  # Entertainment (1033 files): kultur.musik=34.2%
+  - "Entertainment <> (kultur & musik)"
+  # Geography (18082 files): freizeit-unterhaltung.reisen=68.4%
+  - "Geography <> (freizeit-unterhaltung & reisen)"
+  # Government (6594 files): politik.ausland=45.8%
+  - "Government <> (politik & ausland)"
+  # Human_behavior (10855 files): politik.ausland=35.7%
+  - "Human_behavior <> (politik & ausland)"
+  # Humanities (6897 files): kultur.literatur=31.8%
+  - "Humanities <> (kultur & literatur)"
+  # Information (1480 files): technik-industrie.edv-elektronik=55.0%
+  - "Information <> (technik-industrie & edv-elektronik)"
+  # Internet (1694 files): technik-industrie.edv-elektronik=67.7%
+  - "Internet <> (technik-industrie & edv-elektronik)"
+  # Knowledge (4832 files): wissenschaft.populaerwissenschaft=59.5%
+  - "Knowledge <> (wissenschaft & populaerwissenschaft)"
+  # Language (60359 files): kultur.literatur=64.5%
+  - "Language <> (kultur & literatur)"
+  # Law (26387 files): politik.ausland=42.5%
+  - "Law <> (politik & ausland)"
+  # Life (3117 files): politik.ausland=21.5%
+  - "Life <> (politik & ausland)"
+  # Lists (22019 files): freizeit-unterhaltung.reisen=21.0%
+  - "Lists <> (freizeit-unterhaltung & reisen)"
+  # Mass_media (21707 files): kultur.film=32.1%
+  - "Mass_media <> (kultur & film)"
+  # Military (27580 files): politik.ausland=32.0%
+  - "Military <> (politik & ausland)"
+  # Nature (5573 files): freizeit-unterhaltung.reisen=42.6%
+  - "Nature <> (freizeit-unterhaltung & reisen)"
+  # Politics (9887 files): politik.ausland=48.7%
+  - "Politics <> (politik & ausland)"
+  # Society (12187 files): wissenschaft.populaerwissenschaft=49.4%
+  - "Society <> (wissenschaft & populaerwissenschaft)"
+  # Technology (11385 files): wissenschaft.populaerwissenschaft=44.0%
+  - "Technology <> (wissenschaft & populaerwissenschaft)"
+  # Universe (1967 files): wissenschaft.populaerwissenschaft=41.1%
+  - "Universe <> (wissenschaft & populaerwissenschaft)"
+  # freizeit-unterhaltung.reisen → History, Geography, Culture (AND)
+  - "(History | Geography | Culture) <> (freizeit-unterhaltung & reisen)"
+  # technik-industrie.edv-elektronik → Entities, Internet (AND)
+  - "(Entities | Internet) <> (technik-industrie & edv-elektronik)"
+  # kultur.literatur → Language, History (AND)
+  - "(Language | History) <> (kultur & literatur)"
+  # politik.ausland → Law, Military (AND)
+  - "(Law | Military) <> (politik & ausland)"
+  # Health (1952 files): gesundheit-ernaehrung.gesundheit=28.7%
+  - "Health <> (gesundheit-ernaehrung & gesundheit)"
+  # Religion (7875 files): staat-gesellschaft.kirche=37.1%
+  - "Religion <> (staat-gesellschaft & kirche)"
+  # Science (31185 files): wissenschaft.populaerwissenschaft=42.3%
+  - "Science <> (wissenschaft & populaerwissenschaft)"
+  # Sports (49599 files): sport.fussball=28.8%
+  - "Sports <> (sport & fussball)"
+  # Sports (49599 files): sport.vermischtes=37.5%
+  - "Sports <> (sport & vermischtes)"

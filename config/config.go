@@ -32,6 +32,8 @@ type MappingList struct {
 	LayerA      string        `yaml:"layerA,omitempty"`
 	FoundryB    string        `yaml:"foundryB,omitempty"`
 	LayerB      string        `yaml:"layerB,omitempty"`
+	FieldA      string        `yaml:"fieldA,omitempty"`
+	FieldB      string        `yaml:"fieldB,omitempty"`
 	Mappings    []MappingRule `yaml:"mappings"`
 }
 
@@ -41,8 +43,12 @@ func (list *MappingList) IsCorpus() bool {
 }
 
 // ParseCorpusMappings parses all mapping rules as corpus rules.
+// Bare values (without key=) are always allowed and receive the default
+// field name from the mapping list header (FieldA/FieldB) when set.
 func (list *MappingList) ParseCorpusMappings() ([]*parser.CorpusMappingResult, error) {
 	corpusParser := parser.NewCorpusParser()
+	corpusParser.AllowBareValues = true
+
 	results := make([]*parser.CorpusMappingResult, len(list.Mappings))
 	for i, rule := range list.Mappings {
 		if rule == "" {
@@ -52,9 +58,31 @@ func (list *MappingList) ParseCorpusMappings() ([]*parser.CorpusMappingResult, e
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse corpus mapping rule %d in list '%s': %w", i, list.ID, err)
 		}
+
+		if list.FieldA != "" {
+			applyDefaultCorpusKey(result.Upper, list.FieldA)
+		}
+		if list.FieldB != "" {
+			applyDefaultCorpusKey(result.Lower, list.FieldB)
+		}
+
 		results[i] = result
 	}
 	return results, nil
+}
+
+// applyDefaultCorpusKey recursively fills in empty keys on CorpusField nodes.
+func applyDefaultCorpusKey(node parser.CorpusNode, defaultKey string) {
+	switch n := node.(type) {
+	case *parser.CorpusField:
+		if n.Key == "" {
+			n.Key = defaultKey
+		}
+	case *parser.CorpusGroup:
+		for _, op := range n.Operands {
+			applyDefaultCorpusKey(op, defaultKey)
+		}
+	}
 }
 
 // MappingConfig represents the root configuration containing multiple mapping lists

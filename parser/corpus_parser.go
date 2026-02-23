@@ -82,7 +82,12 @@ type CorpusMappingResult struct {
 }
 
 // CorpusParser parses corpus mapping rules.
-type CorpusParser struct{}
+type CorpusParser struct {
+	// AllowBareValues enables parsing values without a key= prefix.
+	// The resulting CorpusField will have an empty Key, to be filled
+	// from the mapping list header (KeyA/KeyB).
+	AllowBareValues bool
+}
 
 func NewCorpusParser() *CorpusParser {
 	return &CorpusParser{}
@@ -174,12 +179,16 @@ var validMatchTypes = map[string]bool{
 }
 
 // parseField parses a single field expression: key=value[:match][#type].
+// When AllowBareValues is true, also accepts bare values without key=.
 func (p *CorpusParser) parseField(input string) (*CorpusField, error) {
 	input = strings.TrimSpace(input)
 
 	eqIdx := strings.Index(input, "=")
 	if eqIdx == -1 {
-		return nil, fmt.Errorf("invalid field expression: missing '=' in %q", input)
+		if !p.AllowBareValues {
+			return nil, fmt.Errorf("invalid field expression: missing '=' in %q", input)
+		}
+		return p.parseBareValue(input)
 	}
 
 	key := strings.TrimSpace(input[:eqIdx])
@@ -212,6 +221,36 @@ func (p *CorpusParser) parseField(input string) (*CorpusField, error) {
 	field.Value = strings.TrimSpace(rest)
 	if field.Value == "" {
 		return nil, fmt.Errorf("invalid field expression: empty value for key %q", key)
+	}
+
+	return field, nil
+}
+
+// parseBareValue parses a value without a key= prefix.
+// The Key is left empty and should be filled from the mapping list header.
+func (p *CorpusParser) parseBareValue(input string) (*CorpusField, error) {
+	if input == "" {
+		return nil, fmt.Errorf("invalid field expression: empty bare value")
+	}
+
+	field := &CorpusField{}
+
+	if hashIdx := strings.LastIndex(input, "#"); hashIdx != -1 {
+		field.Type = strings.TrimSpace(input[hashIdx+1:])
+		input = input[:hashIdx]
+	}
+
+	if colonIdx := strings.LastIndex(input, ":"); colonIdx != -1 {
+		candidate := strings.TrimSpace(input[colonIdx+1:])
+		if validMatchTypes[candidate] {
+			field.Match = candidate
+			input = input[:colonIdx]
+		}
+	}
+
+	field.Value = strings.TrimSpace(input)
+	if field.Value == "" {
+		return nil, fmt.Errorf("invalid field expression: empty bare value")
 	}
 
 	return field, nil

@@ -98,44 +98,14 @@ The `sdk`, `stylesheet`, `server`, `port`, and `loglevel` fields in the main con
 
 These values are applied during configuration parsing. When using only individual mapping files (`-m` flags), default values are used unless overridden by command line arguments.
 
+### Mapping Rules
 
-### Corpus mapping rules (type: corpus)
+Koral-Mapper supports two types of mapping rules:
 
-Corpus mapping rules use `key=value <> key=value` syntax for rewriting `koral:doc` / `koral:docGroup` structures in the `corpus`/`collection` section of a KoralQuery request, and enriching `fields` arrays in responses.
+- **Annotation mappings** (default): Rewrite `koral:token` / `koral:term` structures in queries and annotation spans in responses
+- **Corpus mappings** (`type: corpus`): Rewrite `koral:doc` / `koral:docGroup` structures in corpus/collection queries and enrich response fields
 
-- Simple fields: `textClass=novel <> genre=fiction`
-- Match types: `pubDate=2020:geq <> yearFrom=2020:geq` (eq, ne, geq, leq, contains, excludes)
-- Value types: `pubDate=2020-01#date <> year=2020#string` (string, regex, date)
-- Regex matching: `textClass=wissenschaft.*#regex <> genre=science`
-- Groups (AND/OR): `(textClass=novel & pubDate=2020) <> genre=fiction`
-
-(Supported `@type` aliases: `koral:field` for `koral:doc`, `koral:fieldGroup` for `koral:docGroup`).
-
-### Annotation mapping rules (type: annotation)
-
-Each annotation mapping rule consists of two patterns separated by `<>`. The patterns can be:
-- Simple terms (e.g. `[key]`, `[layer=key]`, `[foundry/*=key]`, `[foundry/layer=key]` or `[foundry/layer=key:value]`)
-- Complex terms with AND/OR relations: `[term1 & term2]` or `[term1 | term2]` or `[term1 | (term2 & term3)]`
-
-### Foundry and Layer Precedence for term mapping
-
-Koral-Mapper follows a strict precedence hierarchy when determining which foundry and layer values to use during mapping transformations. This ensures predictable behavior when combining mapping rules with runtime overrides.
-
-#### Precedence Rules
-
-The precedence hierarchy is applied separately for foundry and layer values:
-
-1. **Mapping rule foundry/layer** (highest priority)
-   - Explicit foundry/layer specifications in mapping rule patterns
-   - Example: `[opennlp/p=DT]` has explicit foundry "opennlp" and layer "p"
-
-2. **Passed overwrite foundry/layer** (medium priority)
-   - Values provided via query parameters (`foundryA`, `foundryB`, `layerA`, `layerB`)
-   - Applied only when mapping rules don't have explicit foundry/layer
-
-3. **Mapping list foundry/layer** (lowest priority)
-   - Default values from the mapping list configuration
-   - Used as fallback when neither mapping rules nor query parameters specify values
+For detailed mapping rule syntax, examples, and guidelines on writing mapping files, see [MAPPING.md](MAPPING.md).
 
 ## API Endpoints
 
@@ -245,12 +215,15 @@ Serves the Kalamar plugin integration page. This HTML page includes:
 
 The SDK script and server data-attribute in the HTML are determined by the configuration file's `sdk` and `server` values, with fallback to default endpoints if not specified.
 
-## Supported mappings
+## Supported Mappings
 
 ### `mappings/stts-upos.yaml`
 
-Mapping between [STTS and UD part-of-spech tags](https://universaldependencies.org/tagset-conversion/de-stts-uposf.html).
+Mapping between [STTS and UD part-of-speech tags](https://universaldependencies.org/tagset-conversion/de-stts-uposf.html).
 
+### `mappings/wiki-dereko.yaml`
+
+Corpus mapping between wiki categories and DeReKo text classes.
 
 ## Progress
 

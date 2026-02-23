@@ -283,3 +283,74 @@ func TestCorpusGroupClone(t *testing.T) {
 	c.Operands[0].(*CorpusField).Key = "changed"
 	assert.NotEqual(t, g.Operands[0].(*CorpusField).Key, "changed")
 }
+
+func TestCorpusParserBareValue(t *testing.T) {
+	p := &CorpusParser{AllowBareValues: true}
+	result, err := p.ParseMapping("Entertainment <> (technik-industrie & edv-elektronik)")
+	require.NoError(t, err)
+
+	upper, ok := result.Upper.(*CorpusField)
+	require.True(t, ok)
+	assert.Equal(t, "", upper.Key)
+	assert.Equal(t, "Entertainment", upper.Value)
+
+	group, ok := result.Lower.(*CorpusGroup)
+	require.True(t, ok)
+	assert.Equal(t, "and", group.Operation)
+	require.Len(t, group.Operands, 2)
+
+	f1 := group.Operands[0].(*CorpusField)
+	assert.Equal(t, "", f1.Key)
+	assert.Equal(t, "technik-industrie", f1.Value)
+
+	f2 := group.Operands[1].(*CorpusField)
+	assert.Equal(t, "", f2.Key)
+	assert.Equal(t, "edv-elektronik", f2.Value)
+}
+
+func TestCorpusParserBareValueORGroup(t *testing.T) {
+	p := &CorpusParser{AllowBareValues: true}
+	result, err := p.ParseMapping("Entertainment <> ((kultur & musik) | (kultur & film))")
+	require.NoError(t, err)
+
+	upper, ok := result.Upper.(*CorpusField)
+	require.True(t, ok)
+	assert.Equal(t, "Entertainment", upper.Value)
+
+	group, ok := result.Lower.(*CorpusGroup)
+	require.True(t, ok)
+	assert.Equal(t, "or", group.Operation)
+	require.Len(t, group.Operands, 2)
+
+	and1, ok := group.Operands[0].(*CorpusGroup)
+	require.True(t, ok)
+	assert.Equal(t, "and", and1.Operation)
+	assert.Equal(t, "kultur", and1.Operands[0].(*CorpusField).Value)
+	assert.Equal(t, "musik", and1.Operands[1].(*CorpusField).Value)
+
+	and2, ok := group.Operands[1].(*CorpusGroup)
+	require.True(t, ok)
+	assert.Equal(t, "and", and2.Operation)
+	assert.Equal(t, "kultur", and2.Operands[0].(*CorpusField).Value)
+	assert.Equal(t, "film", and2.Operands[1].(*CorpusField).Value)
+}
+
+func TestCorpusParserBareValueDisabledByDefault(t *testing.T) {
+	p := NewCorpusParser()
+	_, err := p.ParseMapping("Entertainment <> genre=fiction")
+	assert.Error(t, err, "bare values should fail without AllowBareValues")
+}
+
+func TestCorpusParserBareValueMixedWithKeyed(t *testing.T) {
+	p := &CorpusParser{AllowBareValues: true}
+	result, err := p.ParseMapping("Entertainment <> genre=fiction")
+	require.NoError(t, err)
+
+	upper := result.Upper.(*CorpusField)
+	assert.Equal(t, "", upper.Key)
+	assert.Equal(t, "Entertainment", upper.Value)
+
+	lower := result.Lower.(*CorpusField)
+	assert.Equal(t, "genre", lower.Key)
+	assert.Equal(t, "fiction", lower.Value)
+}

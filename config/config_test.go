@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/KorAP/Koral-Mapper/ast"
+	"github.com/KorAP/Koral-Mapper/parser"
 	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -948,4 +949,34 @@ func TestParseCorpusMappingsErrors(t *testing.T) {
 	_, err = list2.ParseCorpusMappings()
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to parse corpus mapping rule")
+}
+
+func TestParseCorpusMappingsWithFieldAFieldB(t *testing.T) {
+	list := &MappingList{
+		ID:     "test-keyed",
+		Type:   "corpus",
+		FieldA: "wikiCat",
+		FieldB: "textClass",
+		Mappings: []MappingRule{
+			"Entertainment <> ((kultur & musik) | (kultur & film))",
+		},
+	}
+
+	results, err := list.ParseCorpusMappings()
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+
+	upper := results[0].Upper.(*parser.CorpusField)
+	assert.Equal(t, "wikiCat", upper.Key)
+	assert.Equal(t, "Entertainment", upper.Value)
+
+	group := results[0].Lower.(*parser.CorpusGroup)
+	assert.Equal(t, "or", group.Operation)
+	require.Len(t, group.Operands, 2)
+
+	and1 := group.Operands[0].(*parser.CorpusGroup)
+	assert.Equal(t, "textClass", and1.Operands[0].(*parser.CorpusField).Key)
+	assert.Equal(t, "kultur", and1.Operands[0].(*parser.CorpusField).Value)
+	assert.Equal(t, "textClass", and1.Operands[1].(*parser.CorpusField).Key)
+	assert.Equal(t, "musik", and1.Operands[1].(*parser.CorpusField).Value)
 }

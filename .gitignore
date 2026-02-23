@@ -17,5 +17,6 @@ todo.txt
 *.tar
 !/cmd/termmapper/
 !/cmd/koralmapper/
+/cmd/koralmapper/wiki2mapping
 *-plan.md
 overview.md
