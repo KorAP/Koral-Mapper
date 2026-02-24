@@ -86,6 +86,11 @@ dt {
     padding: 0.3rem 1rem;
 }
 
+#active-toggle {
+  white-space: nowrap;
+  margin-left: 1em;
+}
+
 footer {
     background-color: var(--light-grey-color);
     font-size:60%;

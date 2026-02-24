@@ -1,6 +1,6 @@
 "use strict";
 
-(function () {
+function pluginit(KorAPugin) {
   var container = document.querySelector(".container");
   if (!container) return;
 
@@ -244,10 +244,35 @@
     return parts.join(";");
   }
 
+  // Active state tracking
+
+  var isPluginActive = false;
+  var activeCheckbox = container.querySelector("#check-active");
+
+  function setActiveState(value) {
+    isPluginActive = !!value;
+    if (activeCheckbox) {
+      activeCheckbox.checked = isPluginActive;
+    }
+    syncPipes();
+  }
+
   // Kalamar pipe registration
 
   var lastQueryPipe = null;
   var lastResponsePipe = null;
+
+  function removePipes() {
+    if (typeof KorAPugin === "undefined") return;
+    if (lastQueryPipe) {
+      KorAPlugin.sendMsg({ action: "pipe", job: "del", service: lastQueryPipe });
+      lastQueryPipe = null;
+    }
+    if (lastResponsePipe) {
+      KorAPlugin.sendMsg({ action: "pipe", job: "del-after", service: lastResponsePipe });
+      lastResponsePipe = null;
+    }
+  }
 
   function registerPipes() {
     var queryCfg = buildCfgParam("request");
@@ -258,6 +283,11 @@
     }
     if (responseCfgPreview) {
       responseCfgPreview.value = responseCfg;
+    }
+
+    if (!isPluginActive) {
+      removePipes();
+      return;
     }
 
     var newQueryPipe = queryCfg ? serviceURL + "/query?cfg=" + encodeURIComponent(queryCfg) : "";
@@ -288,6 +318,14 @@
     lastResponsePipe = newResponsePipe;
   }
 
+  function syncPipes() {
+    if (isPluginActive) {
+      registerPipes();
+    } else {
+      removePipes();
+    }
+  }
+
   // Change handler
 
   function onChange() {
@@ -302,7 +340,7 @@
     restoreFormState(saved);
   }
 
-  var checkboxes = container.querySelectorAll('input[type="checkbox"]');
+  var checkboxes = container.querySelectorAll('input[type="checkbox"]:not(#check-active)');
   for (var i = 0; i < checkboxes.length; i++) {
     checkboxes[i].addEventListener("change", onChange);
   }
@@ -350,10 +388,40 @@
     registerPipes();
   }
 
+
   var resetBtn = container.querySelector("#reset-btn");
   if (resetBtn) {
     resetBtn.addEventListener("click", resetForm);
   }
 
-  registerPipes();
-})();
+  // When the active checkbox in the iframe is toggled,
+  // send the new state to the host button.
+  if (activeCheckbox) {
+    activeCheckbox.addEventListener("change", function () {
+      isPluginActive = activeCheckbox.checked;
+      if (typeof KorAPlugin !== "undefined") {
+        KorAPlugin.sendMsg({
+          action: "set",
+          key: "Active",
+          value: isPluginActive
+        });
+      }
+      syncPipes();
+    });
+  }
+
+  // Don't register pipes until we know the active state
+    KorAPugin.requestMsg({
+      'action': 'get',
+      'key': 'Active'
+    }, function (msg) {
+      setActiveState(msg.value);
+    });
+
+    KorAPugin.onMessage = function(msg) {
+      if (msg.action === 'state' && msg.key === 'active') {
+        setActiveState(msg.value);
+        return;
+      }
+    };
+};
