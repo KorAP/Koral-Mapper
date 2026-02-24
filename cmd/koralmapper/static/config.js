@@ -38,6 +38,10 @@
     document.cookie = cookieName + "=" + value + "; path=/; SameSite=Lax; max-age=31536000";
   }
 
+  function deleteCookie() {
+    document.cookie = cookieName + "=; path=/; SameSite=Lax; max-age=0";
+  }
+
   // Form state
 
   function reverseDir(dir) {
@@ -318,6 +322,37 @@
         onChange();
       });
     })(arrows[i]);
+  }
+
+  // Reset button
+
+  function resetForm() {
+    for (var i = 0; i < checkboxes.length; i++) {
+      checkboxes[i].checked = false;
+    }
+
+    for (var i = 0; i < textInputs.length; i++) {
+      textInputs[i].value = "";
+    }
+
+    var requestArrows = container.querySelectorAll(".request-dir-arrow");
+    for (var i = 0; i < requestArrows.length; i++) {
+      requestArrows[i].dataset.dir = "atob";
+      requestArrows[i].textContent = "\u2192";
+    }
+    var responseArrows = container.querySelectorAll(".response-dir-arrow");
+    for (var i = 0; i < responseArrows.length; i++) {
+      responseArrows[i].dataset.dir = "btoa";
+      responseArrows[i].textContent = "\u2190";
+    }
+
+    deleteCookie();
+    registerPipes();
+  }
+
+  var resetBtn = container.querySelector("#reset-btn");
+  if (resetBtn) {
+    resetBtn.addEventListener("click", resetForm);
   }
 
   registerPipes();

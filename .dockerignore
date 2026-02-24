@@ -12,6 +12,8 @@ koralmapper
 !mapper/
 !matcher/
 !mappings/
+!testdata/
+testdata/sandbox
 !/LICENSE
 !.dockerignore
 !go.mod

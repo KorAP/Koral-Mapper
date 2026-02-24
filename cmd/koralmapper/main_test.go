@@ -1948,8 +1948,8 @@ func TestConfigPageRendering(t *testing.T) {
 	assert.Contains(t, htmlContent, "anno-mapper")
 	assert.Contains(t, htmlContent, `data-id="anno-mapper"`)
 	assert.Contains(t, htmlContent, `data-type="annotation"`)
-	assert.Contains(t, htmlContent, `value="opennlp"`)
-	assert.Contains(t, htmlContent, `value="upos"`)
+	assert.Contains(t, htmlContent, `placeholder="opennlp"`)
+	assert.Contains(t, htmlContent, `placeholder="upos"`)
 	assert.Contains(t, htmlContent, "Annotation mapping")
 
 	// Corpus mapping entries
@@ -1964,6 +1964,10 @@ func TestConfigPageRendering(t *testing.T) {
 	assert.Contains(t, htmlContent, `class="response-fieldA"`)
 	assert.Contains(t, htmlContent, `class="response-fieldB"`)
 	assert.Contains(t, htmlContent, "Corpus mapping")
+
+	// Reset button
+	assert.Contains(t, htmlContent, `id="reset-btn"`)
+	assert.Contains(t, htmlContent, "Reset all")
 }
 
 func TestConfigPageAnnotationMappingHasFoundryInputs(t *testing.T) {
@@ -2068,8 +2072,8 @@ func TestConfigPageCorpusMappingHasFieldAndDirectionInputs(t *testing.T) {
 	assert.Contains(t, htmlContent, `class="request-fieldB"`)
 	assert.Contains(t, htmlContent, `class="response-fieldA"`)
 	assert.Contains(t, htmlContent, `class="response-fieldB"`)
-	assert.Contains(t, htmlContent, `value="genre"`)
-	assert.Contains(t, htmlContent, `value="topic"`)
+	assert.Contains(t, htmlContent, `placeholder="genre"`)
+	assert.Contains(t, htmlContent, `placeholder="topic"`)
 }
 
 func TestConfigPageBackwardCompatibility(t *testing.T) {
@@ -2167,6 +2171,89 @@ func TestBuildConfigPageData(t *testing.T) {
 	assert.Equal(t, "corpus1", data.CorpusMappings[0].ID)
 	assert.Equal(t, "corpus", data.CorpusMappings[0].Type)
 	assert.Equal(t, "First corpus", data.CorpusMappings[0].Description)
+}
+
+func TestConfigPageDefaultsAsPlaceholdersOnly(t *testing.T) {
+	lists := []tmconfig.MappingList{
+		{
+			ID:       "anno-mapper",
+			FoundryA: "opennlp",
+			LayerA:   "p",
+			FoundryB: "upos",
+			LayerB:   "pos",
+			Mappings: []tmconfig.MappingRule{"[A] <> [B]"},
+		},
+		{
+			ID:     "corpus-mapper",
+			Type:   "corpus",
+			FieldA: "genre",
+			FieldB: "topic",
+			Mappings: []tmconfig.MappingRule{
+				"textClass=science <> textClass=akademisch",
+			},
+		},
+	}
+	m, err := mapper.NewMapper(lists)
+	require.NoError(t, err)
+
+	mockConfig := &tmconfig.MappingConfig{Lists: lists}
+	tmconfig.ApplyDefaults(mockConfig)
+
+	app := fiber.New()
+	setupRoutes(app, m, mockConfig)
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	resp, err := app.Test(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	htmlContent := string(body)
+
+	// Placeholders are present
+	assert.Contains(t, htmlContent, `placeholder="opennlp"`)
+	assert.Contains(t, htmlContent, `placeholder="upos"`)
+	assert.Contains(t, htmlContent, `placeholder="genre"`)
+	assert.Contains(t, htmlContent, `placeholder="topic"`)
+
+	// Value attributes must NOT appear on mapping inputs (defaults shown as
+	// placeholders only). We check that the combined string value="opennlp"
+	// etc. is absent.
+	assert.NotContains(t, htmlContent, `value="opennlp"`)
+	assert.NotContains(t, htmlContent, `value="upos"`)
+	assert.NotContains(t, htmlContent, `value="genre"`)
+	assert.NotContains(t, htmlContent, `value="topic"`)
+}
+
+func TestConfigPageHasResetButton(t *testing.T) {
+	lists := []tmconfig.MappingList{
+		{
+			ID:       "test-mapper",
+			Mappings: []tmconfig.MappingRule{"[A] <> [B]"},
+		},
+	}
+	m, err := mapper.NewMapper(lists)
+	require.NoError(t, err)
+
+	mockConfig := &tmconfig.MappingConfig{Lists: lists}
+	tmconfig.ApplyDefaults(mockConfig)
+
+	app := fiber.New()
+	setupRoutes(app, m, mockConfig)
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	resp, err := app.Test(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	htmlContent := string(body)
+
+	assert.Contains(t, htmlContent, `id="reset-btn"`)
+	assert.Contains(t, htmlContent, "Reset all")
+	assert.Contains(t, htmlContent, `type="button"`)
 }
 
 func TestConfigPagePreservesOrderOfMappings(t *testing.T) {
