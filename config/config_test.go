@@ -951,6 +951,171 @@ func TestParseCorpusMappingsErrors(t *testing.T) {
 	assert.Contains(t, err.Error(), "failed to parse corpus mapping rule")
 }
 
+func TestApplyEnvOverrides(t *testing.T) {
+	envKeys := []string{
+		"KORAL_MAPPER_SERVER",
+		"KORAL_MAPPER_SDK",
+		"KORAL_MAPPER_STYLESHEET",
+		"KORAL_MAPPER_SERVICE_URL",
+		"KORAL_MAPPER_COOKIE_NAME",
+		"KORAL_MAPPER_PORT",
+		"KORAL_MAPPER_LOG_LEVEL",
+	}
+
+	clearEnv := func() {
+		for _, key := range envKeys {
+			os.Unsetenv(key)
+		}
+	}
+
+	t.Run("ENV overrides config values", func(t *testing.T) {
+		clearEnv()
+		defer clearEnv()
+
+		cfg := &MappingConfig{
+			Server:     "from-config",
+			SDK:        "from-config",
+			Stylesheet: "from-config",
+			ServiceURL: "from-config",
+			CookieName: "from-config",
+			Port:       1234,
+			LogLevel:   "warn",
+		}
+
+		os.Setenv("KORAL_MAPPER_SERVER", "from-env-server")
+		os.Setenv("KORAL_MAPPER_SDK", "from-env-sdk")
+		os.Setenv("KORAL_MAPPER_STYLESHEET", "from-env-style")
+		os.Setenv("KORAL_MAPPER_SERVICE_URL", "from-env-url")
+		os.Setenv("KORAL_MAPPER_COOKIE_NAME", "from-env-cookie")
+		os.Setenv("KORAL_MAPPER_PORT", "9999")
+		os.Setenv("KORAL_MAPPER_LOG_LEVEL", "debug")
+
+		ApplyEnvOverrides(cfg)
+
+		assert.Equal(t, "from-env-server", cfg.Server)
+		assert.Equal(t, "from-env-sdk", cfg.SDK)
+		assert.Equal(t, "from-env-style", cfg.Stylesheet)
+		assert.Equal(t, "from-env-url", cfg.ServiceURL)
+		assert.Equal(t, "from-env-cookie", cfg.CookieName)
+		assert.Equal(t, 9999, cfg.Port)
+		assert.Equal(t, "debug", cfg.LogLevel)
+	})
+
+	t.Run("Empty ENV does not override", func(t *testing.T) {
+		clearEnv()
+		defer clearEnv()
+
+		cfg := &MappingConfig{
+			Server:     "original-server",
+			SDK:        "original-sdk",
+			Stylesheet: "original-style",
+			ServiceURL: "original-url",
+			CookieName: "original-cookie",
+			Port:       1234,
+			LogLevel:   "info",
+		}
+
+		ApplyEnvOverrides(cfg)
+
+		assert.Equal(t, "original-server", cfg.Server)
+		assert.Equal(t, "original-sdk", cfg.SDK)
+		assert.Equal(t, "original-style", cfg.Stylesheet)
+		assert.Equal(t, "original-url", cfg.ServiceURL)
+		assert.Equal(t, "original-cookie", cfg.CookieName)
+		assert.Equal(t, 1234, cfg.Port)
+		assert.Equal(t, "info", cfg.LogLevel)
+	})
+
+	t.Run("Invalid port ENV is ignored", func(t *testing.T) {
+		clearEnv()
+		defer clearEnv()
+
+		cfg := &MappingConfig{Port: 5725}
+		os.Setenv("KORAL_MAPPER_PORT", "not-a-number")
+
+		ApplyEnvOverrides(cfg)
+
+		assert.Equal(t, 5725, cfg.Port)
+	})
+
+	t.Run("Partial ENV overrides", func(t *testing.T) {
+		clearEnv()
+		defer clearEnv()
+
+		cfg := &MappingConfig{
+			Server:   "from-config",
+			SDK:      "from-config",
+			Port:     1234,
+			LogLevel: "warn",
+		}
+
+		os.Setenv("KORAL_MAPPER_SERVER", "from-env")
+		os.Setenv("KORAL_MAPPER_PORT", "8080")
+
+		ApplyEnvOverrides(cfg)
+
+		assert.Equal(t, "from-env", cfg.Server)
+		assert.Equal(t, "from-config", cfg.SDK)
+		assert.Equal(t, 8080, cfg.Port)
+		assert.Equal(t, "warn", cfg.LogLevel)
+	})
+}
+
+func TestEnvOverridesInLoadFromSources(t *testing.T) {
+	envKeys := []string{
+		"KORAL_MAPPER_SERVER",
+		"KORAL_MAPPER_SDK",
+		"KORAL_MAPPER_PORT",
+		"KORAL_MAPPER_LOG_LEVEL",
+		"KORAL_MAPPER_STYLESHEET",
+		"KORAL_MAPPER_SERVICE_URL",
+		"KORAL_MAPPER_COOKIE_NAME",
+	}
+	clearEnv := func() {
+		for _, key := range envKeys {
+			os.Unsetenv(key)
+		}
+	}
+	clearEnv()
+	defer clearEnv()
+
+	configContent := `
+sdk: "https://custom.example.com/sdk.js"
+server: "https://custom.example.com/"
+port: 3000
+lists:
+- id: test-mapper
+  mappings:
+    - "[A] <> [B]"
+`
+	tmpfile, err := os.CreateTemp("", "config-env-*.yaml")
+	require.NoError(t, err)
+	defer os.Remove(tmpfile.Name())
+
+	_, err = tmpfile.WriteString(configContent)
+	require.NoError(t, err)
+	require.NoError(t, tmpfile.Close())
+
+	os.Setenv("KORAL_MAPPER_SERVER", "https://env-override.example.com/")
+	os.Setenv("KORAL_MAPPER_PORT", "7777")
+
+	cfg, err := LoadFromSources(tmpfile.Name(), nil)
+	require.NoError(t, err)
+
+	// ENV overrides YAML values
+	assert.Equal(t, "https://env-override.example.com/", cfg.Server)
+	assert.Equal(t, 7777, cfg.Port)
+
+	// Non-overridden values preserved from YAML
+	assert.Equal(t, "https://custom.example.com/sdk.js", cfg.SDK)
+
+	// Defaults applied for unset fields
+	assert.Equal(t, defaultStylesheet, cfg.Stylesheet)
+	assert.Equal(t, defaultServiceURL, cfg.ServiceURL)
+	assert.Equal(t, defaultCookieName, cfg.CookieName)
+	assert.Equal(t, defaultLogLevel, cfg.LogLevel)
+}
+
 func TestParseCorpusMappingsWithFieldAFieldB(t *testing.T) {
 	list := &MappingList{
 		ID:     "test-keyed",

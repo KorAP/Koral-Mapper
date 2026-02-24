@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"strconv"
 
 	"github.com/KorAP/Koral-Mapper/ast"
 	"github.com/KorAP/Koral-Mapper/parser"
@@ -196,6 +197,9 @@ func LoadFromSources(configFile string, mappingFiles []string) (*MappingConfig, 
 		Lists:      allLists,
 	}
 
+	// Apply environment variable overrides (ENV > config file)
+	ApplyEnvOverrides(result)
+
 	// Apply defaults if not specified
 	ApplyDefaults(result)
 
@@ -221,6 +225,32 @@ func ApplyDefaults(config *MappingConfig) {
 
 	if config.Port == 0 {
 		config.Port = defaultPort
+	}
+}
+
+// ApplyEnvOverrides overrides configuration fields from environment variables.
+// All environment variables are uppercase and prefixed with KORAL_MAPPER_.
+// Non-empty environment values override any previously loaded config values.
+func ApplyEnvOverrides(config *MappingConfig) {
+	envMappings := map[string]*string{
+		"KORAL_MAPPER_SERVER":      &config.Server,
+		"KORAL_MAPPER_SDK":         &config.SDK,
+		"KORAL_MAPPER_STYLESHEET":  &config.Stylesheet,
+		"KORAL_MAPPER_SERVICE_URL": &config.ServiceURL,
+		"KORAL_MAPPER_COOKIE_NAME": &config.CookieName,
+		"KORAL_MAPPER_LOG_LEVEL":   &config.LogLevel,
+	}
+
+	for envKey, field := range envMappings {
+		if val := os.Getenv(envKey); val != "" {
+			*field = val
+		}
+	}
+
+	if val := os.Getenv("KORAL_MAPPER_PORT"); val != "" {
+		if port, err := strconv.Atoi(val); err == nil {
+			config.Port = port
+		}
 	}
 }
 
