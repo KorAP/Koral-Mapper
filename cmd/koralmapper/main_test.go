@@ -1944,7 +1944,7 @@ func TestConfigPageRendering(t *testing.T) {
 	assert.Contains(t, htmlContent, "<legend>Response</legend>")
 
 	// Annotation mapping entries
-	assert.Contains(t, htmlContent, "(query)")
+	assert.Contains(t, htmlContent, "query")
 	assert.Contains(t, htmlContent, "anno-mapper")
 	assert.Contains(t, htmlContent, `data-id="anno-mapper"`)
 	assert.Contains(t, htmlContent, `data-type="annotation"`)
@@ -1953,7 +1953,7 @@ func TestConfigPageRendering(t *testing.T) {
 	assert.Contains(t, htmlContent, "Annotation mapping")
 
 	// Corpus mapping entries
-	assert.Contains(t, htmlContent, "(corpus)")
+	assert.Contains(t, htmlContent, "corpus")
 	assert.Contains(t, htmlContent, "<strong>corpus-mapper</strong>")
 	assert.Contains(t, htmlContent, `data-id="corpus-mapper"`)
 	assert.Contains(t, htmlContent, `data-type="corpus"`)

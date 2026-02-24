@@ -23,7 +23,7 @@
                  data-default-foundry-b="{{.FoundryB}}" data-default-layer-b="{{.LayerB}}">
                 <div class="mapping-row">
                     <input type="checkbox" id="check-{{.ID}}-{{$section.Mode}}" class="checkbox {{$section.CheckboxClass}}" name="{{$section.CheckboxName}}">
-                    <label for="check-{{.ID}}-{{$section.Mode}}"><span></span>{{$section.AnnotationLabel}} <strong>{{.ID}}</strong></label>
+                    <label for="check-{{.ID}}-{{$section.Mode}}"><span></span><span class="data-mode">query</span> <strong>{{.ID}}</strong></label>
                     <div class="mapping-fields {{$section.FieldsClass}}">
                         <input type="text" class="{{$section.Mode}}-foundryA" value="{{.FoundryA}}" placeholder="{{.FoundryA}}" size="8">/<input type="text" class="{{$section.Mode}}-layerA" value="{{.LayerA}}" placeholder="{{.LayerA}}" size="4">
                         <button type="button" class="{{$section.ArrowClass}}" data-dir="{{$section.ArrowDirection}}">{{$section.ArrowLabel}}</button>
@@ -37,7 +37,7 @@
                  data-default-field-a="{{.FieldA}}" data-default-field-b="{{.FieldB}}">
                 <div class="mapping-row">
                     <input type="checkbox" id="check-{{.ID}}-{{$section.Mode}}" class="checkbox {{$section.CheckboxClass}}" name="{{$section.CheckboxName}}">
-                    <label for="check-{{.ID}}-{{$section.Mode}}"><span></span>(corpus) <strong>{{.ID}}</strong></label>
+                    <label for="check-{{.ID}}-{{$section.Mode}}"><span></span><span class="data-mode">corpus</span> <strong>{{.ID}}</strong></label>
                     <div class="mapping-fields {{$section.FieldsClass}}">
                         <input type="text" class="{{$section.Mode}}-fieldA" value="{{.FieldA}}" placeholder="{{.FieldA}}" size="10">
                         <button type="button" class="{{$section.ArrowClass}}" data-dir="{{$section.ArrowDirection}}">{{$section.ArrowLabel}}</button>
@@ -51,20 +51,19 @@
         {{end}}
 
         <section>
-          <h2>Available Mappings</h2>
           <dl>
             {{range .AnnotationMappings}}
-            <dt>{{.ID}}</dt>
+            <dt>{{.ID}}:</dt>
             {{if .Description}}<dd>{{.Description}}</dd>{{end}}
             {{end}}
             {{range .CorpusMappings}}
-            <dt>{{.ID}}</dt>
+            <dt>{{.ID}}:</dt>
             {{if .Description}}<dd>{{.Description}}</dd>{{end}}
             {{end}}
           </dl>
         </section>
 
-        <section class="mapping-section">
+        <section class="mapping-section" id="pipe-info">
             <fieldset style="font-size: 0.8em;">
                 <label class="cfg-line-label" for="request-cfg-preview">Request:</label>
             <input type="text" id="request-cfg-preview" class="cfg-preview request-cfg-preview" readonly value="">

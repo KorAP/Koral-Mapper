@@ -212,11 +212,8 @@
 
       var id = div.dataset.id;
       var dir = "atob";
-
-      if (div.dataset.type !== "corpus") {
-        var arrow = div.querySelector(classes.dirArrow);
-        dir = arrow ? arrow.dataset.dir : "atob";
-      }
+      var arrow = div.querySelector(classes.dirArrow);
+      dir = arrow ? arrow.dataset.dir : "atob";
 
       if (div.dataset.type !== "corpus") {
         var fA = cfgFieldValue(div, classes.foundryA, "defaultFoundryA");
