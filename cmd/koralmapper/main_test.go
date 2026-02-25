@@ -1936,8 +1936,8 @@ func TestConfigPageRendering(t *testing.T) {
 	assert.Contains(t, htmlContent, `data-service-url="https://example.com/plugin/koralmapper"`)
 
 	// Static file references
-	assert.Contains(t, htmlContent, `/static/style.css`)
-	assert.Contains(t, htmlContent, `/static/config.js`)
+	assert.Contains(t, htmlContent, `static/style.css`)
+	assert.Contains(t, htmlContent, `static/config.js`)
 
 	// Request/response sections
 	assert.Contains(t, htmlContent, "<legend>Request</legend>")

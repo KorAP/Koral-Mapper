@@ -3,8 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <title>{{.Title}}</title>
+    <base href="{{.ServiceURL}}" target="_blank">
     <link rel="stylesheet" href="{{.Stylesheet}}">
-    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="static/style.css">
     <script src="{{.SDK}}"
             data-server="{{.Server}}"></script>
 </head>
@@ -83,6 +84,6 @@
             <p><tt>{{.Version}} - {{.Date}} {{.Hash}}</tt></p>
         </footer>
     </div>
-    <script src="/static/config.js"></script>
+    <script src="static/config.js"></script>
 </body>
 </html>
