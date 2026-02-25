@@ -98,6 +98,21 @@ The `sdk`, `stylesheet`, `server`, `port`, and `loglevel` fields in the main con
 
 These values are applied during configuration parsing. When using only individual mapping files (`-m` flags), default values are used unless overridden by command line arguments.
 
+### Environment Variable Overrides
+
+In addition to YAML config, global settings can be overridden with environment variables.
+All variables are optional and use the `KORAL_MAPPER_` prefix:
+
+- `KORAL_MAPPER_SERVER`: Overrides `server`
+- `KORAL_MAPPER_SDK`: Overrides `sdk`
+- `KORAL_MAPPER_STYLESHEET`: Overrides `stylesheet`
+- `KORAL_MAPPER_SERVICE_URL`: Overrides `serviceURL`
+- `KORAL_MAPPER_COOKIE_NAME`: Overrides `cookieName`
+- `KORAL_MAPPER_LOG_LEVEL`: Overrides `loglevel`
+- `KORAL_MAPPER_PORT`: Overrides `port` (integer)
+
+Environment variable values take precedence over values from the configuration file.
+
 ### Mapping Rules
 
 Koral-Mapper supports two types of mapping rules:
