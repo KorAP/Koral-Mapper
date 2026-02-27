@@ -1,5 +1,5 @@
 id: stts-upos
-desc: Mapping from STTS and Universal dependency Part-of-Speech
+desc: Mapping between STTS and Universal dependency Part-of-Speech
 foundryA: opennlp
 layerA: p
 foundryB: upos
