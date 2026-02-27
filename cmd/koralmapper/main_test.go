@@ -1595,7 +1595,7 @@ lists:
 	}{
 		{
 			name:         "cascades two query mappings",
-			url:          "/query?cfg=step1:atob;step2:atob",
+			url:          "/query/step1:atob;step2:atob",
 			expectedCode: http.StatusOK,
 			input: `{
 				"@type": "koral:token",
@@ -1619,33 +1619,8 @@ lists:
 			},
 		},
 		{
-			name:         "empty cfg returns input unchanged",
-			url:          "/query?cfg=",
-			expectedCode: http.StatusOK,
-			input: `{
-				"@type": "koral:token",
-				"wrap": {
-					"@type": "koral:term",
-					"foundry": "opennlp",
-					"key": "PIDAT",
-					"layer": "p",
-					"match": "match:eq"
-				}
-			}`,
-			expected: map[string]any{
-				"@type": "koral:token",
-				"wrap": map[string]any{
-					"@type":   "koral:term",
-					"foundry": "opennlp",
-					"key":     "PIDAT",
-					"layer":   "p",
-					"match":   "match:eq",
-				},
-			},
-		},
-		{
 			name:         "invalid cfg returns bad request",
-			url:          "/query?cfg=missing:atob",
+			url:          "/query/missing:atob",
 			expectedCode: http.StatusBadRequest,
 			input:        `{"@type": "koral:token"}`,
 			expected: map[string]any{
@@ -1703,7 +1678,7 @@ lists:
 	}{
 		{
 			name:         "cascades two response mappings",
-			url:          "/response?cfg=resp-step1:atob;resp-step2:atob",
+			url:          "/response/resp-step1:atob;resp-step2:atob",
 			expectedCode: http.StatusOK,
 			input: `{
 				"fields": [{
@@ -1724,27 +1699,8 @@ lists:
 			},
 		},
 		{
-			name:         "empty cfg returns input unchanged",
-			url:          "/response?cfg=",
-			expectedCode: http.StatusOK,
-			input: `{
-				"fields": [{
-					"@type": "koral:field",
-					"key": "textClass",
-					"value": "novel",
-					"type": "type:string"
-				}]
-			}`,
-			assertBody: func(t *testing.T, actual map[string]any) {
-				fields := actual["fields"].([]any)
-				require.Len(t, fields, 1)
-				assert.Equal(t, "textClass", fields[0].(map[string]any)["key"])
-				assert.Equal(t, "novel", fields[0].(map[string]any)["value"])
-			},
-		},
-		{
 			name:         "invalid cfg returns bad request",
-			url:          "/response?cfg=resp-step1",
+			url:          "/response/resp-step1",
 			expectedCode: http.StatusBadRequest,
 			input:        `{"fields": []}`,
 			assertBody: func(t *testing.T, actual map[string]any) {

@@ -312,9 +312,9 @@ func setupRoutes(app *fiber.App, m *mapper.Mapper, yamlConfig *config.MappingCon
 	// Static file serving from embedded FS
 	app.Get("/static/*", handleStaticFile())
 
-	// Composite cascade transformation endpoints
-	app.Post("/query", handleCompositeQueryTransform(m, yamlConfig.Lists))
-	app.Post("/response", handleCompositeResponseTransform(m, yamlConfig.Lists))
+	// Composite cascade transformation endpoints (cfg in path)
+	app.Post("/query/:cfg", handleCompositeQueryTransform(m, yamlConfig.Lists))
+	app.Post("/response/:cfg", handleCompositeResponseTransform(m, yamlConfig.Lists))
 
 	// Transformation endpoint
 	app.Post("/:map/query", handleTransform(m))
@@ -406,7 +406,7 @@ func buildConfigPageData(yamlConfig *config.MappingConfig) ConfigPageData {
 
 func handleCompositeQueryTransform(m *mapper.Mapper, lists []config.MappingList) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		cfgRaw := c.Query("cfg", "")
+		cfgRaw := c.Params("cfg")
 		if len(cfgRaw) > maxParamLength {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"error": fmt.Sprintf("cfg too long (max %d bytes)", maxParamLength),
@@ -465,7 +465,7 @@ func handleCompositeQueryTransform(m *mapper.Mapper, lists []config.MappingList)
 
 func handleCompositeResponseTransform(m *mapper.Mapper, lists []config.MappingList) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		cfgRaw := c.Query("cfg", "")
+		cfgRaw := c.Params("cfg")
 		if len(cfgRaw) > maxParamLength {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"error": fmt.Sprintf("cfg too long (max %d bytes)", maxParamLength),

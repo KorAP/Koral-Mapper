@@ -124,14 +124,65 @@ For detailed mapping rule syntax, examples, and guidelines on writing mapping fi
 
 ## API Endpoints
 
+### POST /query/:cfg
+
+Apply a cascade of query mappings to a JSON object. The `:cfg` path parameter specifies which mapping lists to apply and in what order, using a compact serialization format.
+
+**cfg format:** `id:dir[:foundryA:layerA:foundryB:layerB]` entries separated by `;`
+
+- `id`: ID of the mapping list
+- `dir`: Direction (`atob` or `btoa`)
+- Optional foundry/layer overrides (annotation mappings use 6 fields, corpus mappings use 4 fields with `fieldA:fieldB`)
+
+When override fields are omitted, defaults from the YAML mapping list are used.
+
+Request body: JSON object to transform
+
+Example request:
+
+```http
+POST /query/stts-upos:atob;other-mapper:btoa HTTP/1.1
+Content-Type: application/json
+
+{
+  "@type": "koral:token",
+  "wrap": {
+    "@type": "koral:term",
+    "foundry": "opennlp",
+    "key": "PIDAT",
+    "layer": "p",
+    "match": "match:eq"
+  }
+}
+```
+
+### POST /response/:cfg
+
+Apply a cascade of response mappings to a JSON object. The `:cfg` path parameter uses the same format as `/query/:cfg`.
+
+This endpoint processes response snippets by applying term mappings to annotations within HTML snippet markup, and enriches corpus fields for corpus mappings.
+
+Request body: JSON object (with `snippet` field for annotation mappings, or `fields` for corpus mappings)
+
+Example request:
+
+```http
+POST /response/stts-upos:btoa HTTP/1.1
+Content-Type: application/json
+
+{
+  "snippet": "<span title=\"marmot/m:gender:masc\">Der</span>"
+}
+```
+
 ### POST /:map/query
 
-Transform a JSON object using the specified mapping list.
+Transform a JSON object using a single mapping list.
 
 Parameters:
 
 - `:map`: ID of the mapping list to use
-- `dir` (query): Direction of transformation (atob or `btoa`, default: `atob`)
+- `dir` (query): Direction of transformation (`atob` or `btoa`, default: `atob`)
 - `foundryA` (query): Override default foundryA from mapping list
 - `foundryB` (query): Override default foundryB from mapping list
 - `layerA` (query): Override default layerA from mapping list
@@ -188,12 +239,12 @@ Example response:
 
 ### POST /:map/response
 
-Transform JSON response objects using the specified mapping list. This endpoint processes response snippets by applying term mappings to annotations within HTML snippet markup.
+Transform JSON response objects using a single mapping list. This endpoint processes response snippets by applying term mappings to annotations within HTML snippet markup.
 
 Parameters:
 
 - `:map`: ID of the mapping list to use
-- `dir` (query): Direction of transformation (atob or `btoa`, default: `atob`)
+- `dir` (query): Direction of transformation (`atob` or `btoa`, default: `atob`)
 - `foundryA` (query): Override default foundryA from mapping list
 - `foundryB` (query): Override default foundryB from mapping list
 - `layerA` (query): Override default layerA from mapping list
@@ -220,15 +271,23 @@ Example response:
 }
 ```
 
+### GET /
+
+Serves the configuration page for the Kalamar plugin integration. This HTML page allows selecting mapping lists and configuring their parameters. The JavaScript registers KorAP pipes using the path-based `/query/:cfg` and `/response/:cfg` endpoints.
+
 ### GET /:map
 
-Serves the Kalamar plugin integration page. This HTML page includes:
+Serves the Kalamar plugin integration page for a single mapping list. This HTML page includes:
 
 - Plugin information and available mapping lists
 - JavaScript integration code for Kalamar
 - SDK and server endpoints configured via `sdk` and `server` configuration fields
 
 The SDK script and server data-attribute in the HTML are determined by the configuration file's `sdk` and `server` values, with fallback to default endpoints if not specified.
+
+### GET /health
+
+Health check endpoint. Returns `OK` with HTTP 200.
 
 ## Supported Mappings
 
