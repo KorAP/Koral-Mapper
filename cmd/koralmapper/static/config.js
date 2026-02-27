@@ -259,6 +259,15 @@ function pluginit(KorAPugin) {
 
   // Kalamar pipe registration
 
+  function encodePathCfg(cfg) {
+    return encodeURIComponent(cfg).replace(/%3A/gi, ':').replace(/%3B/gi, ';');
+  }
+
+  function buildPipeURL(pipeType, cfg) {
+    if (!cfg) return "";
+    return serviceURL.replace(/\/+$/, "") + "/" + pipeType + "/" + encodePathCfg(cfg);
+  }
+
   var lastQueryPipe = null;
   var lastResponsePipe = null;
 
@@ -290,8 +299,8 @@ function pluginit(KorAPugin) {
       return;
     }
 
-    var newQueryPipe = queryCfg ? serviceURL + "/query?cfg=" + encodeURIComponent(queryCfg) : "";
-    var newResponsePipe = responseCfg ? serviceURL + "/response?cfg=" + encodeURIComponent(responseCfg) : "";
+    var newQueryPipe = buildPipeURL("query", queryCfg);
+    var newResponsePipe = buildPipeURL("response", responseCfg);
 
     if (newQueryPipe === lastQueryPipe && newResponsePipe === lastResponsePipe) return;
 
