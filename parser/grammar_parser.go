@@ -156,7 +156,7 @@ func (p *GrammarParser) preprocessInput(input string) string {
 			// Check if this parenthesis is inside brackets (part of an identifier)
 			insideBrackets := false
 			bracketDepth := 0
-			for j := 0; j < i; j++ {
+			for j := range i {
 				if runes[j] == '[' {
 					bracketDepth++
 				} else if runes[j] == ']' {

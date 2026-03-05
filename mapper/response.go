@@ -2,6 +2,7 @@ package mapper
 
 import (
 	"fmt"
+	"maps"
 	"strings"
 
 	"github.com/KorAP/Koral-Mapper/ast"
@@ -143,9 +144,7 @@ func (m *Mapper) ApplyResponseMappings(mappingID string, opts MappingOptions, js
 
 	// Create a copy of the input data and update the snippet
 	result := make(map[string]any)
-	for k, v := range jsonMap {
-		result[k] = v
-	}
+	maps.Copy(result, jsonMap)
 	result["snippet"] = processedSnippet
 
 	return result, nil
@@ -242,9 +241,9 @@ func (m *Mapper) addAnnotationsToSnippet(snippet string, matchingTokens []matche
 			trimmed := strings.TrimSpace(text)
 
 			if token, ok := tokenByStartPos[textPos]; ok && trimmed != "" && trimmed == token.Text {
-				trimStart := strings.Index(text, trimmed)
-				leadingWS := text[:trimStart]
-				trailingWS := text[trimStart+len(trimmed):]
+				before, after, _ := strings.Cut(text, trimmed)
+				leadingWS := before
+				trailingWS := after
 
 				result.WriteString(leadingWS)
 

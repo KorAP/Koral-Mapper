@@ -181,7 +181,7 @@ func BenchmarkApplyResponseMappings(b *testing.B) {
 func BenchmarkApplyQueryMappingsWorstCase(b *testing.B) {
 	// Create a mapper with many rules
 	manyRules := make([]config.MappingRule, 100)
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		ruleChar := string(rune('A' + i%26))
 		manyRules[i] = config.MappingRule("[UNUSED" + ruleChar + "] <> [TARGET" + ruleChar + "]")
 	}

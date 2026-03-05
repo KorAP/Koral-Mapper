@@ -1,6 +1,8 @@
 package mapper
 
 import (
+	"encoding/json"
+	"os"
 	"testing"
 
 	"github.com/KorAP/Koral-Mapper/config"
@@ -596,6 +598,45 @@ func TestCorpusResponseMultiValuedField(t *testing.T) {
 	assert.Equal(t, "genre", mapped2["key"])
 	assert.Equal(t, "popsci", mapped2["value"])
 	assert.Equal(t, true, mapped2["mapped"])
+}
+
+func TestCorpusResponseWikiDeReKoFixtureEnrichment(t *testing.T) {
+	cfg, err := config.LoadFromSources("", []string{"../mappings/wiki-dereko.yaml"})
+	require.NoError(t, err)
+
+	m, err := NewMapper(cfg.Lists)
+	require.NoError(t, err)
+
+	raw, err := os.ReadFile("../testdata/corpus-response.json")
+	require.NoError(t, err)
+
+	var input map[string]any
+	require.NoError(t, json.Unmarshal(raw, &input))
+
+	result, err := m.ApplyResponseMappings("wiki-dereko", MappingOptions{Direction: BtoA}, input)
+	require.NoError(t, err)
+
+	resultMap := result.(map[string]any)
+	document := resultMap["document"].(map[string]any)
+	fields := document["fields"].([]any)
+
+	var wikiValues []string
+	for _, fieldRaw := range fields {
+		field, ok := fieldRaw.(map[string]any)
+		if !ok {
+			continue
+		}
+		key, _ := field["key"].(string)
+		if key != "wikiCat" {
+			continue
+		}
+		if value, ok := field["value"].(string); ok {
+			wikiValues = append(wikiValues, value)
+		}
+	}
+
+	assert.NotEmpty(t, wikiValues, "expected wiki categories to be enriched from textClass values")
+	assert.Contains(t, wikiValues, "Science")
 }
 
 func TestCorpusResponseRegexMatch(t *testing.T) {

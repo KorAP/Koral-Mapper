@@ -1,7 +1,9 @@
 package mapper
 
 import (
+	"maps"
 	"regexp"
+	"slices"
 
 	"github.com/KorAP/Koral-Mapper/parser"
 )
@@ -390,12 +392,7 @@ func (m *Mapper) applyCorpusResponseMappings(mappingID string, opts MappingOptio
 		return jsonData, nil
 	}
 
-	fieldsRaw, exists := jsonMap["fields"]
-	if !exists {
-		return jsonData, nil
-	}
-
-	fields, ok := fieldsRaw.([]any)
+	fieldsInDocument, fields, ok := extractResponseFieldsContainer(jsonMap)
 	if !ok {
 		return jsonData, nil
 	}
@@ -421,9 +418,50 @@ func (m *Mapper) applyCorpusResponseMappings(mappingID string, opts MappingOptio
 		newFields = append(newFields, mapped...)
 	}
 
+	fieldValues := collectResponseFieldValues(fields)
+	newFields = append(newFields, m.matchGroupPatternsAndCollect(fieldValues, rules, opts)...)
+
 	result := shallowCopyMap(jsonMap)
-	result["fields"] = newFields
+	if !fieldsInDocument {
+		result["fields"] = newFields
+		return result, nil
+	}
+
+	if document, ok := jsonMap["document"].(map[string]any); ok {
+		documentCopy := shallowCopyMap(document)
+		documentCopy["fields"] = newFields
+		result["document"] = documentCopy
+	}
+
 	return result, nil
+}
+
+// extractResponseFieldsContainer finds the response field array either at
+// top-level ("fields") or in document-level ("document.fields").
+func extractResponseFieldsContainer(jsonMap map[string]any) (bool, []any, bool) {
+	if fieldsRaw, exists := jsonMap["fields"]; exists {
+		if fields, ok := fieldsRaw.([]any); ok {
+			return false, fields, true
+		}
+	}
+
+	documentRaw, exists := jsonMap["document"]
+	if !exists {
+		return false, nil, false
+	}
+	document, ok := documentRaw.(map[string]any)
+	if !ok {
+		return false, nil, false
+	}
+	fieldsRaw, exists := document["fields"]
+	if !exists {
+		return false, nil, false
+	}
+	fields, ok := fieldsRaw.([]any)
+	if !ok {
+		return false, nil, false
+	}
+	return true, fields, true
 }
 
 // matchFieldAndCollect matches a field's key/value against rules and returns mapped entries.
@@ -472,6 +510,118 @@ func (m *Mapper) matchSingleValue(key, value string, rules []*parser.CorpusMappi
 	}
 
 	return results
+}
+
+// matchGroupPatternsAndCollect matches group-based rule patterns against the
+// complete set of response field values (e.g. AND combinations across
+// multi-valued textClass fields).
+func (m *Mapper) matchGroupPatternsAndCollect(values map[string][]string, rules []*parser.CorpusMappingResult, opts MappingOptions) []any {
+	var results []any
+
+	for _, rule := range rules {
+		var pattern, replacement parser.CorpusNode
+		if opts.Direction == AtoB {
+			pattern, replacement = rule.Upper, rule.Lower
+		} else {
+			pattern, replacement = rule.Lower, rule.Upper
+		}
+
+		if !patternNeedsAggregateMatching(pattern) {
+			continue
+		}
+		if !matchCorpusPatternAgainstValues(pattern, values) {
+			continue
+		}
+
+		results = append(results, collectReplacementFields(replacement)...)
+	}
+
+	return results
+}
+
+func collectResponseFieldValues(fields []any) map[string][]string {
+	values := make(map[string][]string)
+
+	for _, fieldRaw := range fields {
+		fieldMap, ok := fieldRaw.(map[string]any)
+		if !ok {
+			continue
+		}
+
+		fieldKey, _ := fieldMap["key"].(string)
+		if fieldKey == "" {
+			continue
+		}
+
+		switch v := fieldMap["value"].(type) {
+		case string:
+			values[fieldKey] = append(values[fieldKey], v)
+		case []any:
+			for _, elem := range v {
+				if s, ok := elem.(string); ok {
+					values[fieldKey] = append(values[fieldKey], s)
+				}
+			}
+		}
+	}
+
+	return values
+}
+
+func matchCorpusPatternAgainstValues(pattern parser.CorpusNode, values map[string][]string) bool {
+	switch p := pattern.(type) {
+	case *parser.CorpusField:
+		if p.Key == "" {
+			for key, keyValues := range values {
+				for _, value := range keyValues {
+					if matchCorpusField(p, map[string]any{"key": key, "value": value}) {
+						return true
+					}
+				}
+			}
+			return false
+		}
+		for _, value := range values[p.Key] {
+			if matchCorpusField(p, map[string]any{"key": p.Key, "value": value}) {
+				return true
+			}
+		}
+		return false
+
+	case *parser.CorpusGroup:
+		if p.Operation == "or" {
+			for _, op := range p.Operands {
+				if matchCorpusPatternAgainstValues(op, values) {
+					return true
+				}
+			}
+			return false
+		}
+
+		for _, op := range p.Operands {
+			if !matchCorpusPatternAgainstValues(op, values) {
+				return false
+			}
+		}
+		return true
+	}
+
+	return false
+}
+
+func patternNeedsAggregateMatching(pattern parser.CorpusNode) bool {
+	switch p := pattern.(type) {
+	case *parser.CorpusField:
+		return false
+	case *parser.CorpusGroup:
+		if p.Operation == "and" {
+			return true
+		}
+		if slices.ContainsFunc(p.Operands, patternNeedsAggregateMatching) {
+			return true
+		}
+	}
+	return false
 }
 
 // matchCorpusFieldPattern checks if a single response field matches a pattern.
@@ -529,9 +679,7 @@ func collectReplacementFields(node parser.CorpusNode) []any {
 
 func shallowCopyMap(m map[string]any) map[string]any {
 	result := make(map[string]any, len(m))
-	for k, v := range m {
-		result[k] = v
-	}
+	maps.Copy(result, m)
 	return result
 }
 
@@ -571,4 +719,3 @@ func applyCorpusKeyOverride(node parser.CorpusNode, key string) {
 		}
 	}
 }
-

@@ -1,6 +1,7 @@
 package matcher
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/KorAP/Koral-Mapper/ast"
@@ -269,13 +270,7 @@ func TestSnippetMatcher_FindMatchingTokens(t *testing.T) {
 		assert.Equal(t, expectedTexts[i], token.Text)
 
 		// Verify that each token has the required annotation
-		hasGenderMasc := false
-		for _, annotation := range token.Annotations {
-			if annotation == "marmot/m:gender:masc" {
-				hasGenderMasc = true
-				break
-			}
-		}
+		hasGenderMasc := slices.Contains(token.Annotations, "marmot/m:gender:masc")
 		assert.True(t, hasGenderMasc, "Token %s should have marmot/m:gender:masc annotation", token.Text)
 	}
 }

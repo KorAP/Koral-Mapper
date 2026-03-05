@@ -700,18 +700,18 @@ mappings:
 
 			assert.Equal(t, http.StatusOK, resp.StatusCode)
 
-			var result map[string]interface{}
+			var result map[string]any
 			err = json.NewDecoder(resp.Body).Decode(&result)
 			require.NoError(t, err)
 
 			// Check that the mapping was applied
-			wrap := result["wrap"].(map[string]interface{})
+			wrap := result["wrap"].(map[string]any)
 			if tc.expectGroup {
 				// For complex mappings, check the first operand
 				assert.Equal(t, "koral:termGroup", wrap["@type"])
-				operands := wrap["operands"].([]interface{})
+				operands := wrap["operands"].([]any)
 				require.Greater(t, len(operands), 0)
-				firstOperand := operands[0].(map[string]interface{})
+				firstOperand := operands[0].(map[string]any)
 				assert.Equal(t, tc.expectedKey, firstOperand["key"])
 			} else {
 				// For simple mappings, check the key directly
@@ -1111,16 +1111,16 @@ func TestGlobIntegrationWithTestData(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
-	var result map[string]interface{}
+	var result map[string]any
 	err = json.NewDecoder(resp.Body).Decode(&result)
 	require.NoError(t, err)
 
 	// Verify the transformation was applied
-	wrap := result["wrap"].(map[string]interface{})
+	wrap := result["wrap"].(map[string]any)
 	assert.Equal(t, "koral:termGroup", wrap["@type"])
-	operands := wrap["operands"].([]interface{})
+	operands := wrap["operands"].([]any)
 	require.Greater(t, len(operands), 0)
-	firstOperand := operands[0].(map[string]interface{})
+	firstOperand := operands[0].(map[string]any)
 	assert.Equal(t, "DET", firstOperand["key"])
 }
 

@@ -95,13 +95,13 @@ func NewCorpusParser() *CorpusParser {
 
 // ParseMapping parses a corpus mapping rule of the form "pattern <> replacement".
 func (p *CorpusParser) ParseMapping(input string) (*CorpusMappingResult, error) {
-	sepIdx := strings.Index(input, "<>")
-	if sepIdx == -1 {
+	before, after, ok := strings.Cut(input, "<>")
+	if !ok {
 		return nil, fmt.Errorf("invalid corpus mapping rule: missing <> separator in %q", input)
 	}
 
-	leftStr := strings.TrimSpace(input[:sepIdx])
-	rightStr := strings.TrimSpace(input[sepIdx+2:])
+	leftStr := strings.TrimSpace(before)
+	rightStr := strings.TrimSpace(after)
 
 	if leftStr == "" {
 		return nil, fmt.Errorf("invalid corpus mapping rule: empty left side")
@@ -183,16 +183,16 @@ var validMatchTypes = map[string]bool{
 func (p *CorpusParser) parseField(input string) (*CorpusField, error) {
 	input = strings.TrimSpace(input)
 
-	eqIdx := strings.Index(input, "=")
-	if eqIdx == -1 {
+	before, after, ok := strings.Cut(input, "=")
+	if !ok {
 		if !p.AllowBareValues {
 			return nil, fmt.Errorf("invalid field expression: missing '=' in %q", input)
 		}
 		return p.parseBareValue(input)
 	}
 
-	key := strings.TrimSpace(input[:eqIdx])
-	rest := strings.TrimSpace(input[eqIdx+1:])
+	key := strings.TrimSpace(before)
+	rest := strings.TrimSpace(after)
 
 	if key == "" {
 		return nil, fmt.Errorf("invalid field expression: empty key")
