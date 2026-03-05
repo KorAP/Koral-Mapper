@@ -653,10 +653,11 @@ func collectReplacementFields(node parser.CorpusNode) []any {
 	switch n := node.(type) {
 	case *parser.CorpusField:
 		entry := map[string]any{
-			"@type":  "koral:field",
-			"key":    n.Key,
-			"value":  n.Value,
-			"mapped": true,
+			"@type":   "koral:field",
+			"key":     n.Key,
+			"value":   n.Value,
+			"mapped":  true,
+			"comment": "notinindex",
 		}
 		if n.Type != "" {
 			entry["type"] = "type:" + n.Type

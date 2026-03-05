@@ -167,8 +167,7 @@ func BenchmarkApplyResponseMappings(b *testing.B) {
 
 	opts := MappingOptions{Direction: AtoB}
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, err := mapper.ApplyResponseMappings("bench-response", opts, responseData)
 		if err != nil {
 			b.Fatalf("ApplyResponseMappings failed: %v", err)
@@ -211,8 +210,7 @@ func BenchmarkApplyQueryMappingsWorstCase(b *testing.B) {
 
 	opts := MappingOptions{Direction: true}
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, err := mapper.ApplyQueryMappings("many-rules", opts, testData)
 		if err != nil {
 			b.Fatalf("ApplyQueryMappings failed: %v", err)

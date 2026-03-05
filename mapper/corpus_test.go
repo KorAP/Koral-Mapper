@@ -545,6 +545,7 @@ func TestCorpusResponseSimpleFieldEnrichment(t *testing.T) {
 	assert.Equal(t, "textClass", mapped["key"])
 	assert.Equal(t, "novel", mapped["value"])
 	assert.Equal(t, true, mapped["mapped"])
+	assert.Equal(t, "notinindex", mapped["comment"])
 }
 
 func TestCorpusResponseNoMatch(t *testing.T) {
@@ -593,11 +594,13 @@ func TestCorpusResponseMultiValuedField(t *testing.T) {
 	assert.Equal(t, "genre", mapped1["key"])
 	assert.Equal(t, "science", mapped1["value"])
 	assert.Equal(t, true, mapped1["mapped"])
+	assert.Equal(t, "notinindex", mapped1["comment"])
 
 	mapped2 := fields[2].(map[string]any)
 	assert.Equal(t, "genre", mapped2["key"])
 	assert.Equal(t, "popsci", mapped2["value"])
 	assert.Equal(t, true, mapped2["mapped"])
+	assert.Equal(t, "notinindex", mapped2["comment"])
 }
 
 func TestCorpusResponseWikiDeReKoFixtureEnrichment(t *testing.T) {
