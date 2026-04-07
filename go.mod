@@ -3,7 +3,7 @@ module github.com/KorAP/Koral-Mapper
 go 1.24.0
 
 require (
-	github.com/alecthomas/kong v1.14.0
+	github.com/alecthomas/kong v1.15.0
 	github.com/alecthomas/participle/v2 v2.1.4
 	github.com/gofiber/fiber/v2 v2.52.11
 	github.com/orisano/gosax v1.1.4
