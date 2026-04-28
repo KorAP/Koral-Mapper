@@ -5,7 +5,7 @@ go 1.24.0
 require (
 	github.com/alecthomas/kong v1.14.0
 	github.com/alecthomas/participle/v2 v2.1.4
-	github.com/gofiber/fiber/v2 v2.52.11
+	github.com/gofiber/fiber/v2 v2.52.13
 	github.com/orisano/gosax v1.1.4
 	github.com/rs/zerolog v1.34.0
 	github.com/stretchr/testify v1.11.1
