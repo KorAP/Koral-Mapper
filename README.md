@@ -2,6 +2,8 @@
 
 A KorAP service using the KoralPipe mechanism to rewrite terms in queries and responses between different annotations.
 
+![Koral-Mapper Screenshot](https://raw.githubusercontent.com/KorAP/Koral-Mapper/main/misc/koral-mapper.png)
+
 ## Overview
 
 Koral-Mapper is a tool for transforming linguistic annotations between different annotation schemes. It allows you to define mapping rules in YAML configuration files and apply these mappings to JSON-encoded linguistic annotations.
