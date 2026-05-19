@@ -668,6 +668,247 @@ func TestInvalidPatternReplacement(t *testing.T) {
 	}
 }
 
+func TestMultiFieldRewritesAreReversible(t *testing.T) {
+	mappingList := config.MappingList{
+		ID:       "multi-field",
+		FoundryA: "opennlp",
+		LayerA:   "p",
+		FoundryB: "upos",
+		LayerB:   "pos",
+		Mappings: []config.MappingRule{
+			"[DET] <> [PRON]",
+		},
+	}
+
+	m, err := NewMapper([]config.MappingList{mappingList})
+	require.NoError(t, err)
+
+	tests := []struct {
+		name     string
+		opts     MappingOptions
+		input    string
+		expected string
+	}{
+		{
+			name: "Multi-field change: foundry + layer + key all change",
+			opts: MappingOptions{
+				Direction:   AtoB,
+				AddRewrites: true,
+			},
+			input: `{
+				"@type": "koral:token",
+				"wrap": {
+					"@type": "koral:term",
+					"foundry": "opennlp",
+					"key": "DET",
+					"layer": "p",
+					"match": "match:eq"
+				}
+			}`,
+			expected: `{
+				"@type": "koral:token",
+				"wrap": {
+					"@type": "koral:term",
+					"foundry": "upos",
+					"key": "PRON",
+					"layer": "pos",
+					"match": "match:eq",
+					"rewrites": [
+						{
+							"@type": "koral:rewrite",
+							"editor": "Koral-Mapper",
+							"scope": "foundry",
+							"original": "opennlp"
+						},
+						{
+							"@type": "koral:rewrite",
+							"editor": "Koral-Mapper",
+							"scope": "layer",
+							"original": "p"
+						},
+						{
+							"@type": "koral:rewrite",
+							"editor": "Koral-Mapper",
+							"scope": "key",
+							"original": "DET"
+						}
+					]
+				}
+			}`,
+		},
+		{
+			name: "Reverse direction: foundry + layer + key all change back",
+			opts: MappingOptions{
+				Direction:   BtoA,
+				AddRewrites: true,
+			},
+			input: `{
+				"@type": "koral:token",
+				"wrap": {
+					"@type": "koral:term",
+					"foundry": "upos",
+					"key": "PRON",
+					"layer": "pos",
+					"match": "match:eq"
+				}
+			}`,
+			expected: `{
+				"@type": "koral:token",
+				"wrap": {
+					"@type": "koral:term",
+					"foundry": "opennlp",
+					"key": "DET",
+					"layer": "p",
+					"match": "match:eq",
+					"rewrites": [
+						{
+							"@type": "koral:rewrite",
+							"editor": "Koral-Mapper",
+							"scope": "foundry",
+							"original": "upos"
+						},
+						{
+							"@type": "koral:rewrite",
+							"editor": "Koral-Mapper",
+							"scope": "layer",
+							"original": "pos"
+						},
+						{
+							"@type": "koral:rewrite",
+							"editor": "Koral-Mapper",
+							"scope": "key",
+							"original": "PRON"
+						}
+					]
+				}
+			}`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var inputData any
+			err := json.Unmarshal([]byte(tt.input), &inputData)
+			require.NoError(t, err)
+
+			result, err := m.ApplyQueryMappings("multi-field", tt.opts, inputData)
+			require.NoError(t, err)
+
+			var expectedData any
+			err = json.Unmarshal([]byte(tt.expected), &expectedData)
+			require.NoError(t, err)
+
+			assert.Equal(t, expectedData, result)
+		})
+	}
+}
+
+func TestSingleFieldRewrite(t *testing.T) {
+	mappingList := config.MappingList{
+		ID:       "same-fl",
+		FoundryA: "opennlp",
+		LayerA:   "p",
+		FoundryB: "opennlp",
+		LayerB:   "p",
+		Mappings: []config.MappingRule{
+			"[DET] <> [PRON]",
+		},
+	}
+
+	m, err := NewMapper([]config.MappingList{mappingList})
+	require.NoError(t, err)
+
+	var inputData any
+	err = json.Unmarshal([]byte(`{
+		"@type": "koral:token",
+		"wrap": {
+			"@type": "koral:term",
+			"foundry": "opennlp",
+			"key": "DET",
+			"layer": "p",
+			"match": "match:eq"
+		}
+	}`), &inputData)
+	require.NoError(t, err)
+
+	result, err := m.ApplyQueryMappings("same-fl", MappingOptions{
+		Direction:   AtoB,
+		AddRewrites: true,
+	}, inputData)
+	require.NoError(t, err)
+
+	var expectedData any
+	err = json.Unmarshal([]byte(`{
+		"@type": "koral:token",
+		"wrap": {
+			"@type": "koral:term",
+			"foundry": "opennlp",
+			"key": "PRON",
+			"layer": "p",
+			"match": "match:eq",
+			"rewrites": [
+				{
+					"@type": "koral:rewrite",
+					"editor": "Koral-Mapper",
+					"scope": "key",
+					"original": "DET"
+				}
+			]
+		}
+	}`), &expectedData)
+	require.NoError(t, err)
+
+	assert.Equal(t, expectedData, result)
+}
+
+func TestBuildRewritesFieldInjection(t *testing.T) {
+	tests := []struct {
+		name           string
+		original       *ast.Term
+		new_           *ast.Term
+		expectedScopes []string
+		hasOriginals   []bool
+	}{
+		{
+			name:           "All fields change with originals",
+			original:       &ast.Term{Foundry: "a", Layer: "l1", Key: "k1", Value: "v1", Match: ast.MatchEqual},
+			new_:           &ast.Term{Foundry: "b", Layer: "l2", Key: "k2", Value: "v2", Match: ast.MatchEqual},
+			expectedScopes: []string{"foundry", "layer", "key", "value"},
+			hasOriginals:   []bool{true, true, true, true},
+		},
+		{
+			name:           "Injection: empty value becomes non-empty",
+			original:       &ast.Term{Foundry: "a", Layer: "l", Key: "k", Match: ast.MatchEqual},
+			new_:           &ast.Term{Foundry: "a", Layer: "l", Key: "k", Value: "v", Match: ast.MatchEqual},
+			expectedScopes: []string{"value"},
+			hasOriginals:   []bool{false},
+		},
+		{
+			name:           "Deletion: non-empty value becomes empty",
+			original:       &ast.Term{Foundry: "a", Layer: "l", Key: "k", Value: "v", Match: ast.MatchEqual},
+			new_:           &ast.Term{Foundry: "a", Layer: "l", Key: "k", Match: ast.MatchEqual},
+			expectedScopes: []string{"value"},
+			hasOriginals:   []bool{true},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rewrites := buildRewrites(tt.original, tt.new_)
+			require.Len(t, rewrites, len(tt.expectedScopes))
+			for i, rw := range rewrites {
+				assert.Equal(t, RewriteEditor, rw.Editor)
+				assert.Equal(t, tt.expectedScopes[i], rw.Scope)
+				if tt.hasOriginals[i] {
+					assert.NotNil(t, rw.Original, "expected original for scope %s", tt.expectedScopes[i])
+				} else {
+					assert.Nil(t, rw.Original, "expected no original for scope %s (injection)", tt.expectedScopes[i])
+				}
+			}
+		})
+	}
+}
+
 func TestQueryWrapperMappings(t *testing.T) {
 
 	mappingList := config.MappingList{

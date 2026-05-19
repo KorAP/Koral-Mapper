@@ -266,44 +266,67 @@ func recordRewritesForOperand(newOp, oldOp ast.Node) {
 	addRewriteToNode(newInner, oldInner)
 }
 
-// addRewriteToNode creates and attaches a rewrite entry to a node,
+// addRewriteToNode creates and attaches rewrite entries to a node,
 // recording what the node looked like before the change.
 func addRewriteToNode(newNode, originalNode ast.Node) {
-	rw := buildRewrite(originalNode, newNode)
-	ast.AppendRewrite(newNode, rw)
+	for _, rw := range buildRewrites(originalNode, newNode) {
+		ast.AppendRewrite(newNode, rw)
+	}
 }
 
-// buildRewrite creates a Rewrite describing what changed between
-// originalNode and newNode. For simple term-level changes (just foundry,
-// layer, key, or value), it uses a scoped rewrite. For structural changes,
-// it stores the full original as an object.
-func buildRewrite(originalNode, newNode ast.Node) ast.Rewrite {
+// buildRewrites creates Rewrite entries describing what changed between
+// originalNode and newNode. For term-level changes it emits one scoped
+// rewrite per changed field so the transformation is fully reversible.
+// For structural changes it stores the full original as an object.
+func buildRewrites(originalNode, newNode ast.Node) []ast.Rewrite {
 	if term, ok := originalNode.(*ast.Term); ok && ast.IsTermNode(newNode) && originalNode.Type() == newNode.Type() {
 		newTerm := newNode.(*ast.Term)
+		var rewrites []ast.Rewrite
+
 		if term.Foundry != newTerm.Foundry {
-			return ast.Rewrite{Editor: RewriteEditor, Scope: "foundry", Original: term.Foundry}
+			rw := ast.Rewrite{Editor: RewriteEditor, Scope: "foundry"}
+			if term.Foundry != "" {
+				rw.Original = term.Foundry
+			}
+			rewrites = append(rewrites, rw)
 		}
 		if term.Layer != newTerm.Layer {
-			return ast.Rewrite{Editor: RewriteEditor, Scope: "layer", Original: term.Layer}
+			rw := ast.Rewrite{Editor: RewriteEditor, Scope: "layer"}
+			if term.Layer != "" {
+				rw.Original = term.Layer
+			}
+			rewrites = append(rewrites, rw)
 		}
 		if term.Key != newTerm.Key {
-			return ast.Rewrite{Editor: RewriteEditor, Scope: "key", Original: term.Key}
+			rw := ast.Rewrite{Editor: RewriteEditor, Scope: "key"}
+			if term.Key != "" {
+				rw.Original = term.Key
+			}
+			rewrites = append(rewrites, rw)
 		}
 		if term.Value != newTerm.Value {
-			return ast.Rewrite{Editor: RewriteEditor, Scope: "value", Original: term.Value}
+			rw := ast.Rewrite{Editor: RewriteEditor, Scope: "value"}
+			if term.Value != "" {
+				rw.Original = term.Value
+			}
+			rewrites = append(rewrites, rw)
+		}
+
+		if len(rewrites) > 0 {
+			return rewrites
 		}
 	}
 
 	// Structural change: serialize the original as the rewrite value
 	originalBytes, err := parser.SerializeToJSON(originalNode)
 	if err != nil {
-		return ast.Rewrite{Editor: RewriteEditor}
+		return []ast.Rewrite{{Editor: RewriteEditor}}
 	}
 	var originalJSON any
 	if err := json.Unmarshal(originalBytes, &originalJSON); err != nil {
-		return ast.Rewrite{Editor: RewriteEditor}
+		return []ast.Rewrite{{Editor: RewriteEditor}}
 	}
-	return ast.Rewrite{Editor: RewriteEditor, Original: originalJSON}
+	return []ast.Rewrite{{Editor: RewriteEditor, Original: originalJSON}}
 }
 
 // isValidQueryObject returns true if data is a JSON object with an @type field.

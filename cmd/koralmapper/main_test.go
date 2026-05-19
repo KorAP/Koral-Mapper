@@ -1678,6 +1678,12 @@ lists:
 							"scope":    "foundry",
 							"original": "opennlp",
 						},
+						map[string]any{
+							"@type":    "koral:rewrite",
+							"editor":   "Koral-Mapper",
+							"scope":    "key",
+							"original": "DET",
+						},
 					},
 				},
 			},
