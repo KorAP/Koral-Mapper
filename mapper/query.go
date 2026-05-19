@@ -143,11 +143,20 @@ func (m *Mapper) ApplyQueryMappings(mappingID string, opts MappingOptions, jsonD
 			beforeNode = node.Clone()
 		}
 
+		// Collect pre-existing rewrites before replacement so they
+		// survive when the matcher creates a fresh replacement node.
+		existingRewrites := collectRewrites(node)
+
 		actualMatcher, err := matcher.NewMatcher(ast.Pattern{Root: processedPattern}, ast.Replacement{Root: processedReplacement})
 		if err != nil {
 			return nil, fmt.Errorf("failed to create matcher: %w", err)
 		}
 		node = actualMatcher.Replace(node)
+
+		// Carry forward pre-existing rewrites from earlier cascade steps.
+		if len(existingRewrites) > 0 {
+			prependRewrites(node, existingRewrites)
+		}
 
 		if opts.AddRewrites {
 			recordRewrites(node, beforeNode)
@@ -327,6 +336,44 @@ func buildRewrites(originalNode, newNode ast.Node) []ast.Rewrite {
 		return []ast.Rewrite{{Editor: RewriteEditor}}
 	}
 	return []ast.Rewrite{{Editor: RewriteEditor, Original: originalJSON}}
+}
+
+// collectRewrites returns the rewrites from the deepest rewritable node.
+// For a Token wrapping a Term, it returns the Term's rewrites.
+// This captures rewrites added by previous cascade steps.
+func collectRewrites(node ast.Node) []ast.Rewrite {
+	if node == nil {
+		return nil
+	}
+	// Unwrap Token to reach the inner node that carries rewrites
+	if tok, ok := node.(*ast.Token); ok && tok.Wrap != nil {
+		return collectRewrites(tok.Wrap)
+	}
+	if r, ok := node.(ast.Rewriteable); ok {
+		return r.GetRewrites()
+	}
+	return nil
+}
+
+// prependRewrites inserts existing rewrites at the front of the node's
+// rewrite list so they appear before any rewrites added by the current step.
+func prependRewrites(node ast.Node, rewrites []ast.Rewrite) {
+	if node == nil || len(rewrites) == 0 {
+		return
+	}
+	// Unwrap Token to reach the inner rewritable node
+	if tok, ok := node.(*ast.Token); ok && tok.Wrap != nil {
+		prependRewrites(tok.Wrap, rewrites)
+		return
+	}
+	if r, ok := node.(ast.Rewriteable); ok {
+		current := r.GetRewrites()
+		// Prepend old rewrites before any newly added ones
+		combined := make([]ast.Rewrite, 0, len(rewrites)+len(current))
+		combined = append(combined, rewrites...)
+		combined = append(combined, current...)
+		r.SetRewrites(combined)
+	}
 }
 
 // isValidQueryObject returns true if data is a JSON object with an @type field.

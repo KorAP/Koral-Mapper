@@ -192,6 +192,141 @@ func TestCascadeQueryUnknownID(t *testing.T) {
 
 // --- Response cascade tests ---
 
+func TestCascadeQueryRewritesPreservedAcrossSteps(t *testing.T) {
+	// Step 1 changes key (PIDAT->DET) within same foundry/layer.
+	// Step 2 changes foundry+key (DET->PRON, opennlp->upos).
+	// Rewrites from step 1 must survive step 2's replacement.
+	m, err := NewMapper([]config.MappingList{
+		{
+			ID: "step1", FoundryA: "opennlp", LayerA: "p",
+			FoundryB: "opennlp", LayerB: "p",
+			Mappings: []config.MappingRule{`[PIDAT] <> [DET]`},
+		},
+		{
+			ID: "step2", FoundryA: "opennlp", LayerA: "p",
+			FoundryB: "upos", LayerB: "p",
+			Mappings: []config.MappingRule{`[DET] <> [PRON]`},
+		},
+	})
+	require.NoError(t, err)
+
+	input := parseJSON(t, `{
+		"@type": "koral:token",
+		"wrap": {
+			"@type": "koral:term",
+			"foundry": "opennlp",
+			"key": "PIDAT",
+			"layer": "p",
+			"match": "match:eq"
+		}
+	}`)
+
+	result, err := m.CascadeQueryMappings(
+		[]string{"step1", "step2"},
+		[]MappingOptions{
+			{Direction: AtoB, AddRewrites: true},
+			{Direction: AtoB, AddRewrites: true},
+		},
+		input,
+	)
+	require.NoError(t, err)
+
+	// After both steps, the term should have rewrites from both steps:
+	// step 1 recorded scope=key original=PIDAT,
+	// step 2 recorded scope=foundry original=opennlp and scope=key original=DET.
+	expected := parseJSON(t, `{
+		"@type": "koral:token",
+		"wrap": {
+			"@type": "koral:term",
+			"foundry": "upos",
+			"key": "PRON",
+			"layer": "p",
+			"match": "match:eq",
+			"rewrites": [
+				{
+					"@type": "koral:rewrite",
+					"editor": "Koral-Mapper",
+					"scope": "key",
+					"original": "PIDAT"
+				},
+				{
+					"@type": "koral:rewrite",
+					"editor": "Koral-Mapper",
+					"scope": "foundry",
+					"original": "opennlp"
+				},
+				{
+					"@type": "koral:rewrite",
+					"editor": "Koral-Mapper",
+					"scope": "key",
+					"original": "DET"
+				}
+			]
+		}
+	}`)
+	assert.Equal(t, expected, result)
+}
+
+func TestCascadeQueryRewritesPreservedStructuralChange(t *testing.T) {
+	// Step 1 changes key (PIDAT->DET) and records a scoped rewrite.
+	// Step 2 replaces Term with TermGroup (structural change).
+	// Rewrites from step 1 must be carried into the new TermGroup.
+	m, err := NewMapper([]config.MappingList{
+		{
+			ID: "sc-step1", FoundryA: "opennlp", LayerA: "p",
+			FoundryB: "opennlp", LayerB: "p",
+			Mappings: []config.MappingRule{`[PIDAT] <> [DET]`},
+		},
+		{
+			ID: "sc-step2", FoundryA: "opennlp", LayerA: "p",
+			FoundryB: "opennlp", LayerB: "p",
+			Mappings: []config.MappingRule{`[DET] <> [opennlp/p=DET & opennlp/p=PronType:Art]`},
+		},
+	})
+	require.NoError(t, err)
+
+	input := parseJSON(t, `{
+		"@type": "koral:token",
+		"wrap": {
+			"@type": "koral:term",
+			"foundry": "opennlp",
+			"key": "PIDAT",
+			"layer": "p",
+			"match": "match:eq"
+		}
+	}`)
+
+	result, err := m.CascadeQueryMappings(
+		[]string{"sc-step1", "sc-step2"},
+		[]MappingOptions{
+			{Direction: AtoB, AddRewrites: true},
+			{Direction: AtoB, AddRewrites: true},
+		},
+		input,
+	)
+	require.NoError(t, err)
+
+	// Step 1 rewrites (scope=key, original=PIDAT) must appear on the
+	// TermGroup created by step 2, along with step 2's own structural rewrite.
+	resultMap := result.(map[string]any)
+	wrap := resultMap["wrap"].(map[string]any)
+	require.Equal(t, "koral:termGroup", wrap["@type"])
+
+	rewrites := wrap["rewrites"].([]any)
+	// First rewrite is from step 1 (carried forward)
+	rw0 := rewrites[0].(map[string]any)
+	assert.Equal(t, "key", rw0["scope"])
+	assert.Equal(t, "PIDAT", rw0["original"])
+
+	// Last rewrite is from step 2 (structural: original is the full term)
+	rwLast := rewrites[len(rewrites)-1].(map[string]any)
+	assert.Equal(t, "Koral-Mapper", rwLast["editor"])
+	// Structural rewrite stores the full original node (no scope)
+	original := rwLast["original"].(map[string]any)
+	assert.Equal(t, "koral:term", original["@type"])
+	assert.Equal(t, "DET", original["key"])
+}
+
 func TestCascadeResponseTwoCorpusMappings(t *testing.T) {
 	m, err := NewMapper([]config.MappingList{
 		{

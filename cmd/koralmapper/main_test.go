@@ -1675,6 +1675,12 @@ lists:
 						map[string]any{
 							"@type":    "koral:rewrite",
 							"editor":   "Koral-Mapper",
+							"scope":    "key",
+							"original": "PIDAT",
+						},
+						map[string]any{
+							"@type":    "koral:rewrite",
+							"editor":   "Koral-Mapper",
 							"scope":    "foundry",
 							"original": "opennlp",
 						},
