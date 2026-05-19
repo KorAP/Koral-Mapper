@@ -1,4 +1,4 @@
-package mapper // ApplyQueryMappings applies the specified mapping rules to a JSON object
+package mapper
 
 import (
 	"encoding/json"
@@ -9,9 +9,10 @@ import (
 	"github.com/KorAP/Koral-Mapper/parser"
 )
 
-// ApplyQueryMappings applies the specified mapping rules to a JSON object
+// ApplyQueryMappings transforms a JSON query object using the mapping rules
+// identified by mappingID. The input may be a bare query node or a wrapper
+// object containing a "query" field; both forms are accepted.
 func (m *Mapper) ApplyQueryMappings(mappingID string, opts MappingOptions, jsonData any) (any, error) {
-	// Validate mapping ID
 	if _, exists := m.mappingLists[mappingID]; !exists {
 		return nil, fmt.Errorf("mapping list with ID %s not found", mappingID)
 	}
@@ -20,10 +21,9 @@ func (m *Mapper) ApplyQueryMappings(mappingID string, opts MappingOptions, jsonD
 		return m.applyCorpusQueryMappings(mappingID, opts, jsonData)
 	}
 
-	// Get the parsed rules
 	rules := m.parsedQueryRules[mappingID]
 
-	// Check if we have a wrapper object with a "query" field
+	// Detect wrapper: input may be {"query": ...} or a bare koral:token
 	var queryData any
 	var hasQueryWrapper bool
 
@@ -34,20 +34,17 @@ func (m *Mapper) ApplyQueryMappings(mappingID string, opts MappingOptions, jsonD
 		}
 	}
 
-	// If no query wrapper was found, use the entire input
 	if !hasQueryWrapper {
-		// If the input itself is not a valid query object, return it as is
 		if !isValidQueryObject(jsonData) {
 			return jsonData, nil
 		}
 		queryData = jsonData
 	} else if queryData == nil || !isValidQueryObject(queryData) {
-		// If we have a query wrapper but the query is nil or not a valid object,
-		// return the original data
 		return jsonData, nil
 	}
 
-	// Store rewrites if they exist
+	// Strip pre-existing rewrites before AST conversion so they do not
+	// interfere with matching. They are restored after transformation.
 	var oldRewrites any
 	if queryMap, ok := queryData.(map[string]any); ok {
 		if rewrites, exists := queryMap["rewrites"]; exists {
@@ -56,7 +53,6 @@ func (m *Mapper) ApplyQueryMappings(mappingID string, opts MappingOptions, jsonD
 		}
 	}
 
-	// Convert input JSON to AST
 	jsonBytes, err := json.Marshal(queryData)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal input JSON: %w", err)
@@ -67,7 +63,7 @@ func (m *Mapper) ApplyQueryMappings(mappingID string, opts MappingOptions, jsonD
 		return nil, fmt.Errorf("failed to parse JSON into AST: %w", err)
 	}
 
-	// Store whether the input was a Token
+	// Unwrap Token so matching operates on the inner node; re-wrapped later.
 	isToken := false
 	var tokenWrap ast.Node
 	if token, ok := node.(*ast.Token); ok {
@@ -76,15 +72,9 @@ func (m *Mapper) ApplyQueryMappings(mappingID string, opts MappingOptions, jsonD
 		node = tokenWrap
 	}
 
-	// Store original node for rewrite if needed
-	var originalNode ast.Node
-	if opts.AddRewrites {
-		originalNode = node.Clone()
-	}
-
-	// Pre-check foundry/layer overrides to optimize processing
+	// Resolve foundry/layer overrides per direction once, before the rule loop.
 	var patternFoundry, patternLayer, replacementFoundry, replacementLayer string
-	if opts.Direction { // true means AtoB
+	if opts.Direction {
 		patternFoundry, patternLayer = opts.FoundryA, opts.LayerA
 		replacementFoundry, replacementLayer = opts.FoundryB, opts.LayerB
 	} else {
@@ -92,7 +82,8 @@ func (m *Mapper) ApplyQueryMappings(mappingID string, opts MappingOptions, jsonD
 		replacementFoundry, replacementLayer = opts.FoundryA, opts.LayerA
 	}
 
-	// Create a pattern cache key for memoization
+	// patternCache avoids redundant Clone+Override for the same rule index
+	// and foundry/layer combination across repeated calls.
 	type patternCacheKey struct {
 		ruleIndex     int
 		foundry       string
@@ -101,11 +92,9 @@ func (m *Mapper) ApplyQueryMappings(mappingID string, opts MappingOptions, jsonD
 	}
 	patternCache := make(map[patternCacheKey]ast.Node)
 
-	// Apply each rule to the AST
 	for i, rule := range rules {
-		// Create pattern and replacement based on direction
 		var pattern, replacement ast.Node
-		if opts.Direction { // true means AtoB
+		if opts.Direction {
 			pattern = rule.Upper
 			replacement = rule.Lower
 		} else {
@@ -113,7 +102,6 @@ func (m *Mapper) ApplyQueryMappings(mappingID string, opts MappingOptions, jsonD
 			replacement = rule.Upper
 		}
 
-		// Extract the inner nodes from the pattern and replacement tokens
 		if token, ok := pattern.(*ast.Token); ok {
 			pattern = token.Wrap
 		}
@@ -121,52 +109,51 @@ func (m *Mapper) ApplyQueryMappings(mappingID string, opts MappingOptions, jsonD
 			replacement = token.Wrap
 		}
 
-		// Get or create pattern with overrides
 		patternKey := patternCacheKey{ruleIndex: i, foundry: patternFoundry, layer: patternLayer, isReplacement: false}
 		processedPattern, exists := patternCache[patternKey]
 		if !exists {
-			// Clone pattern only when needed
 			processedPattern = pattern.Clone()
-			// Apply foundry and layer overrides only if they're non-empty
 			if patternFoundry != "" || patternLayer != "" {
 				ast.ApplyFoundryAndLayerOverrides(processedPattern, patternFoundry, patternLayer)
 			}
 			patternCache[patternKey] = processedPattern
 		}
 
-		// Create a temporary matcher to check for actual matches
+		// Probe for a match before cloning the replacement (lazy evaluation)
 		tempMatcher, err := matcher.NewMatcher(ast.Pattern{Root: processedPattern}, ast.Replacement{Root: &ast.Term{}})
 		if err != nil {
 			return nil, fmt.Errorf("failed to create temporary matcher: %w", err)
 		}
-
-		// Only proceed if there's an actual match
 		if !tempMatcher.Match(node) {
 			continue
 		}
 
-		// Get or create replacement with overrides (lazy evaluation)
 		replacementKey := patternCacheKey{ruleIndex: i, foundry: replacementFoundry, layer: replacementLayer, isReplacement: true}
 		processedReplacement, exists := patternCache[replacementKey]
 		if !exists {
-			// Clone replacement only when we have a match
 			processedReplacement = replacement.Clone()
-			// Apply foundry and layer overrides only if they're non-empty
 			if replacementFoundry != "" || replacementLayer != "" {
 				ast.ApplyFoundryAndLayerOverrides(processedReplacement, replacementFoundry, replacementLayer)
 			}
 			patternCache[replacementKey] = processedReplacement
 		}
 
-		// Create the actual matcher and apply replacement
+		var beforeNode ast.Node
+		if opts.AddRewrites {
+			beforeNode = node.Clone()
+		}
+
 		actualMatcher, err := matcher.NewMatcher(ast.Pattern{Root: processedPattern}, ast.Replacement{Root: processedReplacement})
 		if err != nil {
 			return nil, fmt.Errorf("failed to create matcher: %w", err)
 		}
 		node = actualMatcher.Replace(node)
+
+		if opts.AddRewrites {
+			recordRewrites(node, beforeNode)
+		}
 	}
 
-	// Wrap the result in a token if the input was a token
 	var result ast.Node
 	if isToken {
 		result = &ast.Token{Wrap: node}
@@ -174,45 +161,23 @@ func (m *Mapper) ApplyQueryMappings(mappingID string, opts MappingOptions, jsonD
 		result = node
 	}
 
-	// Convert AST back to JSON
 	resultBytes, err := parser.SerializeToJSON(result)
 	if err != nil {
 		return nil, fmt.Errorf("failed to serialize AST to JSON: %w", err)
 	}
 
-	// Parse the JSON string back into
 	var resultData any
 	if err := json.Unmarshal(resultBytes, &resultData); err != nil {
 		return nil, fmt.Errorf("failed to parse result JSON: %w", err)
 	}
 
-	// Add rewrites if enabled and node was changed
-	if opts.AddRewrites && !ast.NodesEqual(node, originalNode) {
-		rewrite := buildQueryRewrite(originalNode, node)
-
-		// Add rewrite to the node
-		if resultMap, ok := resultData.(map[string]any); ok {
-			if wrapMap, ok := resultMap["wrap"].(map[string]any); ok {
-				rewrites, exists := wrapMap["rewrites"]
-				if !exists {
-					rewrites = []any{}
-				}
-				if rewritesList, ok := rewrites.([]any); ok {
-					wrapMap["rewrites"] = append(rewritesList, rewrite)
-				} else {
-					wrapMap["rewrites"] = []any{rewrite}
-				}
-			}
-		}
-	}
-
-	// Restore rewrites if they existed
+	// Restore pre-existing rewrites. The round-trip through ast.Rewrite
+	// normalizes legacy field names (e.g. "source" -> "editor") so the
+	// output always uses the modern schema.
 	if oldRewrites != nil {
-		// Process old rewrites through AST to ensure backward compatibility
 		if rewritesList, ok := oldRewrites.([]any); ok {
 			processedRewrites := make([]any, len(rewritesList))
 			for i, rewriteData := range rewritesList {
-				// Marshal and unmarshal each rewrite to apply backward compatibility
 				rewriteBytes, err := json.Marshal(rewriteData)
 				if err != nil {
 					return nil, fmt.Errorf("failed to marshal old rewrite %d: %w", i, err)
@@ -221,7 +186,6 @@ func (m *Mapper) ApplyQueryMappings(mappingID string, opts MappingOptions, jsonD
 				if err := json.Unmarshal(rewriteBytes, &rewrite); err != nil {
 					return nil, fmt.Errorf("failed to unmarshal old rewrite %d: %w", i, err)
 				}
-				// Marshal back to get the transformed version
 				transformedBytes, err := json.Marshal(&rewrite)
 				if err != nil {
 					return nil, fmt.Errorf("failed to marshal transformed rewrite %d: %w", i, err)
@@ -236,14 +200,12 @@ func (m *Mapper) ApplyQueryMappings(mappingID string, opts MappingOptions, jsonD
 				resultMap["rewrites"] = processedRewrites
 			}
 		} else {
-			// If it's not a list, restore as-is
 			if resultMap, ok := resultData.(map[string]any); ok {
 				resultMap["rewrites"] = oldRewrites
 			}
 		}
 	}
 
-	// If we had a query wrapper, put the transformed data back in it
 	if hasQueryWrapper {
 		if wrapper, ok := jsonData.(map[string]any); ok {
 			wrapper["query"] = resultData
@@ -254,48 +216,102 @@ func (m *Mapper) ApplyQueryMappings(mappingID string, opts MappingOptions, jsonD
 	return resultData, nil
 }
 
-// buildQueryRewrite creates a rewrite entry for a query-level transformation
-// by comparing the original and new AST nodes.
-func buildQueryRewrite(originalNode, newNode ast.Node) map[string]any {
+// recordRewrites compares the new node against the before-snapshot and
+// attaches rewrite entries to any changed nodes. It handles both simple
+// nodes (Term, TermGroup) and container nodes (CatchallNode with operands).
+func recordRewrites(newNode, beforeNode ast.Node) {
+	if ast.NodesEqual(newNode, beforeNode) {
+		return
+	}
+
+	// For CatchallNodes with operands (e.g. token sequences), attach
+	// per-operand rewrites so each changed token gets its own annotation.
+	if newCatchall, ok := newNode.(*ast.CatchallNode); ok {
+		if oldCatchall, ok := beforeNode.(*ast.CatchallNode); ok && len(newCatchall.Operands) > 0 {
+			for i, newOp := range newCatchall.Operands {
+				if i >= len(oldCatchall.Operands) {
+					break
+				}
+				oldOp := oldCatchall.Operands[i]
+				recordRewritesForOperand(newOp, oldOp)
+			}
+			return
+		}
+	}
+
+	addRewriteToNode(newNode, beforeNode)
+}
+
+// recordRewritesForOperand handles rewrite recording for a single operand,
+// unwrapping Token nodes so the rewrite attaches to the inner term/termGroup
+// rather than the token wrapper.
+func recordRewritesForOperand(newOp, oldOp ast.Node) {
+	if ast.NodesEqual(newOp, oldOp) {
+		return
+	}
+
+	newInner := newOp
+	oldInner := oldOp
+	if tok, ok := newOp.(*ast.Token); ok {
+		newInner = tok.Wrap
+	}
+	if tok, ok := oldOp.(*ast.Token); ok {
+		oldInner = tok.Wrap
+	}
+
+	if newInner == nil || ast.NodesEqual(newInner, oldInner) {
+		return
+	}
+
+	addRewriteToNode(newInner, oldInner)
+}
+
+// addRewriteToNode creates and attaches a rewrite entry to a node,
+// recording what the node looked like before the change.
+func addRewriteToNode(newNode, originalNode ast.Node) {
+	rw := buildRewrite(originalNode, newNode)
+	ast.AppendRewrite(newNode, rw)
+}
+
+// buildRewrite creates a Rewrite describing what changed between
+// originalNode and newNode. For simple term-level changes (just foundry,
+// layer, key, or value), it uses a scoped rewrite. For structural changes,
+// it stores the full original as an object.
+func buildRewrite(originalNode, newNode ast.Node) ast.Rewrite {
 	if term, ok := originalNode.(*ast.Term); ok && ast.IsTermNode(newNode) && originalNode.Type() == newNode.Type() {
 		newTerm := newNode.(*ast.Term)
 		if term.Foundry != newTerm.Foundry {
-			return newRewriteEntry("foundry", term.Foundry)
+			return ast.Rewrite{Editor: RewriteEditor, Scope: "foundry", Original: term.Foundry}
 		}
 		if term.Layer != newTerm.Layer {
-			return newRewriteEntry("layer", term.Layer)
+			return ast.Rewrite{Editor: RewriteEditor, Scope: "layer", Original: term.Layer}
 		}
 		if term.Key != newTerm.Key {
-			return newRewriteEntry("key", term.Key)
+			return ast.Rewrite{Editor: RewriteEditor, Scope: "key", Original: term.Key}
 		}
 		if term.Value != newTerm.Value {
-			return newRewriteEntry("value", term.Value)
+			return ast.Rewrite{Editor: RewriteEditor, Scope: "value", Original: term.Value}
 		}
 	}
 
+	// Structural change: serialize the original as the rewrite value
 	originalBytes, err := parser.SerializeToJSON(originalNode)
 	if err != nil {
-		return newRewriteEntry("", nil)
+		return ast.Rewrite{Editor: RewriteEditor}
 	}
 	var originalJSON any
 	if err := json.Unmarshal(originalBytes, &originalJSON); err != nil {
-		return newRewriteEntry("", nil)
+		return ast.Rewrite{Editor: RewriteEditor}
 	}
-	return newRewriteEntry("", originalJSON)
+	return ast.Rewrite{Editor: RewriteEditor, Original: originalJSON}
 }
 
-// isValidQueryObject checks if the query data is a valid object that can be processed
+// isValidQueryObject returns true if data is a JSON object with an @type field.
 func isValidQueryObject(data any) bool {
-	// Check if it's a map
 	queryMap, ok := data.(map[string]any)
 	if !ok {
 		return false
 	}
-
-	// Check if it has the required @type field
-	if _, ok := queryMap["@type"]; !ok {
-		return false
-	}
-
-	return true
+	_, ok = queryMap["@type"]
+	return ok
 }

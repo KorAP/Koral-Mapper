@@ -59,6 +59,7 @@ lists:
     layerA: p
     foundryB: upos
     layerB: p
+    rewrites: true
     mappings:
       - "[PIDAT] <> [opennlp/p=PIDAT & opennlp/p=AdjType:Pdt]"
       - "[DET] <> [opennlp/p=DET]"
@@ -121,7 +122,20 @@ lists:
 							"value": "Pdt"
 						}
 					],
-					"relation": "relation:and"
+					"relation": "relation:and",
+					"rewrites": [
+						{
+							"@type": "koral:rewrite",
+							"editor": "Koral-Mapper",
+							"original": {
+								"@type": "koral:term",
+								"foundry": "opennlp",
+								"key": "PIDAT",
+								"layer": "p",
+								"match": "match:eq"
+							}
+						}
+					]
 				}
 			}`,
 		},
@@ -161,7 +175,34 @@ lists:
 					"foundry": "opennlp",
 					"key": "PIDAT",
 					"layer": "p",
-					"match": "match:eq"
+					"match": "match:eq",
+					"rewrites": [
+						{
+							"@type": "koral:rewrite",
+							"editor": "Koral-Mapper",
+							"original": {
+								"@type": "koral:termGroup",
+								"operands": [
+									{
+										"@type": "koral:term",
+										"foundry": "opennlp",
+										"key": "PIDAT",
+										"layer": "p",
+										"match": "match:eq"
+									},
+									{
+										"@type": "koral:term",
+										"foundry": "opennlp",
+										"key": "AdjType",
+										"layer": "p",
+										"match": "match:eq",
+										"value": "Pdt"
+									}
+								],
+								"relation": "relation:and"
+							}
+						}
+					]
 				}
 			}`,
 		},
@@ -202,7 +243,20 @@ lists:
 							"value": "Pdt"
 						}
 					],
-					"relation": "relation:and"
+					"relation": "relation:and",
+					"rewrites": [
+						{
+							"@type": "koral:rewrite",
+							"editor": "Koral-Mapper",
+							"original": {
+								"@type": "koral:term",
+								"foundry": "opennlp",
+								"key": "PIDAT",
+								"layer": "p",
+								"match": "match:eq"
+							}
+						}
+					]
 				}
 			}`,
 		},
@@ -1570,6 +1624,7 @@ lists:
     layerA: p
     foundryB: opennlp
     layerB: p
+    rewrites: true
     mappings:
       - "[PIDAT] <> [DET]"
   - id: step2
@@ -1577,6 +1632,7 @@ lists:
     layerA: p
     foundryB: upos
     layerB: p
+    rewrites: true
     mappings:
       - "[DET] <> [PRON]"
 `)
@@ -1615,6 +1671,14 @@ lists:
 					"key":     "PRON",
 					"layer":   "p",
 					"match":   "match:eq",
+					"rewrites": []any{
+						map[string]any{
+							"@type":    "koral:rewrite",
+							"editor":   "Koral-Mapper",
+							"scope":    "foundry",
+							"original": "opennlp",
+						},
+					},
 				},
 			},
 		},
@@ -2210,6 +2274,189 @@ func TestConfigPageHasResetButton(t *testing.T) {
 	assert.Contains(t, htmlContent, `id="reset-btn"`)
 	assert.Contains(t, htmlContent, "Reset all")
 	assert.Contains(t, htmlContent, `type="button"`)
+}
+
+func TestAddRewritesDefaultOff(t *testing.T) {
+	cfg := loadConfigFromYAML(t, `
+lists:
+  - id: test-mapper
+    foundryA: opennlp
+    layerA: p
+    foundryB: upos
+    layerB: p
+    mappings:
+      - "[PIDAT] <> [DET]"
+`)
+	m, err := mapper.NewMapper(cfg.Lists)
+	require.NoError(t, err)
+
+	app := fiber.New()
+	setupRoutes(app, m, cfg)
+
+	input := `{
+		"@type": "koral:token",
+		"wrap": {
+			"@type": "koral:term",
+			"foundry": "opennlp",
+			"key": "PIDAT",
+			"layer": "p",
+			"match": "match:eq"
+		}
+	}`
+
+	req := httptest.NewRequest(http.MethodPost, "/test-mapper/query?dir=atob", bytes.NewBufferString(input))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var result map[string]any
+	err = json.NewDecoder(resp.Body).Decode(&result)
+	require.NoError(t, err)
+
+	wrap := result["wrap"].(map[string]any)
+	assert.Equal(t, "DET", wrap["key"])
+	assert.Nil(t, wrap["rewrites"], "rewrites should not be present by default")
+}
+
+func TestAddRewritesEnabledViaYAML(t *testing.T) {
+	cfg := loadConfigFromYAML(t, `
+lists:
+  - id: test-mapper
+    foundryA: opennlp
+    layerA: p
+    foundryB: upos
+    layerB: p
+    rewrites: true
+    mappings:
+      - "[PIDAT] <> [DET]"
+`)
+	m, err := mapper.NewMapper(cfg.Lists)
+	require.NoError(t, err)
+
+	app := fiber.New()
+	setupRoutes(app, m, cfg)
+
+	input := `{
+		"@type": "koral:token",
+		"wrap": {
+			"@type": "koral:term",
+			"foundry": "opennlp",
+			"key": "PIDAT",
+			"layer": "p",
+			"match": "match:eq"
+		}
+	}`
+
+	req := httptest.NewRequest(http.MethodPost, "/test-mapper/query?dir=atob", bytes.NewBufferString(input))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var result map[string]any
+	err = json.NewDecoder(resp.Body).Decode(&result)
+	require.NoError(t, err)
+
+	wrap := result["wrap"].(map[string]any)
+	assert.Equal(t, "DET", wrap["key"])
+	assert.NotNil(t, wrap["rewrites"], "rewrites should be present when rewrites are enabled in YAML")
+}
+
+func TestAddRewritesQueryParamOverridesYAML(t *testing.T) {
+	cfg := loadConfigFromYAML(t, `
+lists:
+  - id: test-mapper
+    foundryA: opennlp
+    layerA: p
+    foundryB: upos
+    layerB: p
+    rewrites: true
+    mappings:
+      - "[PIDAT] <> [DET]"
+`)
+	m, err := mapper.NewMapper(cfg.Lists)
+	require.NoError(t, err)
+
+	app := fiber.New()
+	setupRoutes(app, m, cfg)
+
+	input := `{
+		"@type": "koral:token",
+		"wrap": {
+			"@type": "koral:term",
+			"foundry": "opennlp",
+			"key": "PIDAT",
+			"layer": "p",
+			"match": "match:eq"
+		}
+	}`
+
+	// Override YAML rewrites=true with query param rewrites=false
+	req := httptest.NewRequest(http.MethodPost, "/test-mapper/query?dir=atob&rewrites=false", bytes.NewBufferString(input))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var result map[string]any
+	err = json.NewDecoder(resp.Body).Decode(&result)
+	require.NoError(t, err)
+
+	wrap := result["wrap"].(map[string]any)
+	assert.Equal(t, "DET", wrap["key"])
+	assert.Nil(t, wrap["rewrites"], "rewrites should be suppressed by query param override")
+}
+
+func TestAddRewritesQueryParamEnablesWhenYAMLOff(t *testing.T) {
+	cfg := loadConfigFromYAML(t, `
+lists:
+  - id: test-mapper
+    foundryA: opennlp
+    layerA: p
+    foundryB: upos
+    layerB: p
+    mappings:
+      - "[PIDAT] <> [DET]"
+`)
+	m, err := mapper.NewMapper(cfg.Lists)
+	require.NoError(t, err)
+
+	app := fiber.New()
+	setupRoutes(app, m, cfg)
+
+	input := `{
+		"@type": "koral:token",
+		"wrap": {
+			"@type": "koral:term",
+			"foundry": "opennlp",
+			"key": "PIDAT",
+			"layer": "p",
+			"match": "match:eq"
+		}
+	}`
+
+	req := httptest.NewRequest(http.MethodPost, "/test-mapper/query?dir=atob&rewrites=true", bytes.NewBufferString(input))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var result map[string]any
+	err = json.NewDecoder(resp.Body).Decode(&result)
+	require.NoError(t, err)
+
+	wrap := result["wrap"].(map[string]any)
+	assert.Equal(t, "DET", wrap["key"])
+	assert.NotNil(t, wrap["rewrites"], "rewrites should be present when enabled by query param")
 }
 
 func TestConfigPagePreservesOrderOfMappings(t *testing.T) {

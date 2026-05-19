@@ -1116,6 +1116,38 @@ lists:
 	assert.Equal(t, defaultLogLevel, cfg.LogLevel)
 }
 
+func TestRewritesYAMLField(t *testing.T) {
+	content := `
+lists:
+  - id: rewrite-on
+    rewrites: true
+    mappings:
+      - "[A] <> [B]"
+  - id: rewrite-off
+    rewrites: false
+    mappings:
+      - "[C] <> [D]"
+  - id: rewrite-default
+    mappings:
+      - "[E] <> [F]"
+`
+	tmpfile, err := os.CreateTemp("", "config-rewrites-*.yaml")
+	require.NoError(t, err)
+	defer os.Remove(tmpfile.Name())
+
+	_, err = tmpfile.WriteString(content)
+	require.NoError(t, err)
+	require.NoError(t, tmpfile.Close())
+
+	cfg, err := LoadFromSources(tmpfile.Name(), nil)
+	require.NoError(t, err)
+	require.Len(t, cfg.Lists, 3)
+
+	assert.True(t, cfg.Lists[0].Rewrites, "rewrites should be true when set to true")
+	assert.False(t, cfg.Lists[1].Rewrites, "rewrites should be false when set to false")
+	assert.False(t, cfg.Lists[2].Rewrites, "rewrites should default to false")
+}
+
 func TestParseCorpusMappingsWithFieldAFieldB(t *testing.T) {
 	list := &MappingList{
 		ID:     "test-keyed",

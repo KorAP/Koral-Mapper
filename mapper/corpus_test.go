@@ -412,6 +412,110 @@ func TestCorpusQueryRewriteAnnotation(t *testing.T) {
 	assert.Equal(t, "Koral-Mapper", rewrite["editor"])
 }
 
+func TestCorpusQueryRewriteWithCollectionKey(t *testing.T) {
+	m := newCorpusMapper(t, "textClass=novel <> genre=fiction")
+
+	input := map[string]any{
+		"collection": map[string]any{
+			"@type": "koral:doc",
+			"key":   "textClass",
+			"value": "novel",
+			"match": "match:eq",
+		},
+	}
+	result, err := m.ApplyQueryMappings("corpus-test", MappingOptions{Direction: AtoB, AddRewrites: true}, input)
+	require.NoError(t, err)
+
+	// Result must use "collection" key (not "corpus")
+	resultMap := result.(map[string]any)
+	assert.Nil(t, resultMap["corpus"], "should not introduce 'corpus' key")
+	collection := resultMap["collection"].(map[string]any)
+	assert.Equal(t, "genre", collection["key"])
+	assert.Equal(t, "fiction", collection["value"])
+
+	rewrites, ok := collection["rewrites"].([]any)
+	require.True(t, ok)
+	require.Len(t, rewrites, 1)
+
+	rewrite := rewrites[0].(map[string]any)
+	assert.Equal(t, "koral:rewrite", rewrite["@type"])
+	assert.Equal(t, "Koral-Mapper", rewrite["editor"])
+	assert.Equal(t, "key", rewrite["scope"])
+	assert.Equal(t, "textClass", rewrite["original"])
+}
+
+func TestCorpusQueryNoRewriteWhenDisabled(t *testing.T) {
+	m := newCorpusMapper(t, "textClass=novel <> genre=fiction")
+
+	input := map[string]any{
+		"corpus": map[string]any{
+			"@type": "koral:doc",
+			"key":   "textClass",
+			"value": "novel",
+			"match": "match:eq",
+		},
+	}
+	result, err := m.ApplyQueryMappings("corpus-test", MappingOptions{Direction: AtoB, AddRewrites: false}, input)
+	require.NoError(t, err)
+
+	corpus := result.(map[string]any)["corpus"].(map[string]any)
+	assert.Equal(t, "genre", corpus["key"])
+	assert.Nil(t, corpus["rewrites"], "rewrites should not be present when disabled")
+}
+
+func TestCorpusQueryNoRewriteWhenDisabledCollection(t *testing.T) {
+	m := newCorpusMapper(t, "textClass=novel <> genre=fiction")
+
+	input := map[string]any{
+		"collection": map[string]any{
+			"@type": "koral:doc",
+			"key":   "textClass",
+			"value": "novel",
+			"match": "match:eq",
+		},
+	}
+	result, err := m.ApplyQueryMappings("corpus-test", MappingOptions{Direction: AtoB, AddRewrites: false}, input)
+	require.NoError(t, err)
+
+	collection := result.(map[string]any)["collection"].(map[string]any)
+	assert.Equal(t, "genre", collection["key"])
+	assert.Nil(t, collection["rewrites"], "rewrites should not be present when disabled")
+}
+
+func TestCorpusQueryRewriteGroupSubsetWithCollectionKey(t *testing.T) {
+	m := newCorpusMapper(t, "genre=fiction <> (textClass=kultur & textClass=musik)")
+
+	input := map[string]any{
+		"collection": map[string]any{
+			"@type":     "koral:docGroup",
+			"operation": "operation:and",
+			"operands": []any{
+				map[string]any{"@type": "koral:doc", "key": "textClass", "value": "kultur"},
+				map[string]any{"@type": "koral:doc", "key": "textClass", "value": "musik"},
+			},
+		},
+	}
+	result, err := m.ApplyQueryMappings("corpus-test", MappingOptions{Direction: BtoA, AddRewrites: true}, input)
+	require.NoError(t, err)
+
+	resultMap := result.(map[string]any)
+	assert.Nil(t, resultMap["corpus"], "should not introduce 'corpus' key")
+
+	collection := resultMap["collection"].(map[string]any)
+	assert.Equal(t, "genre", collection["key"])
+	assert.Equal(t, "fiction", collection["value"])
+
+	rewrites, ok := collection["rewrites"].([]any)
+	require.True(t, ok)
+	require.Len(t, rewrites, 1)
+
+	rewrite := rewrites[0].(map[string]any)
+	assert.Equal(t, "koral:rewrite", rewrite["@type"])
+	original, ok := rewrite["original"].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, "koral:docGroup", original["@type"])
+}
+
 func TestCorpusQueryPreservesMatchTypeFromOriginal(t *testing.T) {
 	m := newCorpusMapper(t, "textClass=novel <> genre=fiction")
 

@@ -35,6 +35,7 @@ type MappingList struct {
 	LayerB      string        `yaml:"layerB,omitempty"`
 	FieldA      string        `yaml:"fieldA,omitempty"`
 	FieldB      string        `yaml:"fieldB,omitempty"`
+	Rewrites    bool          `yaml:"rewrites,omitempty"`
 	Mappings    []MappingRule `yaml:"mappings"`
 }
 

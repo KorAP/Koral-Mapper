@@ -77,6 +77,7 @@ type requestParams struct {
 	FoundryB string
 	LayerA   string
 	LayerB   string
+	Rewrites *bool // nil = use mapping list default; non-nil = override
 }
 
 // MappingSectionData contains per-section UI metadata so request and response
@@ -185,6 +186,11 @@ func extractRequestParams(c *fiber.Ctx) (*requestParams, error) {
 		FoundryB: c.Query("foundryB", ""),
 		LayerA:   c.Query("layerA", ""),
 		LayerB:   c.Query("layerB", ""),
+	}
+
+	if rewrites := c.Query("rewrites", ""); rewrites != "" {
+		v := rewrites == "true"
+		params.Rewrites = &v
 	}
 
 	// Validate input parameters
@@ -317,10 +323,10 @@ func setupRoutes(app *fiber.App, m *mapper.Mapper, yamlConfig *config.MappingCon
 	app.Post("/response/:cfg", handleCompositeResponseTransform(m, yamlConfig.Lists))
 
 	// Transformation endpoint
-	app.Post("/:map/query", handleTransform(m))
+	app.Post("/:map/query", handleTransform(m, yamlConfig.Lists))
 
 	// Response transformation endpoint
-	app.Post("/:map/response", handleResponseTransform(m))
+	app.Post("/:map/response", handleResponseTransform(m, yamlConfig.Lists))
 
 	// Kalamar plugin endpoint
 	app.Get("/", handleKalamarPlugin(yamlConfig, configTmpl, pluginTmpl))
@@ -405,6 +411,11 @@ func buildConfigPageData(yamlConfig *config.MappingConfig) ConfigPageData {
 }
 
 func handleCompositeQueryTransform(m *mapper.Mapper, lists []config.MappingList) fiber.Handler {
+	listsByID := make(map[string]*config.MappingList, len(lists))
+	for i := range lists {
+		listsByID[lists[i].ID] = &lists[i]
+	}
+
 	return func(c *fiber.Ctx) error {
 		cfgRaw := c.Params("cfg")
 		if len(cfgRaw) > maxParamLength {
@@ -431,6 +442,13 @@ func handleCompositeQueryTransform(m *mapper.Mapper, lists []config.MappingList)
 			return c.JSON(jsonData)
 		}
 
+		rewrites := c.Query("rewrites", "")
+		var rewritesOverride *bool
+		if rewrites != "" {
+			v := rewrites == "true"
+			rewritesOverride = &v
+		}
+
 		orderedIDs := make([]string, 0, len(entries))
 		opts := make([]mapper.MappingOptions, 0, len(entries))
 		for _, entry := range entries {
@@ -439,15 +457,24 @@ func handleCompositeQueryTransform(m *mapper.Mapper, lists []config.MappingList)
 				dir = mapper.BtoA
 			}
 
+			addRewrites := false
+			if list, ok := listsByID[entry.ID]; ok {
+				addRewrites = list.Rewrites
+			}
+			if rewritesOverride != nil {
+				addRewrites = *rewritesOverride
+			}
+
 			orderedIDs = append(orderedIDs, entry.ID)
 			opts = append(opts, mapper.MappingOptions{
-				Direction: dir,
-				FoundryA:  entry.FoundryA,
-				LayerA:    entry.LayerA,
-				FoundryB:  entry.FoundryB,
-				LayerB:    entry.LayerB,
-				FieldA:    entry.FieldA,
-				FieldB:    entry.FieldB,
+				Direction:   dir,
+				FoundryA:    entry.FoundryA,
+				LayerA:      entry.LayerA,
+				FoundryB:    entry.FoundryB,
+				LayerB:      entry.LayerB,
+				FieldA:      entry.FieldA,
+				FieldB:      entry.FieldB,
+				AddRewrites: addRewrites,
 			})
 		}
 
@@ -464,6 +491,11 @@ func handleCompositeQueryTransform(m *mapper.Mapper, lists []config.MappingList)
 }
 
 func handleCompositeResponseTransform(m *mapper.Mapper, lists []config.MappingList) fiber.Handler {
+	listsByID := make(map[string]*config.MappingList, len(lists))
+	for i := range lists {
+		listsByID[lists[i].ID] = &lists[i]
+	}
+
 	return func(c *fiber.Ctx) error {
 		cfgRaw := c.Params("cfg")
 		if len(cfgRaw) > maxParamLength {
@@ -490,6 +522,13 @@ func handleCompositeResponseTransform(m *mapper.Mapper, lists []config.MappingLi
 			return c.JSON(jsonData)
 		}
 
+		rewrites := c.Query("rewrites", "")
+		var rewritesOverride *bool
+		if rewrites != "" {
+			v := rewrites == "true"
+			rewritesOverride = &v
+		}
+
 		orderedIDs := make([]string, 0, len(entries))
 		opts := make([]mapper.MappingOptions, 0, len(entries))
 		for _, entry := range entries {
@@ -498,15 +537,24 @@ func handleCompositeResponseTransform(m *mapper.Mapper, lists []config.MappingLi
 				dir = mapper.BtoA
 			}
 
+			addRewrites := false
+			if list, ok := listsByID[entry.ID]; ok {
+				addRewrites = list.Rewrites
+			}
+			if rewritesOverride != nil {
+				addRewrites = *rewritesOverride
+			}
+
 			orderedIDs = append(orderedIDs, entry.ID)
 			opts = append(opts, mapper.MappingOptions{
-				Direction: dir,
-				FoundryA:  entry.FoundryA,
-				LayerA:    entry.LayerA,
-				FoundryB:  entry.FoundryB,
-				LayerB:    entry.LayerB,
-				FieldA:    entry.FieldA,
-				FieldB:    entry.FieldB,
+				Direction:   dir,
+				FoundryA:    entry.FoundryA,
+				LayerA:      entry.LayerA,
+				FoundryB:    entry.FoundryB,
+				LayerB:      entry.LayerB,
+				FieldA:      entry.FieldA,
+				FieldB:      entry.FieldB,
+				AddRewrites: addRewrites,
 			})
 		}
 
@@ -522,7 +570,12 @@ func handleCompositeResponseTransform(m *mapper.Mapper, lists []config.MappingLi
 	}
 }
 
-func handleTransform(m *mapper.Mapper) fiber.Handler {
+func handleTransform(m *mapper.Mapper, lists []config.MappingList) fiber.Handler {
+	listsByID := make(map[string]*config.MappingList, len(lists))
+	for i := range lists {
+		listsByID[lists[i].ID] = &lists[i]
+	}
+
 	return func(c *fiber.Ctx) error {
 		// Extract and validate parameters
 		params, err := extractRequestParams(c)
@@ -540,13 +593,23 @@ func handleTransform(m *mapper.Mapper) fiber.Handler {
 			})
 		}
 
+		// Determine rewrites: query param overrides YAML default
+		addRewrites := false
+		if list, ok := listsByID[params.MapID]; ok {
+			addRewrites = list.Rewrites
+		}
+		if params.Rewrites != nil {
+			addRewrites = *params.Rewrites
+		}
+
 		// Apply mappings
 		result, err := m.ApplyQueryMappings(params.MapID, mapper.MappingOptions{
-			Direction: direction,
-			FoundryA:  params.FoundryA,
-			FoundryB:  params.FoundryB,
-			LayerA:    params.LayerA,
-			LayerB:    params.LayerB,
+			Direction:   direction,
+			FoundryA:    params.FoundryA,
+			FoundryB:    params.FoundryB,
+			LayerA:      params.LayerA,
+			LayerB:      params.LayerB,
+			AddRewrites: addRewrites,
 		}, jsonData)
 
 		if err != nil {
@@ -564,7 +627,12 @@ func handleTransform(m *mapper.Mapper) fiber.Handler {
 	}
 }
 
-func handleResponseTransform(m *mapper.Mapper) fiber.Handler {
+func handleResponseTransform(m *mapper.Mapper, lists []config.MappingList) fiber.Handler {
+	listsByID := make(map[string]*config.MappingList, len(lists))
+	for i := range lists {
+		listsByID[lists[i].ID] = &lists[i]
+	}
+
 	return func(c *fiber.Ctx) error {
 		// Extract and validate parameters
 		params, err := extractRequestParams(c)
@@ -582,13 +650,23 @@ func handleResponseTransform(m *mapper.Mapper) fiber.Handler {
 			})
 		}
 
+		// Determine rewrites: query param overrides YAML default
+		addRewrites := false
+		if list, ok := listsByID[params.MapID]; ok {
+			addRewrites = list.Rewrites
+		}
+		if params.Rewrites != nil {
+			addRewrites = *params.Rewrites
+		}
+
 		// Apply response mappings
 		result, err := m.ApplyResponseMappings(params.MapID, mapper.MappingOptions{
-			Direction: direction,
-			FoundryA:  params.FoundryA,
-			FoundryB:  params.FoundryB,
-			LayerA:    params.LayerA,
-			LayerB:    params.LayerB,
+			Direction:   direction,
+			FoundryA:    params.FoundryA,
+			FoundryB:    params.FoundryB,
+			LayerA:      params.LayerA,
+			LayerB:      params.LayerB,
+			AddRewrites: addRewrites,
 		}, jsonData)
 
 		if err != nil {

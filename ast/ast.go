@@ -450,3 +450,47 @@ func restrictToObligatoryRecursive(node Node) Node {
 	// For unknown node types, return as is
 	return node
 }
+
+// Rewriteable is implemented by AST nodes that carry a rewrites slice.
+type Rewriteable interface {
+	GetRewrites() []Rewrite
+	SetRewrites([]Rewrite)
+}
+
+func (t *Term) GetRewrites() []Rewrite      { return t.Rewrites }
+func (t *Term) SetRewrites(r []Rewrite)      { t.Rewrites = r }
+func (tg *TermGroup) GetRewrites() []Rewrite { return tg.Rewrites }
+func (tg *TermGroup) SetRewrites(r []Rewrite) { tg.Rewrites = r }
+func (t *Token) GetRewrites() []Rewrite      { return t.Rewrites }
+func (t *Token) SetRewrites(r []Rewrite)      { t.Rewrites = r }
+
+// AppendRewrite appends a rewrite to any Rewriteable node.
+// Non-Rewriteable nodes (e.g. CatchallNode) are silently ignored.
+func AppendRewrite(node Node, rw Rewrite) {
+	if r, ok := node.(Rewriteable); ok {
+		r.SetRewrites(append(r.GetRewrites(), rw))
+	}
+}
+
+// StripRewrites recursively removes all rewrites from an AST tree.
+func StripRewrites(node Node) {
+	if node == nil {
+		return
+	}
+	if r, ok := node.(Rewriteable); ok {
+		r.SetRewrites(nil)
+	}
+	switch n := node.(type) {
+	case *Token:
+		StripRewrites(n.Wrap)
+	case *TermGroup:
+		for _, op := range n.Operands {
+			StripRewrites(op)
+		}
+	case *CatchallNode:
+		StripRewrites(n.Wrap)
+		for _, op := range n.Operands {
+			StripRewrites(op)
+		}
+	}
+}

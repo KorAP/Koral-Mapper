@@ -197,6 +197,176 @@ func TestRewriteArrayUnmarshal(t *testing.T) {
 	assert.Equal(t, "legacy-origin", rewrites[1].Src)
 }
 
+func TestRewriteableInterface(t *testing.T) {
+	t.Run("Term implements Rewriteable", func(t *testing.T) {
+		term := &Term{Foundry: "opennlp", Key: "DET", Layer: "p", Match: MatchEqual}
+
+		var r Rewriteable = term
+		assert.Nil(t, r.GetRewrites())
+
+		rewrites := []Rewrite{{Editor: "test", Scope: "foundry"}}
+		r.SetRewrites(rewrites)
+		assert.Equal(t, rewrites, r.GetRewrites())
+		assert.Equal(t, rewrites, term.Rewrites)
+	})
+
+	t.Run("TermGroup implements Rewriteable", func(t *testing.T) {
+		tg := &TermGroup{
+			Operands: []Node{&Term{Key: "A", Match: MatchEqual}},
+			Relation: AndRelation,
+		}
+
+		var r Rewriteable = tg
+		assert.Nil(t, r.GetRewrites())
+
+		rewrites := []Rewrite{{Editor: "editor", Scope: "layer", Original: "old"}}
+		r.SetRewrites(rewrites)
+		assert.Equal(t, rewrites, r.GetRewrites())
+		assert.Equal(t, rewrites, tg.Rewrites)
+	})
+
+	t.Run("Token implements Rewriteable", func(t *testing.T) {
+		tok := &Token{Wrap: &Term{Key: "X", Match: MatchEqual}}
+
+		var r Rewriteable = tok
+		assert.Nil(t, r.GetRewrites())
+
+		rewrites := []Rewrite{{Editor: "mapper", Operation: "op"}}
+		r.SetRewrites(rewrites)
+		assert.Equal(t, rewrites, r.GetRewrites())
+		assert.Equal(t, rewrites, tok.Rewrites)
+	})
+
+	t.Run("SetRewrites to nil clears slice", func(t *testing.T) {
+		term := &Term{
+			Key:      "DET",
+			Match:    MatchEqual,
+			Rewrites: []Rewrite{{Editor: "x"}},
+		}
+		term.SetRewrites(nil)
+		assert.Nil(t, term.GetRewrites())
+	})
+}
+
+func TestAppendRewrite(t *testing.T) {
+	t.Run("Append to Term", func(t *testing.T) {
+		term := &Term{Key: "DET", Match: MatchEqual}
+		rw := Rewrite{Editor: "Koral-Mapper", Scope: "foundry", Original: "opennlp"}
+
+		AppendRewrite(term, rw)
+		assert.Equal(t, []Rewrite{rw}, term.Rewrites)
+
+		rw2 := Rewrite{Editor: "Koral-Mapper", Scope: "key", Original: "PIDAT"}
+		AppendRewrite(term, rw2)
+		assert.Equal(t, []Rewrite{rw, rw2}, term.Rewrites)
+	})
+
+	t.Run("Append to TermGroup", func(t *testing.T) {
+		tg := &TermGroup{
+			Operands: []Node{&Term{Key: "A", Match: MatchEqual}},
+			Relation: AndRelation,
+		}
+		rw := Rewrite{Editor: "editor", Original: "orig"}
+		AppendRewrite(tg, rw)
+		assert.Equal(t, []Rewrite{rw}, tg.Rewrites)
+	})
+
+	t.Run("Append to Token", func(t *testing.T) {
+		tok := &Token{Wrap: &Term{Key: "X", Match: MatchEqual}}
+		rw := Rewrite{Editor: "ed"}
+		AppendRewrite(tok, rw)
+		assert.Equal(t, []Rewrite{rw}, tok.Rewrites)
+	})
+
+	t.Run("Append to non-Rewriteable is no-op", func(t *testing.T) {
+		catchall := &CatchallNode{NodeType: "koral:span"}
+		rw := Rewrite{Editor: "test"}
+		AppendRewrite(catchall, rw)
+		// CatchallNode doesn't implement Rewriteable, so nothing happens
+	})
+
+	t.Run("Append to nil is no-op", func(t *testing.T) {
+		assert.NotPanics(t, func() {
+			AppendRewrite(nil, Rewrite{Editor: "x"})
+		})
+	})
+}
+
+func TestStripRewrites(t *testing.T) {
+	t.Run("Strips from Term", func(t *testing.T) {
+		term := &Term{
+			Key:      "DET",
+			Match:    MatchEqual,
+			Rewrites: []Rewrite{{Editor: "a"}, {Editor: "b"}},
+		}
+		StripRewrites(term)
+		assert.Nil(t, term.Rewrites)
+	})
+
+	t.Run("Strips from Token and its Wrap", func(t *testing.T) {
+		tok := &Token{
+			Wrap: &Term{
+				Key:      "DET",
+				Match:    MatchEqual,
+				Rewrites: []Rewrite{{Editor: "inner"}},
+			},
+			Rewrites: []Rewrite{{Editor: "outer"}},
+		}
+		StripRewrites(tok)
+		assert.Nil(t, tok.Rewrites)
+		assert.Nil(t, tok.Wrap.(*Term).Rewrites)
+	})
+
+	t.Run("Strips from TermGroup and all operands", func(t *testing.T) {
+		tg := &TermGroup{
+			Operands: []Node{
+				&Term{Key: "A", Match: MatchEqual, Rewrites: []Rewrite{{Editor: "e1"}}},
+				&Term{Key: "B", Match: MatchEqual, Rewrites: []Rewrite{{Editor: "e2"}}},
+			},
+			Relation: AndRelation,
+			Rewrites: []Rewrite{{Editor: "group"}},
+		}
+		StripRewrites(tg)
+		assert.Nil(t, tg.Rewrites)
+		assert.Nil(t, tg.Operands[0].(*Term).Rewrites)
+		assert.Nil(t, tg.Operands[1].(*Term).Rewrites)
+	})
+
+	t.Run("Strips recursively from CatchallNode", func(t *testing.T) {
+		catchall := &CatchallNode{
+			NodeType: "koral:group",
+			Wrap: &Term{
+				Key:      "W",
+				Match:    MatchEqual,
+				Rewrites: []Rewrite{{Editor: "wrap-ed"}},
+			},
+			Operands: []Node{
+				&Token{
+					Wrap:     &Term{Key: "X", Match: MatchEqual, Rewrites: []Rewrite{{Editor: "deep"}}},
+					Rewrites: []Rewrite{{Editor: "tok"}},
+				},
+			},
+		}
+		StripRewrites(catchall)
+		assert.Nil(t, catchall.Wrap.(*Term).Rewrites)
+		tok := catchall.Operands[0].(*Token)
+		assert.Nil(t, tok.Rewrites)
+		assert.Nil(t, tok.Wrap.(*Term).Rewrites)
+	})
+
+	t.Run("Nil node does not panic", func(t *testing.T) {
+		assert.NotPanics(t, func() {
+			StripRewrites(nil)
+		})
+	})
+
+	t.Run("Already empty rewrites stays nil", func(t *testing.T) {
+		term := &Term{Key: "DET", Match: MatchEqual}
+		StripRewrites(term)
+		assert.Nil(t, term.Rewrites)
+	})
+}
+
 func TestRewriteMarshalJSON(t *testing.T) {
 	// Test that marshaling works correctly and maintains the modern field names
 	rewrite := Rewrite{

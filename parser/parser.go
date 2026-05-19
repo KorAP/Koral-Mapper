@@ -277,12 +277,14 @@ func nodeToRaw(node ast.Node) rawNode {
 	case *ast.Token:
 		if n.Wrap == nil {
 			return rawNode{
-				Type: "koral:token",
+				Type:     "koral:token",
+				Rewrites: n.Rewrites,
 			}
 		}
 		return rawNode{
-			Type: "koral:token",
-			Wrap: json.RawMessage(nodeToRaw(n.Wrap).toJSON()),
+			Type:     "koral:token",
+			Wrap:     json.RawMessage(nodeToRaw(n.Wrap).toJSON()),
+			Rewrites: n.Rewrites,
 		}
 
 	case *ast.TermGroup:
@@ -294,13 +296,15 @@ func nodeToRaw(node ast.Node) rawNode {
 			Type:     "koral:termGroup",
 			Operands: operands,
 			Relation: "relation:" + string(n.Relation),
+			Rewrites: n.Rewrites,
 		}
 
 	case *ast.Term:
 		raw := rawNode{
-			Type:  "koral:term",
-			Key:   n.Key,
-			Match: "match:" + string(n.Match),
+			Type:     "koral:term",
+			Key:      n.Key,
+			Match:    "match:" + string(n.Match),
+			Rewrites: n.Rewrites,
 		}
 		if n.Foundry != "" {
 			raw.Foundry = n.Foundry

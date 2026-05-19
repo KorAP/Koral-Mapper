@@ -69,6 +69,7 @@ lists:
     layerA: source-layer
     foundryB: target-foundry
     layerB: target-layer
+    rewrites: false  # Optional: attach koral:rewrite annotations (default: false)
     mappings:
       - "[pattern1] <> [replacement1]"
       - "[pattern2] <> [replacement2]"
@@ -82,6 +83,7 @@ foundryA: source-foundry
 layerA: source-layer
 foundryB: target-foundry
 layerB: target-layer
+rewrites: false  # Optional: attach koral:rewrite annotations (default: false)
 mappings:
   - "[pattern1] <> [replacement1]"
   - "[pattern2] <> [replacement2]"
@@ -189,6 +191,7 @@ Parameters:
 - `foundryB` (query): Override default foundryB from mapping list
 - `layerA` (query): Override default layerA from mapping list
 - `layerB` (query): Override default layerB from mapping list
+- `rewrites` (query): Override the mapping list's `rewrites` setting (`true` or `false`)
 
 Request body: JSON object to transform
 
@@ -251,6 +254,7 @@ Parameters:
 - `foundryB` (query): Override default foundryB from mapping list
 - `layerA` (query): Override default layerA from mapping list
 - `layerB` (query): Override default layerB from mapping list
+- `rewrites` (query): Override the mapping list's `rewrites` setting (`true` or `false`)
 
 Request body: JSON object containing a `snippet` field with HTML markup
 

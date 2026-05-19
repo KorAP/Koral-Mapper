@@ -12,10 +12,15 @@ foundryA: source-foundry
 layerA: source-layer
 foundryB: target-foundry
 layerB: target-layer
+rewrites: false  # Optional: attach koral:rewrite annotations (default: false)
 mappings:
   - "[pattern1] <> [replacement1]"
   - "[pattern2] <> [replacement2]"
 ```
+
+### `rewrites`
+
+When `rewrites` is set to `true`, each applied mapping rule produces a `koral:rewrite` annotation on the replacement node, recording what the original structure looked like before the transformation. This is off by default and can be activated per mapping list in the YAML configuration. Each mapping list can have a different default. The value can be overridden globally for all lists in a request via the `rewrites` query parameter (`true` or `false`). When used on composite endpoints (`/query/:cfg` or `/response/:cfg`), the `rewrites` query parameter applies uniformly to all mapping lists in the cascade, overriding each list's individual default.
 
 Mapping files can also be embedded inside a main configuration file under the `lists:` key (see [README.md](README.md) for configuration file format).
 
