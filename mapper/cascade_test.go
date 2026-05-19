@@ -21,11 +21,11 @@ func TestCascadeQueryTwoAnnotationMappings(t *testing.T) {
 	m, err := NewMapper([]config.MappingList{
 		{
 			ID: "ann-step1", FoundryA: "opennlp", LayerA: "p",
-			FoundryB: "opennlp", LayerB: "p",
+			FoundryB: "stts", LayerB: "p",
 			Mappings: []config.MappingRule{`[PIDAT] <> [DET]`},
 		},
 		{
-			ID: "ann-step2", FoundryA: "opennlp", LayerA: "p",
+			ID: "ann-step2", FoundryA: "stts", LayerA: "p",
 			FoundryB: "upos", LayerB: "p",
 			Mappings: []config.MappingRule{`[DET] <> [PRON]`},
 		},
@@ -193,17 +193,17 @@ func TestCascadeQueryUnknownID(t *testing.T) {
 // --- Response cascade tests ---
 
 func TestCascadeQueryRewritesPreservedAcrossSteps(t *testing.T) {
-	// Step 1 changes key (PIDAT->DET) within same foundry/layer.
-	// Step 2 changes foundry+key (DET->PRON, opennlp->upos).
+	// Step 1 changes foundry (opennlp->stts) and key (PIDAT->DET).
+	// Step 2 changes foundry (stts->upos) and key (DET->PRON).
 	// Rewrites from step 1 must survive step 2's replacement.
 	m, err := NewMapper([]config.MappingList{
 		{
 			ID: "step1", FoundryA: "opennlp", LayerA: "p",
-			FoundryB: "opennlp", LayerB: "p",
+			FoundryB: "stts", LayerB: "p",
 			Mappings: []config.MappingRule{`[PIDAT] <> [DET]`},
 		},
 		{
-			ID: "step2", FoundryA: "opennlp", LayerA: "p",
+			ID: "step2", FoundryA: "stts", LayerA: "p",
 			FoundryB: "upos", LayerB: "p",
 			Mappings: []config.MappingRule{`[DET] <> [PRON]`},
 		},
@@ -232,8 +232,8 @@ func TestCascadeQueryRewritesPreservedAcrossSteps(t *testing.T) {
 	require.NoError(t, err)
 
 	// After both steps, the term should have rewrites from both steps:
-	// step 1 recorded scope=key original=PIDAT,
-	// step 2 recorded scope=foundry original=opennlp and scope=key original=DET.
+	// step 1 recorded scope=foundry original=opennlp and scope=key original=PIDAT,
+	// step 2 recorded scope=foundry original=stts and scope=key original=DET.
 	expected := parseJSON(t, `{
 		"@type": "koral:token",
 		"wrap": {
@@ -246,6 +246,12 @@ func TestCascadeQueryRewritesPreservedAcrossSteps(t *testing.T) {
 				{
 					"@type": "koral:rewrite",
 					"editor": "Koral-Mapper",
+					"scope": "foundry",
+					"original": "opennlp"
+				},
+				{
+					"@type": "koral:rewrite",
+					"editor": "Koral-Mapper",
 					"scope": "key",
 					"original": "PIDAT"
 				},
@@ -253,7 +259,7 @@ func TestCascadeQueryRewritesPreservedAcrossSteps(t *testing.T) {
 					"@type": "koral:rewrite",
 					"editor": "Koral-Mapper",
 					"scope": "foundry",
-					"original": "opennlp"
+					"original": "stts"
 				},
 				{
 					"@type": "koral:rewrite",
@@ -268,18 +274,18 @@ func TestCascadeQueryRewritesPreservedAcrossSteps(t *testing.T) {
 }
 
 func TestCascadeQueryRewritesPreservedStructuralChange(t *testing.T) {
-	// Step 1 changes key (PIDAT->DET) and records a scoped rewrite.
+	// Step 1 changes foundry (opennlp->stts) and key (PIDAT->DET).
 	// Step 2 replaces Term with TermGroup (structural change).
 	// Rewrites from step 1 must be carried into the new TermGroup.
 	m, err := NewMapper([]config.MappingList{
 		{
 			ID: "sc-step1", FoundryA: "opennlp", LayerA: "p",
-			FoundryB: "opennlp", LayerB: "p",
+			FoundryB: "stts", LayerB: "p",
 			Mappings: []config.MappingRule{`[PIDAT] <> [DET]`},
 		},
 		{
-			ID: "sc-step2", FoundryA: "opennlp", LayerA: "p",
-			FoundryB: "opennlp", LayerB: "p",
+			ID: "sc-step2", FoundryA: "stts", LayerA: "p",
+			FoundryB: "tt", LayerB: "pos",
 			Mappings: []config.MappingRule{`[DET] <> [opennlp/p=DET & opennlp/p=PronType:Art]`},
 		},
 	})
@@ -306,17 +312,23 @@ func TestCascadeQueryRewritesPreservedStructuralChange(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	// Step 1 rewrites (scope=key, original=PIDAT) must appear on the
-	// TermGroup created by step 2, along with step 2's own structural rewrite.
+	// Step 1 rewrites (scope=foundry original=opennlp, scope=key original=PIDAT)
+	// must appear on the TermGroup created by step 2, along with step 2's
+	// own structural rewrite.
 	resultMap := result.(map[string]any)
 	wrap := resultMap["wrap"].(map[string]any)
 	require.Equal(t, "koral:termGroup", wrap["@type"])
 
 	rewrites := wrap["rewrites"].([]any)
-	// First rewrite is from step 1 (carried forward)
+	// First rewrite is from step 1 (carried forward): foundry change
 	rw0 := rewrites[0].(map[string]any)
-	assert.Equal(t, "key", rw0["scope"])
-	assert.Equal(t, "PIDAT", rw0["original"])
+	assert.Equal(t, "foundry", rw0["scope"])
+	assert.Equal(t, "opennlp", rw0["original"])
+
+	// Second rewrite is from step 1 (carried forward): key change
+	rw1 := rewrites[1].(map[string]any)
+	assert.Equal(t, "key", rw1["scope"])
+	assert.Equal(t, "PIDAT", rw1["original"])
 
 	// Last rewrite is from step 2 (structural: original is the full term)
 	rwLast := rewrites[len(rewrites)-1].(map[string]any)

@@ -1622,13 +1622,13 @@ lists:
   - id: step1
     foundryA: opennlp
     layerA: p
-    foundryB: opennlp
+    foundryB: stts
     layerB: p
     rewrites: true
     mappings:
       - "[PIDAT] <> [DET]"
   - id: step2
-    foundryA: opennlp
+    foundryA: stts
     layerA: p
     foundryB: upos
     layerB: p
@@ -1675,6 +1675,12 @@ lists:
 						map[string]any{
 							"@type":    "koral:rewrite",
 							"editor":   "Koral-Mapper",
+							"scope":    "foundry",
+							"original": "opennlp",
+						},
+						map[string]any{
+							"@type":    "koral:rewrite",
+							"editor":   "Koral-Mapper",
 							"scope":    "key",
 							"original": "PIDAT",
 						},
@@ -1682,7 +1688,7 @@ lists:
 							"@type":    "koral:rewrite",
 							"editor":   "Koral-Mapper",
 							"scope":    "foundry",
-							"original": "opennlp",
+							"original": "stts",
 						},
 						map[string]any{
 							"@type":    "koral:rewrite",

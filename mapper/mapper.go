@@ -91,6 +91,57 @@ type MappingOptions struct {
 	AddRewrites bool
 }
 
+// validateEffectiveOptions checks that the resolved source and target
+// identifiers are not identical, which would cause an infinite mapping loop.
+// For annotation mappings it compares the effective foundry+layer pair;
+// for corpus mappings it compares the effective field names.
+// The effective value is: query-parameter override if non-empty, otherwise
+// the YAML list default.
+func (m *Mapper) validateEffectiveOptions(mappingID string, opts MappingOptions) error {
+	list, exists := m.mappingLists[mappingID]
+	if !exists {
+		return nil // will be caught later
+	}
+
+	if list.IsCorpus() {
+		effFieldA := opts.FieldA
+		if effFieldA == "" {
+			effFieldA = list.FieldA
+		}
+		effFieldB := opts.FieldB
+		if effFieldB == "" {
+			effFieldB = list.FieldB
+		}
+		if effFieldA != "" && effFieldA == effFieldB {
+			return fmt.Errorf("identical source and target field (fieldA == fieldB == %q) in mapping list '%s': this would cause an infinite mapping loop", effFieldA, mappingID)
+		}
+		return nil
+	}
+
+	effFoundryA := opts.FoundryA
+	if effFoundryA == "" {
+		effFoundryA = list.FoundryA
+	}
+	effLayerA := opts.LayerA
+	if effLayerA == "" {
+		effLayerA = list.LayerA
+	}
+	effFoundryB := opts.FoundryB
+	if effFoundryB == "" {
+		effFoundryB = list.FoundryB
+	}
+	effLayerB := opts.LayerB
+	if effLayerB == "" {
+		effLayerB = list.LayerB
+	}
+
+	if effFoundryA != "" && effFoundryA == effFoundryB && effLayerA == effLayerB {
+		return fmt.Errorf("identical source and target (foundryA/layerA == foundryB/layerB == %q/%q) in mapping list '%s': this would cause an infinite mapping loop", effFoundryA, effLayerA, mappingID)
+	}
+
+	return nil
+}
+
 // CascadeQueryMappings applies multiple mapping lists sequentially,
 // feeding the output of each into the next. orderedIDs and
 // perMappingOpts must have the same length. An empty list returns

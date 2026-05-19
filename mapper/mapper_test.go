@@ -440,8 +440,8 @@ func TestTokenToTermGroupWithRewrites(t *testing.T) {
 		ID:       "test-token-to-termgroup",
 		FoundryA: "opennlp",
 		LayerA:   "p",
-		FoundryB: "opennlp", // Keep the same foundry for both sides
-		LayerB:   "p",
+		FoundryB: "tt",
+		LayerB:   "pos",
 		Mappings: []config.MappingRule{
 			"[PIDAT] <> [opennlp/p=PIDAT & opennlp/p=AdjType:Pdt]",
 		},
@@ -809,7 +809,7 @@ func TestSingleFieldRewrite(t *testing.T) {
 		FoundryA: "opennlp",
 		LayerA:   "p",
 		FoundryB: "opennlp",
-		LayerB:   "p",
+		LayerB:   "pos",
 		Mappings: []config.MappingRule{
 			"[DET] <> [PRON]",
 		},
@@ -844,9 +844,15 @@ func TestSingleFieldRewrite(t *testing.T) {
 			"@type": "koral:term",
 			"foundry": "opennlp",
 			"key": "PRON",
-			"layer": "p",
+			"layer": "pos",
 			"match": "match:eq",
 			"rewrites": [
+				{
+					"@type": "koral:rewrite",
+					"editor": "Koral-Mapper",
+					"scope": "layer",
+					"original": "p"
+				},
 				{
 					"@type": "koral:rewrite",
 					"editor": "Koral-Mapper",
@@ -1119,4 +1125,212 @@ func TestQueryWrapperMappings(t *testing.T) {
 			assert.Equal(t, expectedData, result)
 		})
 	}
+}
+
+func TestIdenticalEffectiveFoundryLayerRejected(t *testing.T) {
+	tests := []struct {
+		name    string
+		list    config.MappingList
+		opts    MappingOptions
+		wantErr string
+	}{
+		{
+			name: "YAML defaults identical",
+			list: config.MappingList{
+				ID: "test", FoundryA: "opennlp", LayerA: "p",
+				FoundryB: "opennlp", LayerB: "p",
+				Mappings: []config.MappingRule{"[A] <> [B]"},
+			},
+			opts:    MappingOptions{Direction: AtoB},
+			wantErr: "identical source and target",
+		},
+		{
+			name: "Query param override makes them identical",
+			list: config.MappingList{
+				ID: "test", FoundryA: "opennlp", LayerA: "p",
+				FoundryB: "upos", LayerB: "p",
+				Mappings: []config.MappingRule{"[A] <> [B]"},
+			},
+			opts:    MappingOptions{Direction: AtoB, FoundryB: "opennlp"},
+			wantErr: "identical source and target",
+		},
+		{
+			name: "Query param override resolves the conflict",
+			list: config.MappingList{
+				ID: "test", FoundryA: "opennlp", LayerA: "p",
+				FoundryB: "opennlp", LayerB: "p",
+				Mappings: []config.MappingRule{"[A] <> [B]"},
+			},
+			opts:    MappingOptions{Direction: AtoB, FoundryB: "upos"},
+			wantErr: "",
+		},
+		{
+			name: "Different foundry same layer is allowed",
+			list: config.MappingList{
+				ID: "test", FoundryA: "opennlp", LayerA: "p",
+				FoundryB: "upos", LayerB: "p",
+				Mappings: []config.MappingRule{"[A] <> [B]"},
+			},
+			opts:    MappingOptions{Direction: AtoB},
+			wantErr: "",
+		},
+		{
+			name: "Both foundries empty is allowed",
+			list: config.MappingList{
+				ID:       "test",
+				Mappings: []config.MappingRule{"[A] <> [B]"},
+			},
+			opts:    MappingOptions{Direction: AtoB},
+			wantErr: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m, err := NewMapper([]config.MappingList{tt.list})
+			require.NoError(t, err)
+
+			input := map[string]any{
+				"@type": "koral:token",
+				"wrap": map[string]any{
+					"@type": "koral:term",
+					"key":   "A",
+				},
+			}
+
+			_, err = m.ApplyQueryMappings("test", tt.opts, input)
+			if tt.wantErr != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.wantErr)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestIdenticalEffectiveFieldRejected(t *testing.T) {
+	tests := []struct {
+		name    string
+		list    config.MappingList
+		opts    MappingOptions
+		wantErr string
+	}{
+		{
+			name: "YAML defaults identical",
+			list: config.MappingList{
+				ID: "test", Type: "corpus",
+				FieldA: "textClass", FieldB: "textClass",
+				Mappings: []config.MappingRule{"novel <> fiction"},
+			},
+			opts:    MappingOptions{Direction: AtoB},
+			wantErr: "identical source and target field",
+		},
+		{
+			name: "Query param override makes them identical",
+			list: config.MappingList{
+				ID: "test", Type: "corpus",
+				FieldA: "textClass", FieldB: "genre",
+				Mappings: []config.MappingRule{"novel <> fiction"},
+			},
+			opts:    MappingOptions{Direction: AtoB, FieldB: "textClass"},
+			wantErr: "identical source and target field",
+		},
+		{
+			name: "Query param override resolves the conflict",
+			list: config.MappingList{
+				ID: "test", Type: "corpus",
+				FieldA: "textClass", FieldB: "textClass",
+				Mappings: []config.MappingRule{"novel <> fiction"},
+			},
+			opts:    MappingOptions{Direction: AtoB, FieldB: "genre"},
+			wantErr: "",
+		},
+		{
+			name: "Different fields is allowed",
+			list: config.MappingList{
+				ID: "test", Type: "corpus",
+				FieldA: "textClass", FieldB: "genre",
+				Mappings: []config.MappingRule{"novel <> fiction"},
+			},
+			opts:    MappingOptions{Direction: AtoB},
+			wantErr: "",
+		},
+		{
+			name: "Both fields empty is allowed",
+			list: config.MappingList{
+				ID: "test", Type: "corpus",
+				Mappings: []config.MappingRule{"textClass=novel <> genre=fiction"},
+			},
+			opts:    MappingOptions{Direction: AtoB},
+			wantErr: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m, err := NewMapper([]config.MappingList{tt.list})
+			require.NoError(t, err)
+
+			input := map[string]any{
+				"collection": map[string]any{
+					"@type": "koral:doc",
+					"key":   "textClass",
+					"value": "novel",
+					"match": "match:eq",
+				},
+			}
+
+			_, err = m.ApplyQueryMappings("test", tt.opts, input)
+			if tt.wantErr != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.wantErr)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestIdenticalEffectiveValuesResponseEndpoint(t *testing.T) {
+	t.Run("annotation response rejects identical effective foundry/layer", func(t *testing.T) {
+		m, err := NewMapper([]config.MappingList{{
+			ID: "test", FoundryA: "marmot", LayerA: "p",
+			FoundryB: "marmot", LayerB: "p",
+			Mappings: []config.MappingRule{"[DET] <> [PRON]"},
+		}})
+		require.NoError(t, err)
+
+		input := map[string]any{
+			"snippet": `<span title="marmot/p:DET">Der</span>`,
+		}
+
+		_, err = m.ApplyResponseMappings("test", MappingOptions{Direction: AtoB}, input)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "identical source and target")
+	})
+
+	t.Run("corpus response rejects identical effective field", func(t *testing.T) {
+		m, err := NewMapper([]config.MappingList{{
+			ID: "test", Type: "corpus",
+			FieldA: "textClass", FieldB: "textClass",
+			Mappings: []config.MappingRule{"novel <> fiction"},
+		}})
+		require.NoError(t, err)
+
+		input := map[string]any{
+			"fields": []any{
+				map[string]any{
+					"@type": "koral:field",
+					"key":   "textClass",
+					"value": "novel",
+					"type":  "type:string",
+				},
+			},
+		}
+
+		_, err = m.ApplyResponseMappings("test", MappingOptions{Direction: AtoB}, input)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "identical source and target field")
+	})
 }

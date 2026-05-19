@@ -17,6 +17,10 @@ func (m *Mapper) ApplyQueryMappings(mappingID string, opts MappingOptions, jsonD
 		return nil, fmt.Errorf("mapping list with ID %s not found", mappingID)
 	}
 
+	if err := m.validateEffectiveOptions(mappingID, opts); err != nil {
+		return nil, err
+	}
+
 	if m.mappingLists[mappingID].IsCorpus() {
 		return m.applyCorpusQueryMappings(mappingID, opts, jsonData)
 	}
