@@ -386,6 +386,7 @@ func TestRewriteMarshalJSON(t *testing.T) {
 	err = json.Unmarshal(data, &result)
 	require.NoError(t, err)
 
+	assert.Equal(t, "koral:rewrite", result["@type"])
 	assert.Equal(t, "termMapper", result["editor"])
 	assert.Equal(t, "operation:mapping", result["operation"])
 	assert.Equal(t, "foundry", result["scope"])
@@ -396,4 +397,91 @@ func TestRewriteMarshalJSON(t *testing.T) {
 	// Ensure legacy fields are not present in output
 	assert.NotContains(t, result, "source")
 	assert.NotContains(t, result, "origin")
+}
+
+func TestRewriteMarshalJSONValueAndPointerConsistent(t *testing.T) {
+	rw := Rewrite{
+		Editor:   "Koral-Mapper",
+		Scope:    "key",
+		Original: "textClass",
+	}
+
+	valueBytes, err := json.Marshal(rw)
+	require.NoError(t, err)
+
+	pointerBytes, err := json.Marshal(&rw)
+	require.NoError(t, err)
+
+	assert.JSONEq(t, string(pointerBytes), string(valueBytes))
+}
+
+func TestRewriteToMap(t *testing.T) {
+	t.Run("All fields set", func(t *testing.T) {
+		rw := Rewrite{
+			Editor:    "termMapper",
+			Operation: "operation:mapping",
+			Scope:     "foundry",
+			Src:       "source-value",
+			Comment:   "Test comment",
+			Original:  "original-value",
+		}
+
+		m := rw.ToMap()
+		assert.Equal(t, "koral:rewrite", m["@type"])
+		assert.Equal(t, "termMapper", m["editor"])
+		assert.Equal(t, "operation:mapping", m["operation"])
+		assert.Equal(t, "foundry", m["scope"])
+		assert.Equal(t, "source-value", m["src"])
+		assert.Equal(t, "Test comment", m["_comment"])
+		assert.Equal(t, "original-value", m["original"])
+	})
+
+	t.Run("Only editor and scope", func(t *testing.T) {
+		rw := Rewrite{
+			Editor: "Koral-Mapper",
+			Scope:  "key",
+		}
+
+		m := rw.ToMap()
+		assert.Equal(t, "koral:rewrite", m["@type"])
+		assert.Equal(t, "Koral-Mapper", m["editor"])
+		assert.Equal(t, "key", m["scope"])
+		assert.NotContains(t, m, "operation")
+		assert.NotContains(t, m, "src")
+		assert.NotContains(t, m, "_comment")
+		assert.NotContains(t, m, "original")
+	})
+
+	t.Run("With complex original", func(t *testing.T) {
+		original := map[string]any{
+			"@type":     "koral:docGroup",
+			"operation": "operation:and",
+		}
+		rw := Rewrite{
+			Editor:   "Koral-Mapper",
+			Original: original,
+		}
+
+		m := rw.ToMap()
+		assert.Equal(t, "koral:rewrite", m["@type"])
+		assert.Equal(t, "Koral-Mapper", m["editor"])
+		assert.Equal(t, original, m["original"])
+	})
+
+	t.Run("Matches MarshalJSON output", func(t *testing.T) {
+		rw := Rewrite{
+			Editor:   "Koral-Mapper",
+			Scope:    "key",
+			Original: "textClass",
+		}
+
+		toMapResult := rw.ToMap()
+
+		data, err := json.Marshal(&rw)
+		require.NoError(t, err)
+		var fromJSON map[string]any
+		require.NoError(t, json.Unmarshal(data, &fromJSON))
+
+		assert.Equal(t, fromJSON, toMapResult)
+	})
 }

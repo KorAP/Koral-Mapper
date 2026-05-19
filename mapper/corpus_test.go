@@ -5,6 +5,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/KorAP/Koral-Mapper/ast"
 	"github.com/KorAP/Koral-Mapper/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -1582,4 +1583,199 @@ func TestCorpusResponseORPatternORReplacementSkipped(t *testing.T) {
 
 	fields := result.(map[string]any)["fields"].([]any)
 	require.Len(t, fields, 1, "OR replacement should be skipped")
+}
+
+func TestCorpusRewriteRoundTripsAsAstRewrite(t *testing.T) {
+	m := newCorpusMapper(t, "textClass=novel <> genre=fiction")
+
+	input := map[string]any{
+		"corpus": map[string]any{
+			"@type": "koral:doc",
+			"key":   "textClass",
+			"value": "novel",
+			"match": "match:eq",
+		},
+	}
+	result, err := m.ApplyQueryMappings("corpus-test", MappingOptions{Direction: AtoB, AddRewrites: true}, input)
+	require.NoError(t, err)
+
+	corpus := result.(map[string]any)["corpus"].(map[string]any)
+
+	rewrites, ok := corpus["rewrites"].([]any)
+	require.True(t, ok)
+	require.Len(t, rewrites, 1)
+
+	rewriteBytes, err := json.Marshal(rewrites[0])
+	require.NoError(t, err)
+
+	var rw ast.Rewrite
+	require.NoError(t, json.Unmarshal(rewriteBytes, &rw))
+
+	assert.Equal(t, "Koral-Mapper", rw.Editor)
+	assert.Equal(t, "key", rw.Scope)
+	assert.Equal(t, "textClass", rw.Original)
+}
+
+func TestCorpusRewriteValueScopeRoundTripsAsAstRewrite(t *testing.T) {
+	m := newCorpusMapper(t, "textClass=novel <> textClass=fiction")
+
+	input := map[string]any{
+		"corpus": map[string]any{
+			"@type": "koral:doc",
+			"key":   "textClass",
+			"value": "novel",
+			"match": "match:eq",
+		},
+	}
+	result, err := m.ApplyQueryMappings("corpus-test", MappingOptions{Direction: AtoB, AddRewrites: true}, input)
+	require.NoError(t, err)
+
+	corpus := result.(map[string]any)["corpus"].(map[string]any)
+	assert.Equal(t, "textClass", corpus["key"])
+	assert.Equal(t, "fiction", corpus["value"])
+
+	rewrites, ok := corpus["rewrites"].([]any)
+	require.True(t, ok)
+	require.Len(t, rewrites, 1)
+
+	rewriteBytes, err := json.Marshal(rewrites[0])
+	require.NoError(t, err)
+
+	var rw ast.Rewrite
+	require.NoError(t, json.Unmarshal(rewriteBytes, &rw))
+
+	assert.Equal(t, "Koral-Mapper", rw.Editor)
+	assert.Equal(t, "value", rw.Scope)
+	assert.Equal(t, "novel", rw.Original)
+}
+
+func TestAddCorpusRewriteKeyScope(t *testing.T) {
+	replaced := map[string]any{
+		"@type": "koral:doc",
+		"key":   "genre",
+		"value": "fiction",
+	}
+	original := map[string]any{
+		"@type": "koral:doc",
+		"key":   "textClass",
+		"value": "novel",
+	}
+
+	addCorpusRewrite(replaced, original)
+
+	rewrites, ok := replaced["rewrites"].([]any)
+	require.True(t, ok)
+	require.Len(t, rewrites, 1)
+
+	rewriteBytes, err := json.Marshal(rewrites[0])
+	require.NoError(t, err)
+
+	var rw ast.Rewrite
+	require.NoError(t, json.Unmarshal(rewriteBytes, &rw))
+
+	assert.Equal(t, RewriteEditor, rw.Editor)
+	assert.Equal(t, "key", rw.Scope)
+	assert.Equal(t, "textClass", rw.Original)
+}
+
+func TestAddCorpusRewriteValueScope(t *testing.T) {
+	replaced := map[string]any{
+		"@type": "koral:doc",
+		"key":   "textClass",
+		"value": "fiction",
+	}
+	original := map[string]any{
+		"@type": "koral:doc",
+		"key":   "textClass",
+		"value": "novel",
+	}
+
+	addCorpusRewrite(replaced, original)
+
+	rewrites, ok := replaced["rewrites"].([]any)
+	require.True(t, ok)
+	require.Len(t, rewrites, 1)
+
+	rewriteBytes, err := json.Marshal(rewrites[0])
+	require.NoError(t, err)
+
+	var rw ast.Rewrite
+	require.NoError(t, json.Unmarshal(rewriteBytes, &rw))
+
+	assert.Equal(t, RewriteEditor, rw.Editor)
+	assert.Equal(t, "value", rw.Scope)
+	assert.Equal(t, "novel", rw.Original)
+}
+
+func TestAddCorpusRewriteGroupOriginal(t *testing.T) {
+	replaced := map[string]any{
+		"@type": "koral:doc",
+		"key":   "genre",
+		"value": "fiction",
+	}
+	original := map[string]any{
+		"@type":     "koral:docGroup",
+		"operation": "operation:and",
+		"operands": []any{
+			map[string]any{"@type": "koral:doc", "key": "textClass", "value": "kultur"},
+			map[string]any{"@type": "koral:doc", "key": "textClass", "value": "musik"},
+		},
+	}
+
+	addCorpusRewrite(replaced, original)
+
+	rewrites, ok := replaced["rewrites"].([]any)
+	require.True(t, ok)
+	require.Len(t, rewrites, 1)
+
+	rewriteBytes, err := json.Marshal(rewrites[0])
+	require.NoError(t, err)
+
+	var rw ast.Rewrite
+	require.NoError(t, json.Unmarshal(rewriteBytes, &rw))
+
+	assert.Equal(t, RewriteEditor, rw.Editor)
+	assert.Empty(t, rw.Scope)
+	require.NotNil(t, rw.Original)
+
+	originalMap, ok := rw.Original.(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, "koral:docGroup", originalMap["@type"])
+}
+
+func TestCorpusRewriteGroupOriginalRoundTripsAsAstRewrite(t *testing.T) {
+	m := newCorpusMapper(t, "genre=fiction <> (textClass=kultur & textClass=musik)")
+
+	input := map[string]any{
+		"corpus": map[string]any{
+			"@type":     "koral:docGroup",
+			"operation": "operation:and",
+			"operands": []any{
+				map[string]any{"@type": "koral:doc", "key": "textClass", "value": "kultur"},
+				map[string]any{"@type": "koral:doc", "key": "textClass", "value": "musik"},
+			},
+		},
+	}
+	result, err := m.ApplyQueryMappings("corpus-test", MappingOptions{Direction: BtoA, AddRewrites: true}, input)
+	require.NoError(t, err)
+
+	corpus := result.(map[string]any)["corpus"].(map[string]any)
+
+	rewrites, ok := corpus["rewrites"].([]any)
+	require.True(t, ok)
+	require.Len(t, rewrites, 1)
+
+	rewriteBytes, err := json.Marshal(rewrites[0])
+	require.NoError(t, err)
+
+	var rw ast.Rewrite
+	require.NoError(t, json.Unmarshal(rewriteBytes, &rw))
+
+	assert.Equal(t, "Koral-Mapper", rw.Editor)
+	assert.Empty(t, rw.Scope)
+	require.NotNil(t, rw.Original)
+
+	originalMap, ok := rw.Original.(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, "koral:docGroup", originalMap["@type"])
 }

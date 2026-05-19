@@ -101,8 +101,10 @@ func (r *Rewrite) Clone() Node {
 	}
 }
 
-// MarshalJSON implements custom JSON marshaling to ensure clean output
-func (r *Rewrite) MarshalJSON() ([]byte, error) {
+// MarshalJSON implements custom JSON marshaling to ensure clean output.
+// Uses a value receiver so both json.Marshal(rw) and json.Marshal(&rw)
+// produce identical output including the @type field.
+func (r Rewrite) MarshalJSON() ([]byte, error) {
 	// Create a map with only the modern field names
 	result := make(map[string]any)
 
@@ -129,6 +131,34 @@ func (r *Rewrite) MarshalJSON() ([]byte, error) {
 	}
 
 	return json.Marshal(result)
+}
+
+// ToMap converts the Rewrite to a map[string]any suitable for direct
+// injection into map-based JSON structures. The output is identical to
+// what MarshalJSON produces.
+func (r *Rewrite) ToMap() map[string]any {
+	result := map[string]any{
+		"@type": "koral:rewrite",
+	}
+	if r.Editor != "" {
+		result["editor"] = r.Editor
+	}
+	if r.Operation != "" {
+		result["operation"] = r.Operation
+	}
+	if r.Scope != "" {
+		result["scope"] = r.Scope
+	}
+	if r.Src != "" {
+		result["src"] = r.Src
+	}
+	if r.Comment != "" {
+		result["_comment"] = r.Comment
+	}
+	if r.Original != nil {
+		result["original"] = r.Original
+	}
+	return result
 }
 
 // Token represents a koral:token

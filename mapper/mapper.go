@@ -17,21 +17,6 @@ const (
 	RewriteEditor = "Koral-Mapper"
 )
 
-// newRewriteEntry creates a koral:rewrite annotation entry.
-func newRewriteEntry(scope string, original any) map[string]any {
-	r := map[string]any{
-		"@type":  "koral:rewrite",
-		"editor": RewriteEditor,
-	}
-	if scope != "" {
-		r["scope"] = scope
-	}
-	if original != nil {
-		r["original"] = original
-	}
-	return r
-}
-
 // String converts the Direction to its string representation
 func (d Direction) String() string {
 	if d {

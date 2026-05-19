@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"slices"
 
+	"github.com/KorAP/Koral-Mapper/ast"
 	"github.com/KorAP/Koral-Mapper/parser"
 )
 
@@ -362,25 +363,23 @@ func addCorpusRewrite(replaced any, original map[string]any) {
 
 	origAtType, _ := original["@type"].(string)
 
-	// If the original was a group, store the whole structure as the rewrite original
+	var rw ast.Rewrite
+
 	if origAtType == "koral:docGroup" || origAtType == "koral:fieldGroup" {
-		rewrite := newRewriteEntry("", original)
-		replacedMap["rewrites"] = []any{rewrite}
-		return
-	}
-
-	origKey, _ := original["key"].(string)
-	newKey, _ := replacedMap["key"].(string)
-
-	var rewrite map[string]any
-	if origKey != newKey && origKey != "" {
-		rewrite = newRewriteEntry("key", origKey)
+		rw = ast.Rewrite{Editor: RewriteEditor, Original: original}
 	} else {
-		origValue, _ := original["value"].(string)
-		rewrite = newRewriteEntry("value", origValue)
+		origKey, _ := original["key"].(string)
+		newKey, _ := replacedMap["key"].(string)
+
+		if origKey != newKey && origKey != "" {
+			rw = ast.Rewrite{Editor: RewriteEditor, Scope: "key", Original: origKey}
+		} else {
+			origValue, _ := original["value"].(string)
+			rw = ast.Rewrite{Editor: RewriteEditor, Scope: "value", Original: origValue}
+		}
 	}
 
-	replacedMap["rewrites"] = []any{rewrite}
+	replacedMap["rewrites"] = []any{rw.ToMap()}
 }
 
 // applyCorpusResponseMappings processes fields arrays with corpus rules.
