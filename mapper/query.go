@@ -287,51 +287,15 @@ func addRewriteToNode(newNode, originalNode ast.Node) {
 	}
 }
 
-// buildRewrites creates Rewrite entries describing what changed between
-// originalNode and newNode. For term-level changes it emits one scoped
-// rewrite per changed field so the transformation is fully reversible.
-// For structural changes it stores the full original as an object.
+// buildRewrites creates a single Rewrite entry describing what changed between
+// originalNode and newNode. One rule application on one object always produces
+// exactly one koral:rewrite with the full original serialized in `original`.
+// Rewrites from previous cascade steps are stripped from the original so the
+// serialized value only contains the node's own content.
 func buildRewrites(originalNode, newNode ast.Node) []ast.Rewrite {
-	if term, ok := originalNode.(*ast.Term); ok && ast.IsTermNode(newNode) && originalNode.Type() == newNode.Type() {
-		newTerm := newNode.(*ast.Term)
-		var rewrites []ast.Rewrite
-
-		if term.Foundry != newTerm.Foundry {
-			rw := ast.Rewrite{Editor: RewriteEditor, Scope: "foundry"}
-			if term.Foundry != "" {
-				rw.Original = term.Foundry
-			}
-			rewrites = append(rewrites, rw)
-		}
-		if term.Layer != newTerm.Layer {
-			rw := ast.Rewrite{Editor: RewriteEditor, Scope: "layer"}
-			if term.Layer != "" {
-				rw.Original = term.Layer
-			}
-			rewrites = append(rewrites, rw)
-		}
-		if term.Key != newTerm.Key {
-			rw := ast.Rewrite{Editor: RewriteEditor, Scope: "key"}
-			if term.Key != "" {
-				rw.Original = term.Key
-			}
-			rewrites = append(rewrites, rw)
-		}
-		if term.Value != newTerm.Value {
-			rw := ast.Rewrite{Editor: RewriteEditor, Scope: "value"}
-			if term.Value != "" {
-				rw.Original = term.Value
-			}
-			rewrites = append(rewrites, rw)
-		}
-
-		if len(rewrites) > 0 {
-			return rewrites
-		}
-	}
-
-	// Structural change: serialize the original as the rewrite value
-	originalBytes, err := parser.SerializeToJSON(originalNode)
+	clean := originalNode.Clone()
+	ast.StripRewrites(clean)
+	originalBytes, err := parser.SerializeToJSON(clean)
 	if err != nil {
 		return []ast.Rewrite{{Editor: RewriteEditor}}
 	}

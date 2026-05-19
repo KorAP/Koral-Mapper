@@ -690,7 +690,7 @@ func TestMultiFieldRewritesAreReversible(t *testing.T) {
 		expected string
 	}{
 		{
-			name: "Multi-field change: foundry + layer + key all change",
+			name: "Multi-field change: single rewrite with full original",
 			opts: MappingOptions{
 				Direction:   AtoB,
 				AddRewrites: true,
@@ -717,27 +717,20 @@ func TestMultiFieldRewritesAreReversible(t *testing.T) {
 						{
 							"@type": "koral:rewrite",
 							"editor": "Koral-Mapper",
-							"scope": "foundry",
-							"original": "opennlp"
-						},
-						{
-							"@type": "koral:rewrite",
-							"editor": "Koral-Mapper",
-							"scope": "layer",
-							"original": "p"
-						},
-						{
-							"@type": "koral:rewrite",
-							"editor": "Koral-Mapper",
-							"scope": "key",
-							"original": "DET"
+							"original": {
+								"@type": "koral:term",
+								"foundry": "opennlp",
+								"key": "DET",
+								"layer": "p",
+								"match": "match:eq"
+							}
 						}
 					]
 				}
 			}`,
 		},
 		{
-			name: "Reverse direction: foundry + layer + key all change back",
+			name: "Reverse direction: single rewrite with full original",
 			opts: MappingOptions{
 				Direction:   BtoA,
 				AddRewrites: true,
@@ -764,20 +757,13 @@ func TestMultiFieldRewritesAreReversible(t *testing.T) {
 						{
 							"@type": "koral:rewrite",
 							"editor": "Koral-Mapper",
-							"scope": "foundry",
-							"original": "upos"
-						},
-						{
-							"@type": "koral:rewrite",
-							"editor": "Koral-Mapper",
-							"scope": "layer",
-							"original": "pos"
-						},
-						{
-							"@type": "koral:rewrite",
-							"editor": "Koral-Mapper",
-							"scope": "key",
-							"original": "PRON"
+							"original": {
+								"@type": "koral:term",
+								"foundry": "upos",
+								"key": "PRON",
+								"layer": "pos",
+								"match": "match:eq"
+							}
 						}
 					]
 				}
@@ -850,14 +836,13 @@ func TestSingleFieldRewrite(t *testing.T) {
 				{
 					"@type": "koral:rewrite",
 					"editor": "Koral-Mapper",
-					"scope": "layer",
-					"original": "p"
-				},
-				{
-					"@type": "koral:rewrite",
-					"editor": "Koral-Mapper",
-					"scope": "key",
-					"original": "DET"
+					"original": {
+						"@type": "koral:term",
+						"foundry": "opennlp",
+						"key": "DET",
+						"layer": "p",
+						"match": "match:eq"
+					}
 				}
 			]
 		}
@@ -867,50 +852,40 @@ func TestSingleFieldRewrite(t *testing.T) {
 	assert.Equal(t, expectedData, result)
 }
 
-func TestBuildRewritesFieldInjection(t *testing.T) {
+func TestBuildRewritesSingleObjectRewrite(t *testing.T) {
 	tests := []struct {
-		name           string
-		original       *ast.Term
-		new_           *ast.Term
-		expectedScopes []string
-		hasOriginals   []bool
+		name     string
+		original *ast.Term
+		new_     *ast.Term
 	}{
 		{
-			name:           "All fields change with originals",
-			original:       &ast.Term{Foundry: "a", Layer: "l1", Key: "k1", Value: "v1", Match: ast.MatchEqual},
-			new_:           &ast.Term{Foundry: "b", Layer: "l2", Key: "k2", Value: "v2", Match: ast.MatchEqual},
-			expectedScopes: []string{"foundry", "layer", "key", "value"},
-			hasOriginals:   []bool{true, true, true, true},
+			name:     "All fields change",
+			original: &ast.Term{Foundry: "a", Layer: "l1", Key: "k1", Value: "v1", Match: ast.MatchEqual},
+			new_:     &ast.Term{Foundry: "b", Layer: "l2", Key: "k2", Value: "v2", Match: ast.MatchEqual},
 		},
 		{
-			name:           "Injection: empty value becomes non-empty",
-			original:       &ast.Term{Foundry: "a", Layer: "l", Key: "k", Match: ast.MatchEqual},
-			new_:           &ast.Term{Foundry: "a", Layer: "l", Key: "k", Value: "v", Match: ast.MatchEqual},
-			expectedScopes: []string{"value"},
-			hasOriginals:   []bool{false},
+			name:     "Single field injection: empty value becomes non-empty",
+			original: &ast.Term{Foundry: "a", Layer: "l", Key: "k", Match: ast.MatchEqual},
+			new_:     &ast.Term{Foundry: "a", Layer: "l", Key: "k", Value: "v", Match: ast.MatchEqual},
 		},
 		{
-			name:           "Deletion: non-empty value becomes empty",
-			original:       &ast.Term{Foundry: "a", Layer: "l", Key: "k", Value: "v", Match: ast.MatchEqual},
-			new_:           &ast.Term{Foundry: "a", Layer: "l", Key: "k", Match: ast.MatchEqual},
-			expectedScopes: []string{"value"},
-			hasOriginals:   []bool{true},
+			name:     "Single field deletion: non-empty value becomes empty",
+			original: &ast.Term{Foundry: "a", Layer: "l", Key: "k", Value: "v", Match: ast.MatchEqual},
+			new_:     &ast.Term{Foundry: "a", Layer: "l", Key: "k", Match: ast.MatchEqual},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			rewrites := buildRewrites(tt.original, tt.new_)
-			require.Len(t, rewrites, len(tt.expectedScopes))
-			for i, rw := range rewrites {
-				assert.Equal(t, RewriteEditor, rw.Editor)
-				assert.Equal(t, tt.expectedScopes[i], rw.Scope)
-				if tt.hasOriginals[i] {
-					assert.NotNil(t, rw.Original, "expected original for scope %s", tt.expectedScopes[i])
-				} else {
-					assert.Nil(t, rw.Original, "expected no original for scope %s (injection)", tt.expectedScopes[i])
-				}
-			}
+			require.Len(t, rewrites, 1, "one rule application should produce exactly one rewrite")
+			rw := rewrites[0]
+			assert.Equal(t, RewriteEditor, rw.Editor)
+			assert.Empty(t, rw.Scope, "object-level rewrite should have no scope")
+			assert.NotNil(t, rw.Original, "rewrite should contain the full original")
+			originalMap, ok := rw.Original.(map[string]any)
+			require.True(t, ok)
+			assert.Equal(t, "koral:term", originalMap["@type"])
 		})
 	}
 }

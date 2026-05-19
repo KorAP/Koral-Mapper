@@ -231,9 +231,9 @@ func TestCascadeQueryRewritesPreservedAcrossSteps(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	// After both steps, the term should have rewrites from both steps:
-	// step 1 recorded scope=foundry original=opennlp and scope=key original=PIDAT,
-	// step 2 recorded scope=foundry original=stts and scope=key original=DET.
+	// After both steps, the term should have one rewrite per step:
+	// step 1 recorded the full original term (opennlp/p/PIDAT),
+	// step 2 recorded the full original term (stts/p/DET).
 	expected := parseJSON(t, `{
 		"@type": "koral:token",
 		"wrap": {
@@ -246,26 +246,24 @@ func TestCascadeQueryRewritesPreservedAcrossSteps(t *testing.T) {
 				{
 					"@type": "koral:rewrite",
 					"editor": "Koral-Mapper",
-					"scope": "foundry",
-					"original": "opennlp"
+					"original": {
+						"@type": "koral:term",
+						"foundry": "opennlp",
+						"key": "PIDAT",
+						"layer": "p",
+						"match": "match:eq"
+					}
 				},
 				{
 					"@type": "koral:rewrite",
 					"editor": "Koral-Mapper",
-					"scope": "key",
-					"original": "PIDAT"
-				},
-				{
-					"@type": "koral:rewrite",
-					"editor": "Koral-Mapper",
-					"scope": "foundry",
-					"original": "stts"
-				},
-				{
-					"@type": "koral:rewrite",
-					"editor": "Koral-Mapper",
-					"scope": "key",
-					"original": "DET"
+					"original": {
+						"@type": "koral:term",
+						"foundry": "stts",
+						"key": "DET",
+						"layer": "p",
+						"match": "match:eq"
+					}
 				}
 			]
 		}
@@ -312,31 +310,31 @@ func TestCascadeQueryRewritesPreservedStructuralChange(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	// Step 1 rewrites (scope=foundry original=opennlp, scope=key original=PIDAT)
-	// must appear on the TermGroup created by step 2, along with step 2's
-	// own structural rewrite.
+	// Step 1 produced a single rewrite with the full original term (opennlp/p/PIDAT).
+	// Step 2 replaced the term with a TermGroup (structural change) and produced
+	// another single rewrite with the full original term (stts/p/DET).
+	// Both rewrites must appear on the TermGroup.
 	resultMap := result.(map[string]any)
 	wrap := resultMap["wrap"].(map[string]any)
 	require.Equal(t, "koral:termGroup", wrap["@type"])
 
 	rewrites := wrap["rewrites"].([]any)
-	// First rewrite is from step 1 (carried forward): foundry change
+	require.Len(t, rewrites, 2)
+
+	// First rewrite is from step 1 (carried forward): full original term
 	rw0 := rewrites[0].(map[string]any)
-	assert.Equal(t, "foundry", rw0["scope"])
-	assert.Equal(t, "opennlp", rw0["original"])
+	assert.Equal(t, "Koral-Mapper", rw0["editor"])
+	original0 := rw0["original"].(map[string]any)
+	assert.Equal(t, "koral:term", original0["@type"])
+	assert.Equal(t, "PIDAT", original0["key"])
+	assert.Equal(t, "opennlp", original0["foundry"])
 
-	// Second rewrite is from step 1 (carried forward): key change
+	// Second rewrite is from step 2: full original term
 	rw1 := rewrites[1].(map[string]any)
-	assert.Equal(t, "key", rw1["scope"])
-	assert.Equal(t, "PIDAT", rw1["original"])
-
-	// Last rewrite is from step 2 (structural: original is the full term)
-	rwLast := rewrites[len(rewrites)-1].(map[string]any)
-	assert.Equal(t, "Koral-Mapper", rwLast["editor"])
-	// Structural rewrite stores the full original node (no scope)
-	original := rwLast["original"].(map[string]any)
-	assert.Equal(t, "koral:term", original["@type"])
-	assert.Equal(t, "DET", original["key"])
+	assert.Equal(t, "Koral-Mapper", rw1["editor"])
+	original1 := rw1["original"].(map[string]any)
+	assert.Equal(t, "koral:term", original1["@type"])
+	assert.Equal(t, "DET", original1["key"])
 }
 
 func TestCascadeResponseTwoCorpusMappings(t *testing.T) {
