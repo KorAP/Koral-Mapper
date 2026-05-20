@@ -2,6 +2,7 @@ package mapper
 
 import (
 	"fmt"
+	"regexp"
 
 	"github.com/KorAP/Koral-Mapper/config"
 	"github.com/KorAP/Koral-Mapper/parser"
@@ -42,6 +43,7 @@ type Mapper struct {
 	mappingLists      map[string]*config.MappingList
 	parsedQueryRules  map[string][]*parser.MappingResult
 	parsedCorpusRules map[string][]*parser.CorpusMappingResult
+	compiledRegexes   map[string]*regexp.Regexp
 }
 
 // NewMapper creates a new Mapper instance from a list of MappingLists
@@ -50,9 +52,9 @@ func NewMapper(lists []config.MappingList) (*Mapper, error) {
 		mappingLists:      make(map[string]*config.MappingList),
 		parsedQueryRules:  make(map[string][]*parser.MappingResult),
 		parsedCorpusRules: make(map[string][]*parser.CorpusMappingResult),
+		compiledRegexes:   make(map[string]*regexp.Regexp),
 	}
 
-	// Store mapping lists by ID
 	for _, list := range lists {
 		if _, exists := m.mappingLists[list.ID]; exists {
 			return nil, fmt.Errorf("duplicate mapping list ID found: %s", list.ID)
@@ -66,6 +68,14 @@ func NewMapper(lists []config.MappingList) (*Mapper, error) {
 			if err != nil {
 				return nil, fmt.Errorf("failed to parse corpus mappings for list %s: %w", list.ID, err)
 			}
+			for _, rule := range corpusRules {
+				if err := m.precompileCorpusRegexes(rule.Upper); err != nil {
+					return nil, fmt.Errorf("invalid regex in corpus mapping list %s: %w", list.ID, err)
+				}
+				if err := m.precompileCorpusRegexes(rule.Lower); err != nil {
+					return nil, fmt.Errorf("invalid regex in corpus mapping list %s: %w", list.ID, err)
+				}
+			}
 			m.parsedCorpusRules[list.ID] = corpusRules
 		} else {
 			queryRules, err := list.ParseMappings()
@@ -77,6 +87,31 @@ func NewMapper(lists []config.MappingList) (*Mapper, error) {
 	}
 
 	return m, nil
+}
+
+// precompileCorpusRegexes walks a CorpusNode tree and pre-compiles any
+// regex-typed field patterns into the compiledRegexes cache.
+func (m *Mapper) precompileCorpusRegexes(node parser.CorpusNode) error {
+	switch n := node.(type) {
+	case *parser.CorpusField:
+		if n.Type == "regex" {
+			pattern := "^" + n.Value + "$"
+			if _, exists := m.compiledRegexes[pattern]; !exists {
+				re, err := regexp.Compile(pattern)
+				if err != nil {
+					return fmt.Errorf("failed to compile regex %q: %w", n.Value, err)
+				}
+				m.compiledRegexes[pattern] = re
+			}
+		}
+	case *parser.CorpusGroup:
+		for _, op := range n.Operands {
+			if err := m.precompileCorpusRegexes(op); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // MappingOptions contains the options for applying mappings

@@ -2,7 +2,6 @@ package mapper
 
 import (
 	"maps"
-	"regexp"
 	"slices"
 
 	"github.com/KorAP/Koral-Mapper/ast"
@@ -68,7 +67,7 @@ func (m *Mapper) applyCorpusRule(nodeAny any, rule *parser.CorpusMappingResult, 
 		pattern, replacement = rule.Lower, rule.Upper
 	}
 
-	if matchCorpusNode(pattern, node) {
+	if m.matchCorpusNode(pattern, node) {
 		// AND subset match: node has more operands than pattern
 		if pg, ok := pattern.(*parser.CorpusGroup); ok && pg.Operation == "and" {
 			operandsRaw, _ := node["operands"].([]any)
@@ -126,7 +125,7 @@ func (m *Mapper) buildSubsetANDReplacement(node map[string]any, patternOps []par
 			if !ok {
 				continue
 			}
-			if matchCorpusNode(patOp, docOp) {
+			if m.matchCorpusNode(patOp, docOp) {
 				used[j] = true
 				break
 			}
@@ -167,16 +166,16 @@ func (m *Mapper) buildSubsetANDReplacement(node map[string]any, patternOps []par
 // For CorpusField patterns, the node must be a koral:doc/koral:field.
 // For CorpusGroup patterns, the node must be a koral:docGroup/koral:fieldGroup
 // with matching operation and exactly matching operands (commutative).
-func matchCorpusNode(pattern parser.CorpusNode, node map[string]any) bool {
+func (m *Mapper) matchCorpusNode(pattern parser.CorpusNode, node map[string]any) bool {
 	switch p := pattern.(type) {
 	case *parser.CorpusField:
 		atType, _ := node["@type"].(string)
 		if atType != "koral:doc" && atType != "koral:field" {
 			return false
 		}
-		return matchCorpusField(p, node)
+		return m.matchCorpusField(p, node)
 	case *parser.CorpusGroup:
-		return matchCorpusGroupNode(p, node)
+		return m.matchCorpusGroupNode(p, node)
 	}
 	return false
 }
@@ -190,14 +189,14 @@ func matchCorpusNode(pattern parser.CorpusNode, node map[string]any) bool {
 // AND patterns: the node must be a docGroup/fieldGroup with AND operation
 // and all pattern operands must be found (subset matching — the node may
 // have additional operands beyond those in the pattern).
-func matchCorpusGroupNode(pattern *parser.CorpusGroup, node map[string]any) bool {
+func (m *Mapper) matchCorpusGroupNode(pattern *parser.CorpusGroup, node map[string]any) bool {
 	atType, _ := node["@type"].(string)
 
 	if pattern.Operation == "or" {
 		// Leaf nodes: any-operand matching
 		if atType == "koral:doc" || atType == "koral:field" {
 			for _, op := range pattern.Operands {
-				if matchCorpusNode(op, node) {
+				if m.matchCorpusNode(op, node) {
 					return true
 				}
 			}
@@ -211,7 +210,7 @@ func matchCorpusGroupNode(pattern *parser.CorpusGroup, node map[string]any) bool
 		if operation != "operation:or" {
 			return false
 		}
-		return matchGroupOperands(pattern.Operands, node, true)
+		return m.matchGroupOperands(pattern.Operands, node, true)
 	}
 
 	// AND patterns: subset matching
@@ -222,14 +221,14 @@ func matchCorpusGroupNode(pattern *parser.CorpusGroup, node map[string]any) bool
 	if operation != "operation:and" {
 		return false
 	}
-	return matchGroupOperands(pattern.Operands, node, false)
+	return m.matchGroupOperands(pattern.Operands, node, false)
 }
 
 // matchGroupOperands checks if a docGroup's operands match a pattern's
 // operands using commutative set matching. When exactCount is true, the
 // operand counts must be equal; otherwise subset matching is used (the
 // node may have more operands than the pattern).
-func matchGroupOperands(patternOps []parser.CorpusNode, node map[string]any, exactCount bool) bool {
+func (m *Mapper) matchGroupOperands(patternOps []parser.CorpusNode, node map[string]any, exactCount bool) bool {
 	operandsRaw, ok := node["operands"].([]any)
 	if !ok {
 		return false
@@ -255,7 +254,7 @@ func matchGroupOperands(patternOps []parser.CorpusNode, node map[string]any, exa
 			if !ok {
 				continue
 			}
-			if matchCorpusNode(patOp, docOp) {
+			if m.matchCorpusNode(patOp, docOp) {
 				used[j] = true
 				found = true
 				break
@@ -269,7 +268,7 @@ func matchGroupOperands(patternOps []parser.CorpusNode, node map[string]any, exa
 }
 
 // matchCorpusField checks if a koral:doc JSON node matches a CorpusField pattern.
-func matchCorpusField(pattern *parser.CorpusField, doc map[string]any) bool {
+func (m *Mapper) matchCorpusField(pattern *parser.CorpusField, doc map[string]any) bool {
 	docKey, _ := doc["key"].(string)
 	if docKey != pattern.Key {
 		return false
@@ -277,11 +276,8 @@ func matchCorpusField(pattern *parser.CorpusField, doc map[string]any) bool {
 
 	docValue, _ := doc["value"].(string)
 	if pattern.Type == "regex" {
-		re, err := regexp.Compile("^" + pattern.Value + "$")
-		if err != nil {
-			return false
-		}
-		if !re.MatchString(docValue) {
+		re := m.compiledRegexes["^"+pattern.Value+"$"]
+		if re == nil || !re.MatchString(docValue) {
 			return false
 		}
 	} else if docValue != pattern.Value {
@@ -501,7 +497,7 @@ func (m *Mapper) matchSingleValue(key, value string, rules []*parser.CorpusMappi
 			pattern, replacement = rule.Lower, rule.Upper
 		}
 
-		if !matchCorpusFieldPattern(pattern, pseudoDoc) {
+		if !m.matchCorpusFieldPattern(pattern, pseudoDoc) {
 			continue
 		}
 
@@ -528,7 +524,7 @@ func (m *Mapper) matchGroupPatternsAndCollect(values map[string][]string, rules 
 		if !patternNeedsAggregateMatching(pattern) {
 			continue
 		}
-		if !matchCorpusPatternAgainstValues(pattern, values) {
+		if !m.matchCorpusPatternAgainstValues(pattern, values) {
 			continue
 		}
 
@@ -567,13 +563,13 @@ func collectResponseFieldValues(fields []any) map[string][]string {
 	return values
 }
 
-func matchCorpusPatternAgainstValues(pattern parser.CorpusNode, values map[string][]string) bool {
+func (m *Mapper) matchCorpusPatternAgainstValues(pattern parser.CorpusNode, values map[string][]string) bool {
 	switch p := pattern.(type) {
 	case *parser.CorpusField:
 		if p.Key == "" {
 			for key, keyValues := range values {
 				for _, value := range keyValues {
-					if matchCorpusField(p, map[string]any{"key": key, "value": value}) {
+					if m.matchCorpusField(p, map[string]any{"key": key, "value": value}) {
 						return true
 					}
 				}
@@ -581,7 +577,7 @@ func matchCorpusPatternAgainstValues(pattern parser.CorpusNode, values map[strin
 			return false
 		}
 		for _, value := range values[p.Key] {
-			if matchCorpusField(p, map[string]any{"key": p.Key, "value": value}) {
+			if m.matchCorpusField(p, map[string]any{"key": p.Key, "value": value}) {
 				return true
 			}
 		}
@@ -590,7 +586,7 @@ func matchCorpusPatternAgainstValues(pattern parser.CorpusNode, values map[strin
 	case *parser.CorpusGroup:
 		if p.Operation == "or" {
 			for _, op := range p.Operands {
-				if matchCorpusPatternAgainstValues(op, values) {
+				if m.matchCorpusPatternAgainstValues(op, values) {
 					return true
 				}
 			}
@@ -598,7 +594,7 @@ func matchCorpusPatternAgainstValues(pattern parser.CorpusNode, values map[strin
 		}
 
 		for _, op := range p.Operands {
-			if !matchCorpusPatternAgainstValues(op, values) {
+			if !m.matchCorpusPatternAgainstValues(op, values) {
 				return false
 			}
 		}
@@ -626,14 +622,14 @@ func patternNeedsAggregateMatching(pattern parser.CorpusNode) bool {
 // matchCorpusFieldPattern checks if a single response field matches a pattern.
 // Field patterns match directly. OR group patterns match if any operand matches.
 // AND group patterns cannot match a single field.
-func matchCorpusFieldPattern(pattern parser.CorpusNode, doc map[string]any) bool {
+func (m *Mapper) matchCorpusFieldPattern(pattern parser.CorpusNode, doc map[string]any) bool {
 	switch p := pattern.(type) {
 	case *parser.CorpusField:
-		return matchCorpusField(p, doc)
+		return m.matchCorpusField(p, doc)
 	case *parser.CorpusGroup:
 		if p.Operation == "or" {
 			for _, op := range p.Operands {
-				if matchCorpusFieldPattern(op, doc) {
+				if m.matchCorpusFieldPattern(op, doc) {
 					return true
 				}
 			}

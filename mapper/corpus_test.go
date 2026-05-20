@@ -293,6 +293,21 @@ func TestCorpusQuerySingleToGroupReplacement(t *testing.T) {
 	assert.Equal(t, "type", operands[1].(map[string]any)["key"])
 }
 
+func TestCorpusQueryInvalidRegexFailsAtStartup(t *testing.T) {
+	_, err := NewMapper([]config.MappingList{{
+		ID:       "corpus-test",
+		Type:     "corpus",
+		Mappings: []config.MappingRule{"textClass=[invalid#regex <> genre=broken"},
+	}})
+	assert.Error(t, err, "invalid regex should fail at NewMapper time, not silently at match time")
+	assert.Contains(t, err.Error(), "regex")
+}
+
+func TestCorpusQueryRegexCompiledOnce(t *testing.T) {
+	m := newCorpusMapper(t, "textClass=wissenschaft.*#regex <> genre=science")
+	assert.NotEmpty(t, m.compiledRegexes, "regex cache should be populated at startup")
+}
+
 func TestCorpusQueryRegexMatch(t *testing.T) {
 	m := newCorpusMapper(t, "textClass=wissenschaft.*#regex <> genre=science")
 
