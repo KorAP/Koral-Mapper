@@ -19,6 +19,7 @@ const (
 	defaultCookieName = "km-config"
 	defaultPort       = 5725
 	defaultLogLevel   = "warn"
+	defaultRateLimit  = 100
 )
 
 // MappingRule represents a single mapping rule in the configuration
@@ -96,6 +97,7 @@ type MappingConfig struct {
 	CookieName string        `yaml:"cookieName,omitempty"`
 	Port       int           `yaml:"port,omitempty"`
 	LogLevel   string        `yaml:"loglevel,omitempty"`
+	RateLimit  int           `yaml:"rateLimit,omitempty"` // max requests per minute per IP (0 = use default 100)
 	Lists      []MappingList `yaml:"lists,omitempty"`
 }
 
@@ -195,6 +197,7 @@ func LoadFromSources(configFile string, mappingFiles []string) (*MappingConfig, 
 		ServiceURL: globalConfig.ServiceURL,
 		Port:       globalConfig.Port,
 		LogLevel:   globalConfig.LogLevel,
+		RateLimit:  globalConfig.RateLimit,
 		Lists:      allLists,
 	}
 
@@ -227,6 +230,9 @@ func ApplyDefaults(config *MappingConfig) {
 	if config.Port == 0 {
 		config.Port = defaultPort
 	}
+	if config.RateLimit == 0 {
+		config.RateLimit = defaultRateLimit
+	}
 }
 
 // ApplyEnvOverrides overrides configuration fields from environment variables.
@@ -251,6 +257,12 @@ func ApplyEnvOverrides(config *MappingConfig) {
 	if val := os.Getenv("KORAL_MAPPER_PORT"); val != "" {
 		if port, err := strconv.Atoi(val); err == nil {
 			config.Port = port
+		}
+	}
+
+	if val := os.Getenv("KORAL_MAPPER_RATE_LIMIT"); val != "" {
+		if rl, err := strconv.Atoi(val); err == nil {
+			config.RateLimit = rl
 		}
 	}
 }

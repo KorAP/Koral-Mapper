@@ -2560,6 +2560,142 @@ lists:
 	assert.NotNil(t, wrap["rewrites"], "rewrites should be present when enabled by query param")
 }
 
+// TestSecurityHeadersPresent verifies that all HTTP responses include
+// security headers to mitigate MIME-sniffing and referrer leaks.
+// X-Frame-Options is intentionally NOT set because the service is
+// embedded in cross-origin iframes as a Kalamar plugin.
+func TestSecurityHeadersPresent(t *testing.T) {
+	mappingList := tmconfig.MappingList{
+		ID:       "test-mapper",
+		Mappings: []tmconfig.MappingRule{"[A] <> [B]"},
+	}
+
+	m, err := mapper.NewMapper([]tmconfig.MappingList{mappingList})
+	require.NoError(t, err)
+
+	mockConfig := &tmconfig.MappingConfig{Lists: []tmconfig.MappingList{mappingList}}
+	tmconfig.ApplyDefaults(mockConfig)
+
+	app := fiber.New()
+	setupRoutes(app, m, mockConfig)
+
+	endpoints := []struct {
+		method string
+		url    string
+		body   string
+	}{
+		{http.MethodGet, "/health", ""},
+		{http.MethodGet, "/", ""},
+		{http.MethodPost, "/test-mapper/query?dir=atob", `{"@type":"koral:token","wrap":{"@type":"koral:term","foundry":"x","key":"A","layer":"p","match":"match:eq"}}`},
+	}
+
+	for _, ep := range endpoints {
+		t.Run(ep.method+" "+ep.url, func(t *testing.T) {
+			var req *http.Request
+			if ep.body != "" {
+				req = httptest.NewRequest(ep.method, ep.url, bytes.NewBufferString(ep.body))
+				req.Header.Set("Content-Type", "application/json")
+			} else {
+				req = httptest.NewRequest(ep.method, ep.url, nil)
+			}
+
+			resp, err := app.Test(req)
+			require.NoError(t, err)
+			defer resp.Body.Close()
+
+			assert.Equal(t, "nosniff", resp.Header.Get("X-Content-Type-Options"),
+				"X-Content-Type-Options header must be set to nosniff")
+			assert.Equal(t, "strict-origin-when-cross-origin", resp.Header.Get("Referrer-Policy"),
+				"Referrer-Policy header must be set")
+			assert.Empty(t, resp.Header.Get("X-Frame-Options"),
+				"X-Frame-Options must NOT be set (cross-origin iframe embedding)")
+		})
+	}
+}
+
+// TestRateLimitingEnforced verifies that the server applies per-client rate
+// limiting and returns HTTP 429 when the limit is exceeded.
+func TestRateLimitingEnforced(t *testing.T) {
+	mappingList := tmconfig.MappingList{
+		ID:       "test-mapper",
+		Mappings: []tmconfig.MappingRule{"[A] <> [B]"},
+	}
+
+	m, err := mapper.NewMapper([]tmconfig.MappingList{mappingList})
+	require.NoError(t, err)
+
+	mockConfig := &tmconfig.MappingConfig{Lists: []tmconfig.MappingList{mappingList}}
+	tmconfig.ApplyDefaults(mockConfig)
+
+	app := fiber.New()
+	setupRoutes(app, m, mockConfig)
+
+	// The default rate limit is 100/min. Send more requests than that
+	// to verify enforcement.
+	var lastStatus int
+	exceeded := false
+	for i := 0; i < 150; i++ {
+		req := httptest.NewRequest(http.MethodGet, "/health", nil)
+		resp, err := app.Test(req)
+		require.NoError(t, err)
+		resp.Body.Close()
+		lastStatus = resp.StatusCode
+		if lastStatus == fiber.StatusTooManyRequests {
+			exceeded = true
+			break
+		}
+	}
+
+	assert.True(t, exceeded, "rate limiter should return 429 when limit is exceeded, last status was %d", lastStatus)
+}
+
+// TestRateLimitingConfigurable verifies that the rate limit can be customized
+// via the rateLimit configuration field.
+func TestRateLimitingConfigurable(t *testing.T) {
+	mappingList := tmconfig.MappingList{
+		ID:       "test-mapper",
+		Mappings: []tmconfig.MappingRule{"[A] <> [B]"},
+	}
+
+	m, err := mapper.NewMapper([]tmconfig.MappingList{mappingList})
+	require.NoError(t, err)
+
+	// Set a very low rate limit to make testing fast
+	mockConfig := &tmconfig.MappingConfig{
+		RateLimit: 5,
+		Lists:     []tmconfig.MappingList{mappingList},
+	}
+	tmconfig.ApplyDefaults(mockConfig)
+
+	app := fiber.New()
+	setupRoutes(app, m, mockConfig)
+
+	// With a limit of 5, the 6th request should be rejected
+	for i := 0; i < 5; i++ {
+		req := httptest.NewRequest(http.MethodGet, "/health", nil)
+		resp, err := app.Test(req)
+		require.NoError(t, err)
+		resp.Body.Close()
+		assert.Equal(t, http.StatusOK, resp.StatusCode,
+			"request %d should succeed within the rate limit", i+1)
+	}
+
+	// The next request should exceed the limit
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	resp, err := app.Test(req)
+	require.NoError(t, err)
+	resp.Body.Close()
+	assert.Equal(t, fiber.StatusTooManyRequests, resp.StatusCode,
+		"request beyond the configured limit should return 429")
+}
+
+// TestRateLimitDefaultValue verifies the default rate limit is 100.
+func TestRateLimitDefaultValue(t *testing.T) {
+	cfg := &tmconfig.MappingConfig{}
+	tmconfig.ApplyDefaults(cfg)
+	assert.Equal(t, 100, cfg.RateLimit, "default rate limit should be 100 requests per minute")
+}
+
 func TestConfigPagePreservesOrderOfMappings(t *testing.T) {
 	lists := []tmconfig.MappingList{
 		{

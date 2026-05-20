@@ -62,6 +62,9 @@ loglevel: info
 # Optional: ServiceURL for the koralmapper
 serviceURL: "https://korap.ids-mannheim.de/plugin/koralmapper"
 
+# Optional: Maximum requests per minute per IP for rate limiting (default: 100)
+rateLimit: 100
+
 # Optional: Mapping lists (same format as individual mapping files)
 lists:
   - id: mapping-list-id
@@ -99,6 +102,7 @@ The `sdk`, `stylesheet`, `server`, `port`, and `loglevel` fields in the main con
 - **`port`**: Server port (default: `5725`)
 - **`loglevel`**: Log level (default: `warn`)
 - **`serviceURL`**: Service URL of the KoralMapper (default: `https://korap.ids-mannheim.de/plugin/koralmapper`)
+- **`rateLimit`**: Maximum number of requests per minute per IP address (default: `100`). When the limit is exceeded, the server responds with HTTP 429 (Too Many Requests).
 
 These values are applied during configuration parsing. When using only individual mapping files (`-m` flags), default values are used unless overridden by command line arguments.
 
@@ -114,6 +118,7 @@ All variables are optional and use the `KORAL_MAPPER_` prefix:
 - `KORAL_MAPPER_COOKIE_NAME`: Overrides `cookieName`
 - `KORAL_MAPPER_LOG_LEVEL`: Overrides `loglevel`
 - `KORAL_MAPPER_PORT`: Overrides `port` (integer)
+- `KORAL_MAPPER_RATE_LIMIT`: Overrides `rateLimit` (integer, requests per minute per IP)
 
 Environment variable values take precedence over values from the configuration file.
 

@@ -1177,3 +1177,55 @@ func TestParseCorpusMappingsWithFieldAFieldB(t *testing.T) {
 	assert.Equal(t, "textClass", and1.Operands[1].(*parser.CorpusField).Key)
 	assert.Equal(t, "musik", and1.Operands[1].(*parser.CorpusField).Value)
 }
+
+func TestRateLimitConfigField(t *testing.T) {
+	content := `
+rateLimit: 50
+lists:
+  - id: test-mapper
+    mappings:
+      - "[A] <> [B]"
+`
+	tmpfile, err := os.CreateTemp("", "config-ratelimit-*.yaml")
+	require.NoError(t, err)
+	defer os.Remove(tmpfile.Name())
+
+	_, err = tmpfile.WriteString(content)
+	require.NoError(t, err)
+	require.NoError(t, tmpfile.Close())
+
+	cfg, err := LoadFromSources(tmpfile.Name(), nil)
+	require.NoError(t, err)
+	assert.Equal(t, 50, cfg.RateLimit, "rateLimit should be loaded from YAML")
+}
+
+func TestRateLimitDefaultApplied(t *testing.T) {
+	cfg := &MappingConfig{}
+	ApplyDefaults(cfg)
+	assert.Equal(t, defaultRateLimit, cfg.RateLimit,
+		"default rate limit should be applied when not specified")
+}
+
+func TestRateLimitEnvOverride(t *testing.T) {
+	t.Setenv("KORAL_MAPPER_RATE_LIMIT", "200")
+
+	content := `
+rateLimit: 50
+lists:
+  - id: test-mapper
+    mappings:
+      - "[A] <> [B]"
+`
+	tmpfile, err := os.CreateTemp("", "config-ratelimit-env-*.yaml")
+	require.NoError(t, err)
+	defer os.Remove(tmpfile.Name())
+
+	_, err = tmpfile.WriteString(content)
+	require.NoError(t, err)
+	require.NoError(t, tmpfile.Close())
+
+	cfg, err := LoadFromSources(tmpfile.Name(), nil)
+	require.NoError(t, err)
+	assert.Equal(t, 200, cfg.RateLimit,
+		"KORAL_MAPPER_RATE_LIMIT env var should override YAML value")
+}

@@ -20,6 +20,7 @@ import (
 	"github.com/KorAP/Koral-Mapper/mapper"
 	"github.com/alecthomas/kong"
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/limiter"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
@@ -308,6 +309,30 @@ func main() {
 func setupRoutes(app *fiber.App, m *mapper.Mapper, yamlConfig *config.MappingConfig) {
 	configTmpl := template.Must(template.ParseFS(staticFS, "static/config.html"))
 	pluginTmpl := template.Must(template.ParseFS(staticFS, "static/plugin.html"))
+
+	// Security headers middleware to mitigate MIME-sniffing and referrer
+	// information leaks (OWASP Secure Headers). X-Frame-Options is
+	// intentionally omitted because the service is designed to be embedded
+	// in cross-origin iframes (Kalamar plugin).
+	app.Use(func(c *fiber.Ctx) error {
+		c.Set("X-Content-Type-Options", "nosniff")
+		c.Set("Referrer-Policy", "strict-origin-when-cross-origin")
+		return c.Next()
+	})
+
+	// Rate limiting middleware to prevent resource exhaustion from
+	// request floods. The maximum number of requests per minute
+	// per IP is configurable via the "rateLimit" YAML key or the
+	// KORAL_MAPPER_RATE_LIMIT environment variable (default: 100).
+	rateLimit := yamlConfig.RateLimit
+	if rateLimit <= 0 {
+		rateLimit = 100
+	}
+	app.Use(limiter.New(limiter.Config{
+		Max:               rateLimit,
+		Expiration:        1 * time.Minute,
+		LimiterMiddleware: limiter.SlidingWindow{},
+	}))
 
 	// Health check endpoint
 	app.Get("/health", func(c *fiber.Ctx) error {
