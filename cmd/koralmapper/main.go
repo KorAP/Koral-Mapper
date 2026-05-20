@@ -14,7 +14,6 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
-	texttemplate "text/template"
 	"time"
 
 	"github.com/KorAP/Koral-Mapper/config"
@@ -308,7 +307,7 @@ func main() {
 
 func setupRoutes(app *fiber.App, m *mapper.Mapper, yamlConfig *config.MappingConfig) {
 	configTmpl := template.Must(template.ParseFS(staticFS, "static/config.html"))
-	pluginTmpl := texttemplate.Must(texttemplate.ParseFS(staticFS, "static/plugin.html"))
+	pluginTmpl := template.Must(template.ParseFS(staticFS, "static/plugin.html"))
 
 	// Health check endpoint
 	app.Get("/health", func(c *fiber.Ctx) error {
@@ -716,7 +715,7 @@ func validateInput(mapID, dir, foundryA, foundryB, layerA, layerB string, body [
 	return nil
 }
 
-func handleKalamarPlugin(yamlConfig *config.MappingConfig, configTmpl *template.Template, pluginTmpl *texttemplate.Template) fiber.Handler {
+func handleKalamarPlugin(yamlConfig *config.MappingConfig, configTmpl *template.Template, pluginTmpl *template.Template) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		mapID := c.Params("map")
 

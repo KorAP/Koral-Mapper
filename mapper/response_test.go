@@ -931,6 +931,84 @@ func TestResponseAnnotationWhitespaceOnlyNodes(t *testing.T) {
 	assert.Contains(t, snippet, `<span title="opennlp/p:NOUN" class="notinindex">Mann</span>`)
 }
 
+// TestResponseAnnotationHTMLEscaping verifies that annotation strings containing
+// HTML-special characters are properly escaped in the title attribute to prevent XSS.
+func TestResponseAnnotationHTMLEscaping(t *testing.T) {
+	responseSnippet := `{
+		"snippet": "<span title=\"marmot/p:DET\">Der</span>"
+	}`
+
+	// Mapping rule where the replacement foundry contains a quote character
+	// that could break out of the HTML title attribute if unescaped.
+	mappingList := config.MappingList{
+		ID:       "test-xss-mapper",
+		FoundryA: "marmot",
+		LayerA:   "p",
+		FoundryB: `foo" onmouseover="alert(1)" x="`,
+		LayerB:   "p",
+		Mappings: []config.MappingRule{
+			"[DET] <> [DT]",
+		},
+	}
+
+	m, err := NewMapper([]config.MappingList{mappingList})
+	require.NoError(t, err)
+
+	var inputData any
+	err = json.Unmarshal([]byte(responseSnippet), &inputData)
+	require.NoError(t, err)
+
+	result, err := m.ApplyResponseMappings("test-xss-mapper", MappingOptions{Direction: AtoB}, inputData)
+	require.NoError(t, err)
+
+	resultMap := result.(map[string]any)
+	snippet := resultMap["snippet"].(string)
+
+	// The quote character MUST be escaped (as &#34; or &quot;) in the title attribute
+	// so it cannot break out. The raw unescaped sequence must not appear.
+	assert.NotContains(t, snippet, `title="foo" onmouseover="alert(1)"`)
+	// The escaped version should be present (&#34; is the html.EscapeString encoding for ")
+	assert.Contains(t, snippet, `&#34;`)
+	assert.Contains(t, snippet, `class="notinindex"`)
+}
+
+// TestResponseAnnotationHTMLEscapingAngleBrackets verifies that angle brackets
+// in annotation strings are escaped to prevent HTML injection.
+func TestResponseAnnotationHTMLEscapingAngleBrackets(t *testing.T) {
+	responseSnippet := `{
+		"snippet": "<span title=\"marmot/p:DET\">Der</span>"
+	}`
+
+	mappingList := config.MappingList{
+		ID:       "test-angle-mapper",
+		FoundryA: "marmot",
+		LayerA:   "p",
+		FoundryB: "<script>",
+		LayerB:   "p",
+		Mappings: []config.MappingRule{
+			"[DET] <> [DT]",
+		},
+	}
+
+	m, err := NewMapper([]config.MappingList{mappingList})
+	require.NoError(t, err)
+
+	var inputData any
+	err = json.Unmarshal([]byte(responseSnippet), &inputData)
+	require.NoError(t, err)
+
+	result, err := m.ApplyResponseMappings("test-angle-mapper", MappingOptions{Direction: AtoB}, inputData)
+	require.NoError(t, err)
+
+	resultMap := result.(map[string]any)
+	snippet := resultMap["snippet"].(string)
+
+	// Angle brackets must be escaped in the title attribute
+	assert.NotContains(t, snippet, `<script>`)
+	assert.Contains(t, snippet, `&lt;script&gt;`)
+	assert.Contains(t, snippet, `class="notinindex"`)
+}
+
 // TestResponseMappingWithLayerOverride tests layer precedence rules
 func TestResponseMappingWithLayerOverride(t *testing.T) {
 	// Test 1: Explicit layer in mapping rule should take precedence over MappingOptions

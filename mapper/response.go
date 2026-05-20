@@ -2,6 +2,7 @@ package mapper
 
 import (
 	"fmt"
+	"html"
 	"maps"
 	"strings"
 
@@ -253,7 +254,7 @@ func (m *Mapper) addAnnotationsToSnippet(snippet string, matchingTokens []matche
 
 				annotated := escapeXMLText(trimmed)
 				for i := len(annotationStrings) - 1; i >= 0; i-- {
-					annotated = fmt.Sprintf(`<span title="%s" class="notinindex">%s</span>`, annotationStrings[i], annotated)
+					annotated = fmt.Sprintf(`<span title="%s" class="notinindex">%s</span>`, html.EscapeString(annotationStrings[i]), annotated)
 				}
 				result.WriteString(annotated)
 				result.WriteString(trailingWS)

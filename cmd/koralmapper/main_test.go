@@ -21,6 +21,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// jsEscapeURL converts a URL to its html/template JS string escaped form.
+// In JS string context, html/template escapes / as \/ and & as \u0026.
+func jsEscapeURL(u string) string {
+	u = strings.ReplaceAll(u, "/", `\/`)
+	u = strings.ReplaceAll(u, "&", `\u0026`)
+	return u
+}
+
 func loadConfigFromYAML(t *testing.T, configYAML string, mappingYAMLs ...string) *tmconfig.MappingConfig {
 	t.Helper()
 
@@ -1240,8 +1248,8 @@ func TestConfigurableServiceURL(t *testing.T) {
 
 			htmlContent := string(body)
 
-			// Check that the HTML contains the expected service URL in the JavaScript
-			expectedJSURL := tt.expectedServiceURL + "/test-mapper/query"
+			// html/template applies JS string escaping (/ -> \/, & -> \u0026)
+			expectedJSURL := jsEscapeURL(tt.expectedServiceURL + "/test-mapper/query")
 			assert.Contains(t, htmlContent, "'service' : '"+expectedJSURL)
 
 			// Ensure it's still a valid HTML page
@@ -1299,7 +1307,7 @@ lists:
 	require.NoError(t, err)
 
 	htmlContent := string(body)
-	expectedJSURL := "https://custom.example.com/api/koralmapper/config-mapper/query"
+	expectedJSURL := jsEscapeURL("https://custom.example.com/api/koralmapper/config-mapper/query")
 	assert.Contains(t, htmlContent, "'service' : '"+expectedJSURL)
 }
 
@@ -1364,7 +1372,7 @@ func TestServiceURLWithExampleConfig(t *testing.T) {
 	require.NoError(t, err)
 
 	htmlContent := string(body)
-	expectedJSURL := "https://korap.ids-mannheim.de/plugin/koralmapper/main-config-mapper/query"
+	expectedJSURL := jsEscapeURL("https://korap.ids-mannheim.de/plugin/koralmapper/main-config-mapper/query")
 	assert.Contains(t, htmlContent, "'service' : '"+expectedJSURL)
 }
 
@@ -1545,9 +1553,9 @@ func TestKalamarPluginWithQueryParameters(t *testing.T) {
 			} else {
 				htmlContent := string(body)
 
-				// Check that both query and response URLs are present with correct parameters
-				assert.Contains(t, htmlContent, "'service' : '"+tt.expectedQueryURL+"'")
-				assert.Contains(t, htmlContent, "'service' : '"+tt.expectedRespURL+"'")
+				// html/template applies JS string escaping in script contexts
+				assert.Contains(t, htmlContent, "'service' : '"+jsEscapeURL(tt.expectedQueryURL)+"'")
+				assert.Contains(t, htmlContent, "'service' : '"+jsEscapeURL(tt.expectedRespURL)+"'")
 
 				// Ensure it's still a valid HTML page
 				assert.Contains(t, htmlContent, "Koral-Mapper")
@@ -2112,6 +2120,83 @@ func TestConfigPageCorpusMappingHasFieldAndDirectionInputs(t *testing.T) {
 	assert.Contains(t, htmlContent, `placeholder="topic"`)
 }
 
+// TestPluginPageEscapesMapID verifies that the plugin page (GET /:map)
+// properly HTML-escapes the map ID to prevent XSS via URL path injection.
+func TestPluginPageEscapesMapID(t *testing.T) {
+	mappingList := tmconfig.MappingList{
+		ID:       "test-mapper",
+		Mappings: []tmconfig.MappingRule{"[A] <> [B]"},
+	}
+
+	m, err := mapper.NewMapper([]tmconfig.MappingList{mappingList})
+	require.NoError(t, err)
+
+	mockConfig := &tmconfig.MappingConfig{
+		ServiceURL: "https://example.com/plugin/koralmapper",
+		Lists:      []tmconfig.MappingList{mappingList},
+	}
+	tmconfig.ApplyDefaults(mockConfig)
+
+	app := fiber.New()
+	setupRoutes(app, m, mockConfig)
+
+	// Use a map ID that contains HTML/JS injection payload
+	maliciousMapID := `"><script>alert(1)</script>`
+	req := httptest.NewRequest(http.MethodGet, "/"+maliciousMapID, nil)
+	resp, err := app.Test(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	// The request may fail validation (contains invalid chars), which is also acceptable.
+	// If it renders, the output must not contain unescaped script tags.
+	if resp.StatusCode == http.StatusOK {
+		body, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		htmlContent := string(body)
+
+		// The raw script tag must NOT appear in the output
+		assert.NotContains(t, htmlContent, "<script>alert(1)</script>")
+		// If rendered, it should be escaped
+		assert.Contains(t, htmlContent, "&lt;script&gt;")
+	}
+}
+
+// TestPluginPageEscapesServiceURL verifies that the plugin page properly
+// escapes ServiceURL values to prevent template injection.
+func TestPluginPageEscapesServiceURL(t *testing.T) {
+	mappingList := tmconfig.MappingList{
+		ID:       "test-mapper",
+		Mappings: []tmconfig.MappingRule{"[A] <> [B]"},
+	}
+
+	m, err := mapper.NewMapper([]tmconfig.MappingList{mappingList})
+	require.NoError(t, err)
+
+	// Inject a ServiceURL with HTML-special characters
+	mockConfig := &tmconfig.MappingConfig{
+		ServiceURL: `https://example.com/plugin" onload="alert(1)`,
+		Lists:      []tmconfig.MappingList{mappingList},
+	}
+	tmconfig.ApplyDefaults(mockConfig)
+
+	app := fiber.New()
+	setupRoutes(app, m, mockConfig)
+
+	req := httptest.NewRequest(http.MethodGet, "/test-mapper", nil)
+	resp, err := app.Test(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	htmlContent := string(body)
+
+	// The unescaped injection must NOT appear in the output
+	assert.NotContains(t, htmlContent, `onload="alert(1)"`)
+}
+
 func TestConfigPageBackwardCompatibility(t *testing.T) {
 	lists := []tmconfig.MappingList{
 		{
@@ -2148,7 +2233,7 @@ func TestConfigPageBackwardCompatibility(t *testing.T) {
 	assert.Contains(t, htmlContent, "Koral-Mapper")
 	assert.Contains(t, htmlContent, "Map ID: test-mapper")
 	assert.Contains(t, htmlContent, "KorAPlugin.sendMsg")
-	assert.Contains(t, htmlContent, "test-mapper/query")
+	assert.Contains(t, htmlContent, `test-mapper\/query`)
 }
 
 func TestBuildConfigPageData(t *testing.T) {
