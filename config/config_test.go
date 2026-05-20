@@ -3,6 +3,7 @@ package config
 import (
 	"bytes"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/KorAP/Koral-Mapper/ast"
@@ -1061,6 +1062,36 @@ func TestApplyEnvOverrides(t *testing.T) {
 	})
 }
 
+func TestBasePathEnvOverride(t *testing.T) {
+	t.Setenv("KORAL_MAPPER_BASE_PATH", "/custom/base/path")
+
+	cfg := &MappingConfig{BasePath: "from-config"}
+	ApplyEnvOverrides(cfg)
+
+	assert.Equal(t, "/custom/base/path", cfg.BasePath)
+}
+
+func TestBasePathFromYAML(t *testing.T) {
+	content := `
+basePath: "/opt/koralmapper"
+lists:
+  - id: test-mapper
+    mappings:
+      - "[A] <> [B]"
+`
+	tmpfile, err := os.CreateTemp("", "config-basepath-*.yaml")
+	require.NoError(t, err)
+	defer os.Remove(tmpfile.Name())
+
+	_, err = tmpfile.WriteString(content)
+	require.NoError(t, err)
+	require.NoError(t, tmpfile.Close())
+
+	cfg, err := LoadFromSources(tmpfile.Name(), nil)
+	require.NoError(t, err)
+	assert.Equal(t, "/opt/koralmapper", cfg.BasePath)
+}
+
 func TestEnvOverridesInLoadFromSources(t *testing.T) {
 	envKeys := []string{
 		"KORAL_MAPPER_SERVER",
@@ -1228,4 +1259,187 @@ lists:
 	require.NoError(t, err)
 	assert.Equal(t, 200, cfg.RateLimit,
 		"KORAL_MAPPER_RATE_LIMIT env var should override YAML value")
+}
+
+func TestSanitizeFilePathRejectsOutsideBase(t *testing.T) {
+	// Set base to a specific directory and verify paths outside are rejected
+	tmpDir, err := os.MkdirTemp("", "koral-base-*")
+	require.NoError(t, err)
+	defer os.RemoveAll(tmpDir)
+
+	origBase := AllowedBasePath
+	defer func() { AllowedBasePath = origBase }()
+	AllowedBasePath = tmpDir
+
+	tests := []struct {
+		name    string
+		input   string
+		wantErr bool
+	}{
+		{
+			name:    "Path within base is accepted",
+			input:   filepath.Join(tmpDir, "config.yaml"),
+			wantErr: false,
+		},
+		{
+			name:    "Path outside base is rejected",
+			input:   "/etc/passwd",
+			wantErr: true,
+		},
+		{
+			name:    "Traversal escaping base and tmp is rejected",
+			input:   "/etc/passwd",
+			wantErr: true,
+		},
+		{
+			name:    "Empty path is rejected",
+			input:   "",
+			wantErr: true,
+		},
+		{
+			name:    "Subdirectory within base is accepted",
+			input:   filepath.Join(tmpDir, "sub", "dir", "file.yaml"),
+			wantErr: false,
+		},
+		{
+			name:    "Relative path within base is rejected when CWD differs",
+			input:   "config.yaml",
+			wantErr: true, // resolves against CWD, not base
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := sanitizeFilePath(tt.input)
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			assert.True(t, filepath.IsAbs(result),
+				"sanitized path should be absolute, got: %s", result)
+			assert.NotContains(t, result, "..")
+		})
+	}
+}
+
+func TestSanitizeFilePathTraversalToPasswd(t *testing.T) {
+	// Verify /etc/passwd cannot be accessed via traversal
+	cwd, err := os.Getwd()
+	require.NoError(t, err)
+
+	origBase := AllowedBasePath
+	defer func() { AllowedBasePath = origBase }()
+	AllowedBasePath = cwd
+
+	_, err = sanitizeFilePath("../../../etc/passwd")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "path traversal detected")
+}
+
+func TestSanitizeFilePathWithDockerRoot(t *testing.T) {
+	// In Docker the WORKDIR is "/" -- all absolute paths should be valid
+	origBase := AllowedBasePath
+	defer func() { AllowedBasePath = origBase }()
+	AllowedBasePath = "/"
+
+	result, err := sanitizeFilePath("/mappings/stts-upos.yaml")
+	require.NoError(t, err)
+	assert.Equal(t, "/mappings/stts-upos.yaml", result)
+
+	// Even deeply nested paths work when base is /
+	result, err = sanitizeFilePath("/etc/ssl/certs/ca-certificates.crt")
+	require.NoError(t, err)
+	assert.Equal(t, "/etc/ssl/certs/ca-certificates.crt", result)
+}
+
+func TestSanitizeFilePathPrefixFalsePositive(t *testing.T) {
+	// Ensure /home/user does not match /home/username
+	origBase := AllowedBasePath
+	defer func() { AllowedBasePath = origBase }()
+	AllowedBasePath = "/home/user"
+
+	_, err := sanitizeFilePath("/home/username/secret.yaml")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "path traversal detected")
+}
+
+func TestLoadFromSourcesRejectsTraversal(t *testing.T) {
+	origBase := AllowedBasePath
+	defer func() { AllowedBasePath = origBase }()
+
+	cwd, err := os.Getwd()
+	require.NoError(t, err)
+	AllowedBasePath = cwd
+
+	// Config file traversal should be rejected
+	_, err = LoadFromSources("../../../etc/passwd", nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "path traversal detected")
+
+	// Mapping file traversal should be rejected
+	_, err = LoadFromSources("", []string{"../../../etc/passwd"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "path traversal detected")
+}
+
+func TestValidPathsStillWork(t *testing.T) {
+	content := `
+id: test-mapper
+mappings:
+  - "[A] <> [B]"
+`
+	tmpDir, err := os.MkdirTemp("", "koral-test-*")
+	require.NoError(t, err)
+	defer os.RemoveAll(tmpDir)
+
+	origBase := AllowedBasePath
+	defer func() { AllowedBasePath = origBase }()
+	AllowedBasePath = tmpDir
+
+	subDir := filepath.Join(tmpDir, "subdir")
+	require.NoError(t, os.Mkdir(subDir, 0755))
+
+	tmpfile, err := os.CreateTemp(subDir, "mapping-*.yaml")
+	require.NoError(t, err)
+
+	_, err = tmpfile.WriteString(content)
+	require.NoError(t, err)
+	require.NoError(t, tmpfile.Close())
+
+	cfg, err := LoadFromSources("", []string{tmpfile.Name()})
+	require.NoError(t, err)
+	require.Len(t, cfg.Lists, 1)
+	assert.Equal(t, "test-mapper", cfg.Lists[0].ID)
+}
+
+func TestRelativePathWithTraversalWithinBase(t *testing.T) {
+	// Paths with ".." that still resolve within the base should work
+	content := `
+id: traversal-test-mapper
+mappings:
+  - "[A] <> [B]"
+`
+	tmpDir, err := os.MkdirTemp("", "koral-traversal-*")
+	require.NoError(t, err)
+	defer os.RemoveAll(tmpDir)
+
+	origBase := AllowedBasePath
+	defer func() { AllowedBasePath = origBase }()
+	AllowedBasePath = tmpDir
+
+	// Create file at tmpDir/config.yaml
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	require.NoError(t, os.WriteFile(configPath, []byte(content), 0644))
+
+	// Reference via a traversal path: tmpDir/subdir/../config.yaml
+	// This resolves to tmpDir/config.yaml which is within the base
+	subDir := filepath.Join(tmpDir, "subdir")
+	require.NoError(t, os.Mkdir(subDir, 0755))
+	traversalPath := filepath.Join(subDir, "..", "config.yaml")
+
+	cfg, err := LoadFromSources("", []string{traversalPath})
+	require.NoError(t, err)
+	require.Len(t, cfg.Lists, 1)
+	assert.Equal(t, "traversal-test-mapper", cfg.Lists[0].ID)
 }

@@ -222,6 +222,16 @@ func parseRequestBody(c *fiber.Ctx, dir string) (any, mapper.Direction, error) {
 }
 
 func main() {
+	// Confine config file loading to the current working directory tree
+	// (path traversal prevention). Can be overridden via the "basePath"
+	// YAML field or the KORAL_MAPPER_BASE_PATH environment variable.
+	// In Docker (WORKDIR /), the default "/" naturally allows all paths.
+	cwd, err := os.Getwd()
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to determine working directory")
+	}
+	config.AllowedBasePath = cwd
+
 	// Parse command line flags
 	cfg := parseConfig()
 
@@ -240,6 +250,11 @@ func main() {
 	yamlConfig, err := config.LoadFromSources(cfg.Config, expandedMappings)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to load configuration")
+	}
+
+	// Apply basePath from config/env if specified (overrides CWD default)
+	if yamlConfig.BasePath != "" {
+		config.AllowedBasePath = yamlConfig.BasePath
 	}
 
 	finalPort := yamlConfig.Port

@@ -3,7 +3,9 @@ package config
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
+	"strings"
 
 	"github.com/KorAP/Koral-Mapper/ast"
 	"github.com/KorAP/Koral-Mapper/parser"
@@ -95,10 +97,64 @@ type MappingConfig struct {
 	Server     string        `yaml:"server,omitempty"`
 	ServiceURL string        `yaml:"serviceURL,omitempty"`
 	CookieName string        `yaml:"cookieName,omitempty"`
+	BasePath   string        `yaml:"basePath,omitempty"` // restricts config file loading to this directory tree
 	Port       int           `yaml:"port,omitempty"`
 	LogLevel   string        `yaml:"loglevel,omitempty"`
 	RateLimit  int           `yaml:"rateLimit,omitempty"` // max requests per minute per IP (0 = use default 100)
 	Lists      []MappingList `yaml:"lists,omitempty"`
+}
+
+// AllowedBasePath restricts file loading to a specific directory tree.
+// When set, all file paths must resolve to a location at or below this
+// directory (or under the system temp directory). Defaults to the CWD at
+// application startup; can be overridden via the "basePath" YAML config
+// field or the KORAL_MAPPER_BASE_PATH environment variable. In Docker
+// (WORKDIR /), the default "/" naturally allows all paths.
+var AllowedBasePath string
+
+// isWithinDir checks whether absPath is at or below the given directory.
+// Uses a trailing-separator comparison to avoid prefix false positives
+// (e.g. /home/user must not match /home/username).
+func isWithinDir(absPath, dir string) bool {
+	if dir == "/" {
+		return true
+	}
+	return absPath == dir || strings.HasPrefix(absPath, dir+string(filepath.Separator))
+}
+
+// sanitizeFilePath cleans a file path, resolves it to an absolute path, and
+// (when AllowedBasePath is set) verifies it resides at or below the allowed
+// base directory or the system temp directory. This prevents path
+// traversal attacks by ensuring os.ReadFile never receives
+// unsanitized user input and cannot access files outside the application's
+// working tree.
+func sanitizeFilePath(path string) (string, error) {
+	if path == "" {
+		return "", fmt.Errorf("empty file path")
+	}
+
+	// Clean the path to remove redundant separators and resolve "." and ".."
+	cleaned := filepath.Clean(path)
+
+	// Convert to absolute path so all traversal is resolved against the CWD
+	absPath, err := filepath.Abs(cleaned)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve absolute path for '%s': %w", path, err)
+	}
+
+	// If a base path is configured, confine access to that tree or temp dir
+	if AllowedBasePath != "" {
+		base := filepath.Clean(AllowedBasePath)
+		tmpDir := filepath.Clean(os.TempDir())
+
+		if !isWithinDir(absPath, base) && !isWithinDir(absPath, tmpDir) {
+			return "", fmt.Errorf(
+				"path traversal detected: '%s' resolves to '%s' which is outside the allowed base '%s'",
+				path, absPath, base)
+		}
+	}
+
+	return absPath, nil
 }
 
 // LoadFromSources loads configuration from multiple sources and merges them:
@@ -114,7 +170,11 @@ func LoadFromSources(configFile string, mappingFiles []string) (*MappingConfig, 
 
 	// Load main configuration file if provided
 	if configFile != "" {
-		data, err := os.ReadFile(configFile)
+		safePath, err := sanitizeFilePath(configFile)
+		if err != nil {
+			return nil, err
+		}
+		data, err := os.ReadFile(safePath) // #nosec G304 -- path sanitized above
 		if err != nil {
 			return nil, fmt.Errorf("failed to read config file '%s': %w", configFile, err)
 		}
@@ -154,7 +214,11 @@ func LoadFromSources(configFile string, mappingFiles []string) (*MappingConfig, 
 
 	// Load individual mapping files
 	for _, file := range mappingFiles {
-		data, err := os.ReadFile(file)
+		safePath, err := sanitizeFilePath(file)
+		if err != nil {
+			return nil, err
+		}
+		data, err := os.ReadFile(safePath) // #nosec G304 -- path sanitized above
 		if err != nil {
 			log.Error().Err(err).Str("file", file).Msg("Failed to read mapping file")
 			continue
@@ -195,6 +259,7 @@ func LoadFromSources(configFile string, mappingFiles []string) (*MappingConfig, 
 		Stylesheet: globalConfig.Stylesheet,
 		Server:     globalConfig.Server,
 		ServiceURL: globalConfig.ServiceURL,
+		BasePath:   globalConfig.BasePath,
 		Port:       globalConfig.Port,
 		LogLevel:   globalConfig.LogLevel,
 		RateLimit:  globalConfig.RateLimit,
@@ -246,6 +311,7 @@ func ApplyEnvOverrides(config *MappingConfig) {
 		"KORAL_MAPPER_SERVICE_URL": &config.ServiceURL,
 		"KORAL_MAPPER_COOKIE_NAME": &config.CookieName,
 		"KORAL_MAPPER_LOG_LEVEL":   &config.LogLevel,
+		"KORAL_MAPPER_BASE_PATH":   &config.BasePath,
 	}
 
 	for envKey, field := range envMappings {

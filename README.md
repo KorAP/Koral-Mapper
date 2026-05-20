@@ -65,6 +65,11 @@ serviceURL: "https://korap.ids-mannheim.de/plugin/koralmapper"
 # Optional: Maximum requests per minute per IP for rate limiting (default: 100)
 rateLimit: 100
 
+# Optional: Base path for file loading confinement (default: current working directory).
+# All config and mapping file paths must resolve within this directory or /tmp.
+# Set to "/" to allow loading from anywhere on the filesystem.
+basePath: "/opt/koralmapper"
+
 # Optional: Mapping lists (same format as individual mapping files)
 lists:
   - id: mapping-list-id
@@ -94,7 +99,7 @@ mappings:
 
 Command line arguments take precedence over configuration file values:
 
-The `sdk`, `stylesheet`, `server`, `port`, and `loglevel` fields in the main configuration file are optional and override the following default values:
+The `sdk`, `stylesheet`, `server`, `port`, `loglevel`, and `basePath` fields in the main configuration file are optional and override the following default values:
 
 - **`sdk`**: Custom SDK JavaScript file URL (default: `https://korap.ids-mannheim.de/js/korap-plugin-latest.js`)
 - **`stylesheet`**: Kalamar stylesheet URL for the config page (default: `https://korap.ids-mannheim.de/css/kalamar-plugin-latest.css`)
@@ -103,6 +108,7 @@ The `sdk`, `stylesheet`, `server`, `port`, and `loglevel` fields in the main con
 - **`loglevel`**: Log level (default: `warn`)
 - **`serviceURL`**: Service URL of the KoralMapper (default: `https://korap.ids-mannheim.de/plugin/koralmapper`)
 - **`rateLimit`**: Maximum number of requests per minute per IP address (default: `100`). When the limit is exceeded, the server responds with HTTP 429 (Too Many Requests).
+- **`basePath`**: Directory tree for file loading confinement (default: current working directory). Configuration and mapping files must resolve within this path or the system temp directory. Set to `"/"` to disable confinement. This prevents path traversal attacks (CWE-22).
 
 These values are applied during configuration parsing. When using only individual mapping files (`-m` flags), default values are used unless overridden by command line arguments.
 
@@ -119,6 +125,7 @@ All variables are optional and use the `KORAL_MAPPER_` prefix:
 - `KORAL_MAPPER_LOG_LEVEL`: Overrides `loglevel`
 - `KORAL_MAPPER_PORT`: Overrides `port` (integer)
 - `KORAL_MAPPER_RATE_LIMIT`: Overrides `rateLimit` (integer, requests per minute per IP)
+- `KORAL_MAPPER_BASE_PATH`: Overrides `basePath` (directory path for file loading confinement)
 
 Environment variable values take precedence over values from the configuration file.
 
