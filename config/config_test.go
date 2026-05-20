@@ -961,6 +961,7 @@ func TestApplyEnvOverrides(t *testing.T) {
 		"KORAL_MAPPER_COOKIE_NAME",
 		"KORAL_MAPPER_PORT",
 		"KORAL_MAPPER_LOG_LEVEL",
+		"KORAL_MAPPER_ALLOW_ORIGINS",
 	}
 
 	clearEnv := func() {
@@ -1101,6 +1102,7 @@ func TestEnvOverridesInLoadFromSources(t *testing.T) {
 		"KORAL_MAPPER_STYLESHEET",
 		"KORAL_MAPPER_SERVICE_URL",
 		"KORAL_MAPPER_COOKIE_NAME",
+		"KORAL_MAPPER_ALLOW_ORIGINS",
 	}
 	clearEnv := func() {
 		for _, key := range envKeys {
@@ -1259,6 +1261,79 @@ lists:
 	require.NoError(t, err)
 	assert.Equal(t, 200, cfg.RateLimit,
 		"KORAL_MAPPER_RATE_LIMIT env var should override YAML value")
+}
+
+func TestAllowOriginsDefault(t *testing.T) {
+	cfg := &MappingConfig{}
+	ApplyDefaults(cfg)
+	// AllowOrigins should derive from the Server default (trailing slash stripped)
+	assert.Equal(t, "https://korap.ids-mannheim.de", cfg.AllowOrigins,
+		"default AllowOrigins should derive from defaultServer")
+}
+
+func TestAllowOriginsDerivedFromCustomServer(t *testing.T) {
+	cfg := &MappingConfig{
+		Server: "https://custom.example.com/",
+	}
+	ApplyDefaults(cfg)
+	assert.Equal(t, "https://custom.example.com", cfg.AllowOrigins,
+		"AllowOrigins should derive from the configured Server (trailing slash stripped)")
+}
+
+func TestAllowOriginsExplicitNotOverriddenByServer(t *testing.T) {
+	cfg := &MappingConfig{
+		Server:       "https://custom.example.com/",
+		AllowOrigins: "https://explicit-origin.example.com",
+	}
+	ApplyDefaults(cfg)
+	assert.Equal(t, "https://explicit-origin.example.com", cfg.AllowOrigins,
+		"explicit AllowOrigins should not be overridden by Server default")
+}
+
+func TestAllowOriginsFromYAML(t *testing.T) {
+	content := `
+allowOrigins: "https://custom.example.com,https://other.example.com"
+lists:
+  - id: test-mapper
+    mappings:
+      - "[A] <> [B]"
+`
+	tmpfile, err := os.CreateTemp("", "config-cors-*.yaml")
+	require.NoError(t, err)
+	defer os.Remove(tmpfile.Name())
+
+	_, err = tmpfile.WriteString(content)
+	require.NoError(t, err)
+	require.NoError(t, tmpfile.Close())
+
+	cfg, err := LoadFromSources(tmpfile.Name(), nil)
+	require.NoError(t, err)
+	assert.Equal(t, "https://custom.example.com,https://other.example.com",
+		cfg.AllowOrigins)
+}
+
+func TestAllowOriginsEnvOverride(t *testing.T) {
+	t.Setenv("KORAL_MAPPER_ALLOW_ORIGINS", "https://env-origin.example.com")
+
+	content := `
+allowOrigins: "https://yaml-origin.example.com"
+lists:
+  - id: test-mapper
+    mappings:
+      - "[A] <> [B]"
+`
+	tmpfile, err := os.CreateTemp("", "config-cors-env-*.yaml")
+	require.NoError(t, err)
+	defer os.Remove(tmpfile.Name())
+
+	_, err = tmpfile.WriteString(content)
+	require.NoError(t, err)
+	require.NoError(t, tmpfile.Close())
+
+	cfg, err := LoadFromSources(tmpfile.Name(), nil)
+	require.NoError(t, err)
+	assert.Equal(t, "https://env-origin.example.com", cfg.AllowOrigins,
+		"KORAL_MAPPER_ALLOW_ORIGINS env var should override YAML value")
 }
 
 func TestSanitizeFilePathRejectsOutsideBase(t *testing.T) {

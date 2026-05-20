@@ -20,8 +20,8 @@ const (
 	defaultServiceURL = "https://korap.ids-mannheim.de/plugin/koralmapper"
 	defaultCookieName = "km-config"
 	defaultPort       = 5725
-	defaultLogLevel   = "warn"
-	defaultRateLimit  = 100
+	defaultLogLevel     = "warn"
+	defaultRateLimit    = 100
 )
 
 // MappingRule represents a single mapping rule in the configuration
@@ -92,16 +92,17 @@ func applyDefaultCorpusKey(node parser.CorpusNode, defaultKey string) {
 
 // MappingConfig represents the root configuration containing multiple mapping lists
 type MappingConfig struct {
-	SDK        string        `yaml:"sdk,omitempty"`
-	Stylesheet string        `yaml:"stylesheet,omitempty"`
-	Server     string        `yaml:"server,omitempty"`
-	ServiceURL string        `yaml:"serviceURL,omitempty"`
-	CookieName string        `yaml:"cookieName,omitempty"`
-	BasePath   string        `yaml:"basePath,omitempty"` // restricts config file loading to this directory tree
-	Port       int           `yaml:"port,omitempty"`
-	LogLevel   string        `yaml:"loglevel,omitempty"`
-	RateLimit  int           `yaml:"rateLimit,omitempty"` // max requests per minute per IP (0 = use default 100)
-	Lists      []MappingList `yaml:"lists,omitempty"`
+	SDK          string        `yaml:"sdk,omitempty"`
+	Stylesheet   string        `yaml:"stylesheet,omitempty"`
+	Server       string        `yaml:"server,omitempty"`
+	ServiceURL   string        `yaml:"serviceURL,omitempty"`
+	CookieName   string        `yaml:"cookieName,omitempty"`
+	BasePath     string        `yaml:"basePath,omitempty"`     // restricts config file loading to this directory tree
+	AllowOrigins string        `yaml:"allowOrigins,omitempty"` // comma-separated list of allowed CORS origins
+	Port         int           `yaml:"port,omitempty"`
+	LogLevel     string        `yaml:"loglevel,omitempty"`
+	RateLimit    int           `yaml:"rateLimit,omitempty"` // max requests per minute per IP (0 = use default 100)
+	Lists        []MappingList `yaml:"lists,omitempty"`
 }
 
 // AllowedBasePath restricts file loading to a specific directory tree.
@@ -255,15 +256,16 @@ func LoadFromSources(configFile string, mappingFiles []string) (*MappingConfig, 
 
 	// Create final configuration
 	result := &MappingConfig{
-		SDK:        globalConfig.SDK,
-		Stylesheet: globalConfig.Stylesheet,
-		Server:     globalConfig.Server,
-		ServiceURL: globalConfig.ServiceURL,
-		BasePath:   globalConfig.BasePath,
-		Port:       globalConfig.Port,
-		LogLevel:   globalConfig.LogLevel,
-		RateLimit:  globalConfig.RateLimit,
-		Lists:      allLists,
+		SDK:          globalConfig.SDK,
+		Stylesheet:   globalConfig.Stylesheet,
+		Server:       globalConfig.Server,
+		ServiceURL:   globalConfig.ServiceURL,
+		BasePath:     globalConfig.BasePath,
+		AllowOrigins: globalConfig.AllowOrigins,
+		Port:         globalConfig.Port,
+		LogLevel:     globalConfig.LogLevel,
+		RateLimit:    globalConfig.RateLimit,
+		Lists:        allLists,
 	}
 
 	// Apply environment variable overrides (ENV > config file)
@@ -292,6 +294,13 @@ func ApplyDefaults(config *MappingConfig) {
 		}
 	}
 
+	// AllowOrigins defaults to the Server value (with trailing slash
+	// stripped to form a proper origin). This avoids duplicating the
+	// server URL string and keeps CORS in sync with the deployment.
+	if config.AllowOrigins == "" {
+		config.AllowOrigins = strings.TrimRight(config.Server, "/")
+	}
+
 	if config.Port == 0 {
 		config.Port = defaultPort
 	}
@@ -305,13 +314,14 @@ func ApplyDefaults(config *MappingConfig) {
 // Non-empty environment values override any previously loaded config values.
 func ApplyEnvOverrides(config *MappingConfig) {
 	envMappings := map[string]*string{
-		"KORAL_MAPPER_SERVER":      &config.Server,
-		"KORAL_MAPPER_SDK":         &config.SDK,
-		"KORAL_MAPPER_STYLESHEET":  &config.Stylesheet,
-		"KORAL_MAPPER_SERVICE_URL": &config.ServiceURL,
-		"KORAL_MAPPER_COOKIE_NAME": &config.CookieName,
-		"KORAL_MAPPER_LOG_LEVEL":   &config.LogLevel,
-		"KORAL_MAPPER_BASE_PATH":   &config.BasePath,
+		"KORAL_MAPPER_SERVER":        &config.Server,
+		"KORAL_MAPPER_SDK":           &config.SDK,
+		"KORAL_MAPPER_STYLESHEET":    &config.Stylesheet,
+		"KORAL_MAPPER_SERVICE_URL":   &config.ServiceURL,
+		"KORAL_MAPPER_COOKIE_NAME":   &config.CookieName,
+		"KORAL_MAPPER_LOG_LEVEL":     &config.LogLevel,
+		"KORAL_MAPPER_BASE_PATH":     &config.BasePath,
+		"KORAL_MAPPER_ALLOW_ORIGINS": &config.AllowOrigins,
 	}
 
 	for envKey, field := range envMappings {

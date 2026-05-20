@@ -20,6 +20,7 @@ import (
 	"github.com/KorAP/Koral-Mapper/mapper"
 	"github.com/alecthomas/kong"
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/limiter"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -334,6 +335,18 @@ func setupRoutes(app *fiber.App, m *mapper.Mapper, yamlConfig *config.MappingCon
 		c.Set("Referrer-Policy", "strict-origin-when-cross-origin")
 		return c.Next()
 	})
+
+	// CORS middleware to allow cross-origin requests from trusted
+	// origins. Required because the service is designed to be
+	// called as a KorAP/Kalamar plugin from cross-origin iframes.
+	// Configurable via the "allowOrigins" YAML key or the
+	// KORAL_MAPPER_ALLOW_ORIGINS environment variable
+	// (default: "https://korap.ids-mannheim.de").
+	app.Use(cors.New(cors.Config{
+		AllowOrigins: yamlConfig.AllowOrigins,
+		AllowMethods: "GET,POST",
+		AllowHeaders: "Content-Type",
+	}))
 
 	// Rate limiting middleware to prevent resource exhaustion from
 	// request floods. The maximum number of requests per minute
