@@ -35,7 +35,7 @@ function pluginit(KorAPugin) {
 
   function writeCookie(state) {
     var value = encodeURIComponent(JSON.stringify(state));
-    document.cookie = cookieName + "=" + value + "; path=/; SameSite=Lax; max-age=31536000";
+    document.cookie = cookieName + "=" + value + "; path=/; SameSite=Lax; Secure; max-age=31536000";
   }
 
   function deleteCookie() {
