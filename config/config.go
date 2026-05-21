@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -306,12 +307,12 @@ func ApplyDefaults(config *MappingConfig) {
 		}
 	}
 
-	// AllowOrigins defaults to the Server value (with trailing slash
-	// stripped to form a proper origin). This avoids duplicating the
-	// server URL string and keeps CORS in sync with the deployment.
+	// AllowOrigins defaults to the Server value. This avoids duplicating
+	// the server URL string and keeps CORS in sync with the deployment.
 	if config.AllowOrigins == "" {
-		config.AllowOrigins = strings.TrimRight(config.Server, "/")
+		config.AllowOrigins = config.Server
 	}
+	config.AllowOrigins = normalizeOrigins(config.AllowOrigins)
 
 	if config.Port == 0 {
 		config.Port = defaultPort
@@ -319,6 +320,23 @@ func ApplyDefaults(config *MappingConfig) {
 	if config.RateLimit == 0 {
 		config.RateLimit = defaultRateLimit
 	}
+}
+
+// normalizeOrigins takes a comma-separated list of origin URLs and strips
+// any path components, returning only scheme + host (+ port when present).
+// The CORS middleware requires bare origins without paths; URLs like
+// "https://example.com/instance/test" are pruned to "https://example.com".
+func normalizeOrigins(raw string) string {
+	parts := strings.Split(raw, ",")
+	for i, part := range parts {
+		part = strings.TrimSpace(part)
+		if u, err := url.Parse(part); err == nil && u.Host != "" {
+			parts[i] = u.Scheme + "://" + u.Host
+		} else {
+			parts[i] = strings.TrimRight(part, "/")
+		}
+	}
+	return strings.Join(parts, ",")
 }
 
 // ApplyEnvOverrides overrides configuration fields from environment variables.

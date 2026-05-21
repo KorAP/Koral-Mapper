@@ -1494,6 +1494,33 @@ lists:
 		"KORAL_MAPPER_ALLOW_ORIGINS env var should override YAML value")
 }
 
+func TestAllowOriginsDerivedFromServerWithPath(t *testing.T) {
+	cfg := &MappingConfig{
+		Server: "https://korap.ids-mannheim.de/instance/test",
+	}
+	ApplyDefaults(cfg)
+	assert.Equal(t, "https://korap.ids-mannheim.de", cfg.AllowOrigins,
+		"AllowOrigins should be pruned to host-level origin when Server contains a path")
+}
+
+func TestAllowOriginsExplicitWithPathsPruned(t *testing.T) {
+	cfg := &MappingConfig{
+		AllowOrigins: "https://korap.ids-mannheim.de/instance/test,https://other.example.com/app",
+	}
+	ApplyDefaults(cfg)
+	assert.Equal(t, "https://korap.ids-mannheim.de,https://other.example.com", cfg.AllowOrigins,
+		"explicit AllowOrigins entries should be pruned to host-level origins")
+}
+
+func TestAllowOriginsWithPort(t *testing.T) {
+	cfg := &MappingConfig{
+		Server: "https://korap.ids-mannheim.de:8080/instance/test",
+	}
+	ApplyDefaults(cfg)
+	assert.Equal(t, "https://korap.ids-mannheim.de:8080", cfg.AllowOrigins,
+		"AllowOrigins should preserve port but strip path")
+}
+
 func TestSanitizeFilePathRejectsOutsideBase(t *testing.T) {
 	// Set base to a specific directory and verify paths outside are rejected
 	tmpDir, err := os.MkdirTemp("", "koral-base-*")
