@@ -38,13 +38,23 @@ type MappingList struct {
 	LayerB      string        `yaml:"layerB,omitempty"`
 	FieldA      string        `yaml:"fieldA,omitempty"`
 	FieldB      string        `yaml:"fieldB,omitempty"`
-	Rewrites    bool          `yaml:"rewrites,omitempty"`
+	Rewrites    *bool         `yaml:"rewrites,omitempty"`
 	Mappings    []MappingRule `yaml:"mappings"`
 }
 
 // IsCorpus returns true if the mapping list type is "corpus".
 func (list *MappingList) IsCorpus() bool {
 	return list.Type == "corpus"
+}
+
+// EffectiveRewrites returns the resolved rewrites setting for this list.
+// If the list has an explicit per-list override, it is used; otherwise the
+// global default is returned.
+func (list *MappingList) EffectiveRewrites(globalDefault bool) bool {
+	if list.Rewrites != nil {
+		return *list.Rewrites
+	}
+	return globalDefault
 }
 
 // ParseCorpusMappings parses all mapping rules as corpus rules.
@@ -102,6 +112,7 @@ type MappingConfig struct {
 	Port         int           `yaml:"port,omitempty"`
 	LogLevel     string        `yaml:"loglevel,omitempty"`
 	RateLimit    int           `yaml:"rateLimit,omitempty"` // max requests per minute per IP (0 = use default 100)
+	Rewrites     bool          `yaml:"rewrites,omitempty"`  // global default for koral:rewrite annotations
 	Lists        []MappingList `yaml:"lists,omitempty"`
 }
 
@@ -265,6 +276,7 @@ func LoadFromSources(configFile string, mappingFiles []string) (*MappingConfig, 
 		Port:         globalConfig.Port,
 		LogLevel:     globalConfig.LogLevel,
 		RateLimit:    globalConfig.RateLimit,
+		Rewrites:     globalConfig.Rewrites,
 		Lists:        allLists,
 	}
 
@@ -340,6 +352,10 @@ func ApplyEnvOverrides(config *MappingConfig) {
 		if rl, err := strconv.Atoi(val); err == nil {
 			config.RateLimit = rl
 		}
+	}
+
+	if val := os.Getenv("KORAL_MAPPER_REWRITES"); val != "" {
+		config.Rewrites = val == "true"
 	}
 }
 

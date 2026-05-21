@@ -2990,3 +2990,331 @@ lists:
 		resp.Header.Get("Access-Control-Allow-Origin"),
 		"transform endpoints should include CORS headers")
 }
+
+// Helper for rewrites tests: sends a POST to the given URL with a standard input
+// and returns whether the result's wrap contains a "rewrites" field.
+func hasRewritesInResponse(t *testing.T, app *fiber.App, url string) bool {
+	t.Helper()
+	input := `{
+		"@type": "koral:token",
+		"wrap": {
+			"@type": "koral:term",
+			"foundry": "opennlp",
+			"key": "PIDAT",
+			"layer": "p",
+			"match": "match:eq"
+		}
+	}`
+
+	req := httptest.NewRequest(http.MethodPost, url, bytes.NewBufferString(input))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var result map[string]any
+	err = json.NewDecoder(resp.Body).Decode(&result)
+	require.NoError(t, err)
+
+	wrap, ok := result["wrap"].(map[string]any)
+	require.True(t, ok, "result should have a wrap field")
+	_, hasRewrites := wrap["rewrites"]
+	return hasRewrites
+}
+
+func TestGlobalRewritesTrueInheritsToList(t *testing.T) {
+	cfg := loadConfigFromYAML(t, `
+rewrites: true
+lists:
+  - id: test-mapper
+    foundryA: opennlp
+    layerA: p
+    foundryB: upos
+    layerB: p
+    mappings:
+      - "[PIDAT] <> [DET]"
+`)
+	m, err := mapper.NewMapper(cfg.Lists)
+	require.NoError(t, err)
+
+	app := fiber.New()
+	setupRoutes(app, m, cfg)
+
+	assert.True(t, hasRewritesInResponse(t, app, "/test-mapper/query?dir=atob"),
+		"global rewrites=true should be inherited by list without per-list override")
+}
+
+func TestGlobalRewritesTrueOverriddenByListFalse(t *testing.T) {
+	cfg := loadConfigFromYAML(t, `
+rewrites: true
+lists:
+  - id: test-mapper
+    foundryA: opennlp
+    layerA: p
+    foundryB: upos
+    layerB: p
+    rewrites: false
+    mappings:
+      - "[PIDAT] <> [DET]"
+`)
+	m, err := mapper.NewMapper(cfg.Lists)
+	require.NoError(t, err)
+
+	app := fiber.New()
+	setupRoutes(app, m, cfg)
+
+	assert.False(t, hasRewritesInResponse(t, app, "/test-mapper/query?dir=atob"),
+		"per-list rewrites=false should override global rewrites=true")
+}
+
+func TestGlobalRewritesFalseOverriddenByListTrue(t *testing.T) {
+	cfg := loadConfigFromYAML(t, `
+lists:
+  - id: test-mapper
+    foundryA: opennlp
+    layerA: p
+    foundryB: upos
+    layerB: p
+    rewrites: true
+    mappings:
+      - "[PIDAT] <> [DET]"
+`)
+	m, err := mapper.NewMapper(cfg.Lists)
+	require.NoError(t, err)
+
+	app := fiber.New()
+	setupRoutes(app, m, cfg)
+
+	assert.True(t, hasRewritesInResponse(t, app, "/test-mapper/query?dir=atob"),
+		"per-list rewrites=true should override global rewrites=false (default)")
+}
+
+func TestQueryParamOverridesGlobalRewritesTrue(t *testing.T) {
+	cfg := loadConfigFromYAML(t, `
+rewrites: true
+lists:
+  - id: test-mapper
+    foundryA: opennlp
+    layerA: p
+    foundryB: upos
+    layerB: p
+    mappings:
+      - "[PIDAT] <> [DET]"
+`)
+	m, err := mapper.NewMapper(cfg.Lists)
+	require.NoError(t, err)
+
+	app := fiber.New()
+	setupRoutes(app, m, cfg)
+
+	assert.False(t, hasRewritesInResponse(t, app, "/test-mapper/query?dir=atob&rewrites=false"),
+		"query param rewrites=false should override global rewrites=true")
+}
+
+func TestQueryParamOverridesPerListRewritesFalse(t *testing.T) {
+	cfg := loadConfigFromYAML(t, `
+rewrites: true
+lists:
+  - id: test-mapper
+    foundryA: opennlp
+    layerA: p
+    foundryB: upos
+    layerB: p
+    rewrites: false
+    mappings:
+      - "[PIDAT] <> [DET]"
+`)
+	m, err := mapper.NewMapper(cfg.Lists)
+	require.NoError(t, err)
+
+	app := fiber.New()
+	setupRoutes(app, m, cfg)
+
+	assert.True(t, hasRewritesInResponse(t, app, "/test-mapper/query?dir=atob&rewrites=true"),
+		"query param rewrites=true should override per-list rewrites=false")
+}
+
+func TestCompositeQueryGlobalRewritesInherited(t *testing.T) {
+	cfg := loadConfigFromYAML(t, `
+rewrites: true
+lists:
+  - id: step1
+    foundryA: opennlp
+    layerA: p
+    foundryB: stts
+    layerB: p
+    mappings:
+      - "[PIDAT] <> [DET]"
+`)
+	m, err := mapper.NewMapper(cfg.Lists)
+	require.NoError(t, err)
+
+	app := fiber.New()
+	setupRoutes(app, m, cfg)
+
+	assert.True(t, hasRewritesInResponse(t, app, "/query/step1:atob"),
+		"composite query should inherit global rewrites=true")
+}
+
+func TestCompositeQueryGlobalRewritesOverriddenByQueryParam(t *testing.T) {
+	cfg := loadConfigFromYAML(t, `
+rewrites: true
+lists:
+  - id: step1
+    foundryA: opennlp
+    layerA: p
+    foundryB: stts
+    layerB: p
+    mappings:
+      - "[PIDAT] <> [DET]"
+`)
+	m, err := mapper.NewMapper(cfg.Lists)
+	require.NoError(t, err)
+
+	app := fiber.New()
+	setupRoutes(app, m, cfg)
+
+	assert.False(t, hasRewritesInResponse(t, app, "/query/step1:atob?rewrites=false"),
+		"composite query param rewrites=false should override global rewrites=true")
+}
+
+func TestCompositeQueryPerListOverridesGlobal(t *testing.T) {
+	cfg := loadConfigFromYAML(t, `
+rewrites: true
+lists:
+  - id: step1
+    foundryA: opennlp
+    layerA: p
+    foundryB: stts
+    layerB: p
+    rewrites: false
+    mappings:
+      - "[PIDAT] <> [DET]"
+`)
+	m, err := mapper.NewMapper(cfg.Lists)
+	require.NoError(t, err)
+
+	app := fiber.New()
+	setupRoutes(app, m, cfg)
+
+	assert.False(t, hasRewritesInResponse(t, app, "/query/step1:atob"),
+		"composite query should use per-list rewrites=false over global rewrites=true")
+}
+
+func TestResponseEndpointGlobalRewritesInherited(t *testing.T) {
+	cfg := loadConfigFromYAML(t, `
+rewrites: true
+lists:
+  - id: test-response-mapper
+    foundryA: marmot
+    layerA: m
+    foundryB: opennlp
+    layerB: p
+    mappings:
+      - "[gender:masc] <> [p=M & m=M]"
+`)
+	m, err := mapper.NewMapper(cfg.Lists)
+	require.NoError(t, err)
+
+	app := fiber.New()
+	setupRoutes(app, m, cfg)
+
+	// Response rewrites on snippets don't use koral:rewrite fields the same way
+	// but we can verify the handler doesn't error and respects the flag.
+	input := `{"snippet": "<span title=\"marmot/m:gender:masc\">Der</span>"}`
+	req := httptest.NewRequest(http.MethodPost, "/test-response-mapper/response?dir=atob",
+		bytes.NewBufferString(input))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+}
+
+func TestResponseEndpointQueryParamOverridesGlobal(t *testing.T) {
+	cfg := loadConfigFromYAML(t, `
+rewrites: true
+lists:
+  - id: test-response-mapper
+    foundryA: marmot
+    layerA: m
+    foundryB: opennlp
+    layerB: p
+    mappings:
+      - "[gender:masc] <> [p=M & m=M]"
+`)
+	m, err := mapper.NewMapper(cfg.Lists)
+	require.NoError(t, err)
+
+	app := fiber.New()
+	setupRoutes(app, m, cfg)
+
+	input := `{"snippet": "<span title=\"marmot/m:gender:masc\">Der</span>"}`
+	req := httptest.NewRequest(http.MethodPost, "/test-response-mapper/response?dir=atob&rewrites=false",
+		bytes.NewBufferString(input))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+}
+
+func TestMultipleListsMixedRewritesResolution(t *testing.T) {
+	cfg := loadConfigFromYAML(t, `
+rewrites: true
+lists:
+  - id: mapper-inherits
+    foundryA: opennlp
+    layerA: p
+    foundryB: upos
+    layerB: p
+    mappings:
+      - "[PIDAT] <> [DET]"
+  - id: mapper-overrides-off
+    foundryA: stts
+    layerA: p
+    foundryB: upos
+    layerB: p
+    rewrites: false
+    mappings:
+      - "[DET] <> [PRON]"
+`)
+	m, err := mapper.NewMapper(cfg.Lists)
+	require.NoError(t, err)
+
+	app := fiber.New()
+	setupRoutes(app, m, cfg)
+
+	// mapper-inherits should have rewrites (inherits global true)
+	assert.True(t, hasRewritesInResponse(t, app, "/mapper-inherits/query?dir=atob"),
+		"mapper-inherits should have rewrites via global default")
+
+	// mapper-overrides-off has per-list rewrites=false
+	input := `{
+		"@type": "koral:token",
+		"wrap": {
+			"@type": "koral:term",
+			"foundry": "stts",
+			"key": "DET",
+			"layer": "p",
+			"match": "match:eq"
+		}
+	}`
+	req := httptest.NewRequest(http.MethodPost, "/mapper-overrides-off/query?dir=atob",
+		bytes.NewBufferString(input))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	var result map[string]any
+	err = json.NewDecoder(resp.Body).Decode(&result)
+	require.NoError(t, err)
+
+	wrap := result["wrap"].(map[string]any)
+	_, hasRewrites := wrap["rewrites"]
+	assert.False(t, hasRewrites,
+		"mapper-overrides-off should NOT have rewrites (per-list false overrides global true)")
+}

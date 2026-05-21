@@ -962,6 +962,7 @@ func TestApplyEnvOverrides(t *testing.T) {
 		"KORAL_MAPPER_PORT",
 		"KORAL_MAPPER_LOG_LEVEL",
 		"KORAL_MAPPER_ALLOW_ORIGINS",
+		"KORAL_MAPPER_REWRITES",
 	}
 
 	clearEnv := func() {
@@ -1103,6 +1104,7 @@ func TestEnvOverridesInLoadFromSources(t *testing.T) {
 		"KORAL_MAPPER_SERVICE_URL",
 		"KORAL_MAPPER_COOKIE_NAME",
 		"KORAL_MAPPER_ALLOW_ORIGINS",
+		"KORAL_MAPPER_REWRITES",
 	}
 	clearEnv := func() {
 		for _, key := range envKeys {
@@ -1176,9 +1178,165 @@ lists:
 	require.NoError(t, err)
 	require.Len(t, cfg.Lists, 3)
 
-	assert.True(t, cfg.Lists[0].Rewrites, "rewrites should be true when set to true")
-	assert.False(t, cfg.Lists[1].Rewrites, "rewrites should be false when set to false")
-	assert.False(t, cfg.Lists[2].Rewrites, "rewrites should default to false")
+	require.NotNil(t, cfg.Lists[0].Rewrites, "rewrites should be set when specified as true")
+	assert.True(t, *cfg.Lists[0].Rewrites, "rewrites should be true when set to true")
+	require.NotNil(t, cfg.Lists[1].Rewrites, "rewrites should be set when specified as false")
+	assert.False(t, *cfg.Lists[1].Rewrites, "rewrites should be false when set to false")
+	assert.Nil(t, cfg.Lists[2].Rewrites, "rewrites should be nil when not specified")
+}
+
+func TestEffectiveRewrites(t *testing.T) {
+	trueVal := true
+	falseVal := false
+
+	tests := []struct {
+		name          string
+		listRewrites *bool
+		globalDefault bool
+		expected      bool
+	}{
+		{
+			name:          "nil per-list, global false",
+			listRewrites: nil,
+			globalDefault: false,
+			expected:      false,
+		},
+		{
+			name:          "nil per-list, global true",
+			listRewrites: nil,
+			globalDefault: true,
+			expected:      true,
+		},
+		{
+			name:          "per-list true, global false",
+			listRewrites: &trueVal,
+			globalDefault: false,
+			expected:      true,
+		},
+		{
+			name:          "per-list false, global true",
+			listRewrites: &falseVal,
+			globalDefault: true,
+			expected:      false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			list := &MappingList{
+				ID:       "test",
+				Rewrites: tt.listRewrites,
+				Mappings: []MappingRule{"[A] <> [B]"},
+			}
+			assert.Equal(t, tt.expected, list.EffectiveRewrites(tt.globalDefault))
+		})
+	}
+}
+
+func TestGlobalRewritesYAMLField(t *testing.T) {
+	content := `
+rewrites: true
+lists:
+  - id: inherits-global
+    mappings:
+      - "[A] <> [B]"
+  - id: overrides-global
+    rewrites: false
+    mappings:
+      - "[C] <> [D]"
+`
+	tmpfile, err := os.CreateTemp("", "config-global-rewrites-*.yaml")
+	require.NoError(t, err)
+	defer os.Remove(tmpfile.Name())
+
+	_, err = tmpfile.WriteString(content)
+	require.NoError(t, err)
+	require.NoError(t, tmpfile.Close())
+
+	cfg, err := LoadFromSources(tmpfile.Name(), nil)
+	require.NoError(t, err)
+
+	assert.True(t, cfg.Rewrites, "global rewrites should be true")
+
+	assert.Nil(t, cfg.Lists[0].Rewrites, "per-list rewrites should be nil when not specified")
+	assert.True(t, cfg.Lists[0].EffectiveRewrites(cfg.Rewrites),
+		"list should inherit global rewrites=true")
+
+	require.NotNil(t, cfg.Lists[1].Rewrites)
+	assert.False(t, *cfg.Lists[1].Rewrites,
+		"per-list rewrites should be false when explicitly set")
+	assert.False(t, cfg.Lists[1].EffectiveRewrites(cfg.Rewrites),
+		"list should override global rewrites=true with per-list false")
+}
+
+func TestGlobalRewritesDefaultFalse(t *testing.T) {
+	content := `
+lists:
+  - id: test-mapper
+    mappings:
+      - "[A] <> [B]"
+`
+	tmpfile, err := os.CreateTemp("", "config-global-rewrites-default-*.yaml")
+	require.NoError(t, err)
+	defer os.Remove(tmpfile.Name())
+
+	_, err = tmpfile.WriteString(content)
+	require.NoError(t, err)
+	require.NoError(t, tmpfile.Close())
+
+	cfg, err := LoadFromSources(tmpfile.Name(), nil)
+	require.NoError(t, err)
+
+	assert.False(t, cfg.Rewrites, "global rewrites should default to false")
+}
+
+func TestGlobalRewritesEnvOverride(t *testing.T) {
+	t.Setenv("KORAL_MAPPER_REWRITES", "true")
+
+	content := `
+lists:
+  - id: test-mapper
+    mappings:
+      - "[A] <> [B]"
+`
+	tmpfile, err := os.CreateTemp("", "config-rewrites-env-*.yaml")
+	require.NoError(t, err)
+	defer os.Remove(tmpfile.Name())
+
+	_, err = tmpfile.WriteString(content)
+	require.NoError(t, err)
+	require.NoError(t, tmpfile.Close())
+
+	cfg, err := LoadFromSources(tmpfile.Name(), nil)
+	require.NoError(t, err)
+
+	assert.True(t, cfg.Rewrites,
+		"KORAL_MAPPER_REWRITES=true env var should override default")
+}
+
+func TestGlobalRewritesEnvOverridesYAML(t *testing.T) {
+	t.Setenv("KORAL_MAPPER_REWRITES", "false")
+
+	content := `
+rewrites: true
+lists:
+  - id: test-mapper
+    mappings:
+      - "[A] <> [B]"
+`
+	tmpfile, err := os.CreateTemp("", "config-rewrites-env-yaml-*.yaml")
+	require.NoError(t, err)
+	defer os.Remove(tmpfile.Name())
+
+	_, err = tmpfile.WriteString(content)
+	require.NoError(t, err)
+	require.NoError(t, tmpfile.Close())
+
+	cfg, err := LoadFromSources(tmpfile.Name(), nil)
+	require.NoError(t, err)
+
+	assert.False(t, cfg.Rewrites,
+		"KORAL_MAPPER_REWRITES=false env var should override YAML rewrites=true")
 }
 
 func TestParseCorpusMappingsWithFieldAFieldB(t *testing.T) {

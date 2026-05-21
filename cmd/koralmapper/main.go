@@ -371,14 +371,14 @@ func setupRoutes(app *fiber.App, m *mapper.Mapper, yamlConfig *config.MappingCon
 	app.Get("/static/*", handleStaticFile())
 
 	// Composite cascade transformation endpoints (cfg in path)
-	app.Post("/query/:cfg", handleCompositeQueryTransform(m, yamlConfig.Lists))
-	app.Post("/response/:cfg", handleCompositeResponseTransform(m, yamlConfig.Lists))
+	app.Post("/query/:cfg", handleCompositeQueryTransform(m, yamlConfig))
+	app.Post("/response/:cfg", handleCompositeResponseTransform(m, yamlConfig))
 
 	// Transformation endpoint
-	app.Post("/:map/query", handleTransform(m, yamlConfig.Lists))
+	app.Post("/:map/query", handleTransform(m, yamlConfig))
 
 	// Response transformation endpoint
-	app.Post("/:map/response", handleResponseTransform(m, yamlConfig.Lists))
+	app.Post("/:map/response", handleResponseTransform(m, yamlConfig))
 
 	// Kalamar plugin endpoint
 	app.Get("/", handleKalamarPlugin(yamlConfig, configTmpl, pluginTmpl))
@@ -462,10 +462,10 @@ func buildConfigPageData(yamlConfig *config.MappingConfig) ConfigPageData {
 	return data
 }
 
-func handleCompositeQueryTransform(m *mapper.Mapper, lists []config.MappingList) fiber.Handler {
-	listsByID := make(map[string]*config.MappingList, len(lists))
-	for i := range lists {
-		listsByID[lists[i].ID] = &lists[i]
+func handleCompositeQueryTransform(m *mapper.Mapper, yamlConfig *config.MappingConfig) fiber.Handler {
+	listsByID := make(map[string]*config.MappingList, len(yamlConfig.Lists))
+	for i := range yamlConfig.Lists {
+		listsByID[yamlConfig.Lists[i].ID] = &yamlConfig.Lists[i]
 	}
 
 	return func(c *fiber.Ctx) error {
@@ -483,7 +483,7 @@ func handleCompositeQueryTransform(m *mapper.Mapper, lists []config.MappingList)
 			})
 		}
 
-		entries, err := ParseCfgParam(cfgRaw, lists)
+		entries, err := ParseCfgParam(cfgRaw, yamlConfig.Lists)
 		if err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"error": err.Error(),
@@ -509,9 +509,9 @@ func handleCompositeQueryTransform(m *mapper.Mapper, lists []config.MappingList)
 				dir = mapper.BtoA
 			}
 
-			addRewrites := false
+			addRewrites := yamlConfig.Rewrites
 			if list, ok := listsByID[entry.ID]; ok {
-				addRewrites = list.Rewrites
+				addRewrites = list.EffectiveRewrites(yamlConfig.Rewrites)
 			}
 			if rewritesOverride != nil {
 				addRewrites = *rewritesOverride
@@ -542,10 +542,10 @@ func handleCompositeQueryTransform(m *mapper.Mapper, lists []config.MappingList)
 	}
 }
 
-func handleCompositeResponseTransform(m *mapper.Mapper, lists []config.MappingList) fiber.Handler {
-	listsByID := make(map[string]*config.MappingList, len(lists))
-	for i := range lists {
-		listsByID[lists[i].ID] = &lists[i]
+func handleCompositeResponseTransform(m *mapper.Mapper, yamlConfig *config.MappingConfig) fiber.Handler {
+	listsByID := make(map[string]*config.MappingList, len(yamlConfig.Lists))
+	for i := range yamlConfig.Lists {
+		listsByID[yamlConfig.Lists[i].ID] = &yamlConfig.Lists[i]
 	}
 
 	return func(c *fiber.Ctx) error {
@@ -563,7 +563,7 @@ func handleCompositeResponseTransform(m *mapper.Mapper, lists []config.MappingLi
 			})
 		}
 
-		entries, err := ParseCfgParam(cfgRaw, lists)
+		entries, err := ParseCfgParam(cfgRaw, yamlConfig.Lists)
 		if err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"error": err.Error(),
@@ -589,9 +589,9 @@ func handleCompositeResponseTransform(m *mapper.Mapper, lists []config.MappingLi
 				dir = mapper.BtoA
 			}
 
-			addRewrites := false
+			addRewrites := yamlConfig.Rewrites
 			if list, ok := listsByID[entry.ID]; ok {
-				addRewrites = list.Rewrites
+				addRewrites = list.EffectiveRewrites(yamlConfig.Rewrites)
 			}
 			if rewritesOverride != nil {
 				addRewrites = *rewritesOverride
@@ -622,10 +622,10 @@ func handleCompositeResponseTransform(m *mapper.Mapper, lists []config.MappingLi
 	}
 }
 
-func handleTransform(m *mapper.Mapper, lists []config.MappingList) fiber.Handler {
-	listsByID := make(map[string]*config.MappingList, len(lists))
-	for i := range lists {
-		listsByID[lists[i].ID] = &lists[i]
+func handleTransform(m *mapper.Mapper, yamlConfig *config.MappingConfig) fiber.Handler {
+	listsByID := make(map[string]*config.MappingList, len(yamlConfig.Lists))
+	for i := range yamlConfig.Lists {
+		listsByID[yamlConfig.Lists[i].ID] = &yamlConfig.Lists[i]
 	}
 
 	return func(c *fiber.Ctx) error {
@@ -645,10 +645,10 @@ func handleTransform(m *mapper.Mapper, lists []config.MappingList) fiber.Handler
 			})
 		}
 
-		// Determine rewrites: query param overrides YAML default
-		addRewrites := false
+		// Resolve rewrites: global default -> per-list -> query param
+		addRewrites := yamlConfig.Rewrites
 		if list, ok := listsByID[params.MapID]; ok {
-			addRewrites = list.Rewrites
+			addRewrites = list.EffectiveRewrites(yamlConfig.Rewrites)
 		}
 		if params.Rewrites != nil {
 			addRewrites = *params.Rewrites
@@ -679,10 +679,10 @@ func handleTransform(m *mapper.Mapper, lists []config.MappingList) fiber.Handler
 	}
 }
 
-func handleResponseTransform(m *mapper.Mapper, lists []config.MappingList) fiber.Handler {
-	listsByID := make(map[string]*config.MappingList, len(lists))
-	for i := range lists {
-		listsByID[lists[i].ID] = &lists[i]
+func handleResponseTransform(m *mapper.Mapper, yamlConfig *config.MappingConfig) fiber.Handler {
+	listsByID := make(map[string]*config.MappingList, len(yamlConfig.Lists))
+	for i := range yamlConfig.Lists {
+		listsByID[yamlConfig.Lists[i].ID] = &yamlConfig.Lists[i]
 	}
 
 	return func(c *fiber.Ctx) error {
@@ -702,10 +702,10 @@ func handleResponseTransform(m *mapper.Mapper, lists []config.MappingList) fiber
 			})
 		}
 
-		// Determine rewrites: query param overrides YAML default
-		addRewrites := false
+		// Resolve rewrites: global default -> per-list -> query param
+		addRewrites := yamlConfig.Rewrites
 		if list, ok := listsByID[params.MapID]; ok {
-			addRewrites = list.Rewrites
+			addRewrites = list.EffectiveRewrites(yamlConfig.Rewrites)
 		}
 		if params.Rewrites != nil {
 			addRewrites = *params.Rewrites

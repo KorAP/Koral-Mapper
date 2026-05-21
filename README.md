@@ -76,6 +76,10 @@ allowOrigins: "https://korap.ids-mannheim.de"
 # Set to "/" to allow loading from anywhere on the filesystem.
 basePath: "/opt/koralmapper"
 
+# Optional: Global default for koral:rewrite annotations (default: false).
+# Can be overridden per mapping list and per request via query parameter.
+rewrites: false
+
 # Optional: Mapping lists (same format as individual mapping files)
 lists:
   - id: mapping-list-id
@@ -105,7 +109,7 @@ mappings:
 
 Command line arguments take precedence over configuration file values:
 
-The `sdk`, `stylesheet`, `server`, `port`, `loglevel`, and `basePath` fields in the main configuration file are optional and override the following default values:
+The `sdk`, `stylesheet`, `server`, `port`, `loglevel`, `rewrites`, and `basePath` fields in the main configuration file are optional and override the following default values:
 
 - **`sdk`**: Custom SDK JavaScript file URL (default: `https://korap.ids-mannheim.de/js/korap-plugin-latest.js`)
 - **`stylesheet`**: Kalamar stylesheet URL for the config page (default: `https://korap.ids-mannheim.de/css/kalamar-plugin-latest.css`)
@@ -115,6 +119,7 @@ The `sdk`, `stylesheet`, `server`, `port`, `loglevel`, and `basePath` fields in 
 - **`serviceURL`**: Service URL of the KoralMapper (default: `https://korap.ids-mannheim.de/plugin/koralmapper`)
 - **`rateLimit`**: Maximum number of requests per minute per IP address (default: `100`). When the limit is exceeded, the server responds with HTTP 429 (Too Many Requests).
 - **`allowOrigins`**: Comma-separated list of origins allowed for CORS (default: derived from `server` with trailing slash removed, e.g. `https://korap.ids-mannheim.de`). The service is designed to be called cross-origin as a Kalamar plugin loaded in iframes. This setting controls which origins may make cross-origin API requests. Allowed methods are `GET` and `POST`. The `Content-Type` header is permitted. Use `"*"` to allow all origins (not recommended for production).
+- **`rewrites`**: Global default for attaching `koral:rewrite` annotations (default: `false`). When `true`, all mapping lists will attach rewrite annotations unless individually overridden. See [Rewrites Resolution](#rewrites-resolution) for the full precedence chain.
 - **`basePath`**: Directory tree for file loading confinement (default: current working directory). Configuration and mapping files must resolve within this path or the system temp directory. Set to `"/"` to disable confinement. This prevents path traversal attacks (CWE-22).
 
 These values are applied during configuration parsing. When using only individual mapping files (`-m` flags), default values are used unless overridden by command line arguments.
@@ -133,6 +138,7 @@ All variables are optional and use the `KORAL_MAPPER_` prefix:
 - `KORAL_MAPPER_PORT`: Overrides `port` (integer)
 - `KORAL_MAPPER_RATE_LIMIT`: Overrides `rateLimit` (integer, requests per minute per IP)
 - `KORAL_MAPPER_ALLOW_ORIGINS`: Overrides `allowOrigins` (comma-separated list of allowed CORS origins)
+- `KORAL_MAPPER_REWRITES`: Overrides `rewrites` (`true` or `false`, global default for koral:rewrite annotations)
 - `KORAL_MAPPER_BASE_PATH`: Overrides `basePath` (directory path for file loading confinement)
 
 Environment variable values take precedence over values from the configuration file.
