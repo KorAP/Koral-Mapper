@@ -96,7 +96,8 @@ func (m *Mapper) ApplyQueryMappings(mappingID string, opts MappingOptions, jsonD
 	}
 	patternCache := make(map[patternCacheKey]ast.Node)
 
-	for i, rule := range rules {
+	// getProcessedPattern returns a cached, override-applied clone of a rule's pattern.
+	getProcessedPattern := func(i int, rule *parser.MappingResult) (ast.Node, ast.Node, ast.Node, error) {
 		var pattern, replacement ast.Node
 		if opts.Direction {
 			pattern = rule.Upper
@@ -105,7 +106,6 @@ func (m *Mapper) ApplyQueryMappings(mappingID string, opts MappingOptions, jsonD
 			pattern = rule.Lower
 			replacement = rule.Upper
 		}
-
 		if token, ok := pattern.(*ast.Token); ok {
 			pattern = token.Wrap
 		}
@@ -122,17 +122,40 @@ func (m *Mapper) ApplyQueryMappings(mappingID string, opts MappingOptions, jsonD
 			}
 			patternCache[patternKey] = processedPattern
 		}
+		return processedPattern, replacement, pattern, nil
+	}
 
-		// Probe for a match before cloning the replacement (lazy evaluation)
-		tempMatcher, err := matcher.NewMatcher(ast.Pattern{Root: processedPattern}, ast.Replacement{Root: &ast.Term{}})
-		if err != nil {
-			return nil, fmt.Errorf("failed to create temporary matcher: %w", err)
+	// applyBestRule applies the best-matching rule (by specificity) to a single node.
+	applyBestRule := func(target ast.Node) (ast.Node, error) {
+		var candidates []matchCandidate
+		for i, rule := range rules {
+			processedPattern, replacement, _, err := getProcessedPattern(i, rule)
+			if err != nil {
+				return nil, err
+			}
+			tempMatcher, err := matcher.NewMatcher(ast.Pattern{Root: processedPattern}, ast.Replacement{Root: &ast.Term{}})
+			if err != nil {
+				return nil, fmt.Errorf("failed to create temporary matcher: %w", err)
+			}
+			if !tempMatcher.Match(target) {
+				continue
+			}
+			candidates = append(candidates, matchCandidate{
+				ruleIndex:              i,
+				patternSpecificity:     ast.Specificity(processedPattern),
+				replacementSpecificity: ast.Specificity(replacement),
+			})
 		}
-		if !tempMatcher.Match(node) {
-			continue
+		if len(candidates) == 0 {
+			return target, nil
 		}
 
-		replacementKey := patternCacheKey{ruleIndex: i, foundry: replacementFoundry, layer: replacementLayer, isReplacement: true}
+		best := selectBestCandidate(candidates)
+
+		rule := rules[best.ruleIndex]
+		processedPattern, replacement, _, _ := getProcessedPattern(best.ruleIndex, rule)
+
+		replacementKey := patternCacheKey{ruleIndex: best.ruleIndex, foundry: replacementFoundry, layer: replacementLayer, isReplacement: true}
 		processedReplacement, exists := patternCache[replacementKey]
 		if !exists {
 			processedReplacement = replacement.Clone()
@@ -144,7 +167,7 @@ func (m *Mapper) ApplyQueryMappings(mappingID string, opts MappingOptions, jsonD
 
 		var beforeNode ast.Node
 		if opts.AddRewrites {
-			beforeNode = node.Clone()
+			beforeNode = target.Clone()
 		}
 
 		// Collect pre-existing rewrites before replacement so they
@@ -155,15 +178,41 @@ func (m *Mapper) ApplyQueryMappings(mappingID string, opts MappingOptions, jsonD
 		if err != nil {
 			return nil, fmt.Errorf("failed to create matcher: %w", err)
 		}
-		node = actualMatcher.Replace(node)
+		result := actualMatcher.Replace(target)
 
-		// Carry forward pre-existing rewrites from earlier cascade steps.
 		if len(existingRewrites) > 0 {
-			prependRewrites(node, existingRewrites)
+			prependRewrites(result, existingRewrites)
 		}
 
 		if opts.AddRewrites {
-			recordRewrites(node, beforeNode)
+			recordRewrites(result, beforeNode)
+		}
+		return result, nil
+	}
+
+	// For CatchallNodes (any complex KoralQuery operation like sequence,
+	// disjunction, or position), apply best-rule selection per operand
+	// so each token gets its own best-matching rule.
+	if catchall, ok := node.(*ast.CatchallNode); ok && len(catchall.Operands) > 0 {
+		newOperands := make([]ast.Node, len(catchall.Operands))
+		for i, op := range catchall.Operands {
+			replaced, err := applyBestRule(op)
+			if err != nil {
+				return nil, err
+			}
+			newOperands[i] = replaced
+		}
+		node = &ast.CatchallNode{
+			NodeType:   catchall.NodeType,
+			RawContent: catchall.RawContent,
+			Wrap:       catchall.Wrap,
+			Operands:   newOperands,
+		}
+	} else {
+		var err error
+		node, err = applyBestRule(node)
+		if err != nil {
+			return nil, err
 		}
 	}
 
@@ -229,6 +278,31 @@ func (m *Mapper) ApplyQueryMappings(mappingID string, opts MappingOptions, jsonD
 	return resultData, nil
 }
 
+// selectBestCandidate picks the best match from candidates using:
+//  1. Highest pattern specificity (most features matched)
+//  2. Lowest replacement specificity (broadest/fallback output)
+//  3. First in file order (lowest ruleIndex)
+func selectBestCandidate(candidates []matchCandidate) matchCandidate {
+	best := candidates[0]
+	for _, c := range candidates[1:] {
+		if c.patternSpecificity > best.patternSpecificity {
+			best = c
+		} else if c.patternSpecificity == best.patternSpecificity {
+			if c.replacementSpecificity < best.replacementSpecificity {
+				best = c
+			}
+		}
+	}
+	return best
+}
+
+// matchCandidate holds a rule index and its specificity scores for selection.
+type matchCandidate struct {
+	ruleIndex              int
+	patternSpecificity     int
+	replacementSpecificity int
+}
+
 // recordRewrites compares the new node against the before-snapshot and
 // attaches rewrite entries to any changed nodes. It handles both simple
 // nodes (Term, TermGroup) and container nodes (CatchallNode with operands).
@@ -237,8 +311,9 @@ func recordRewrites(newNode, beforeNode ast.Node) {
 		return
 	}
 
-	// For CatchallNodes with operands (e.g. token sequences), attach
-	// per-operand rewrites so each changed token gets its own annotation.
+	// For CatchallNodes with operands (e.g. any complex KoralQuery
+	// operation), attach per-operand rewrites so each changed token
+	// gets its own annotation.
 	if newCatchall, ok := newNode.(*ast.CatchallNode); ok {
 		if oldCatchall, ok := beforeNode.(*ast.CatchallNode); ok && len(newCatchall.Operands) > 0 {
 			for i, newOp := range newCatchall.Operands {

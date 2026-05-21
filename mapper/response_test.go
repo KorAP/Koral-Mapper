@@ -1091,3 +1091,77 @@ func TestResponseMappingWithLayerOverride(t *testing.T) {
 		assert.NotContains(t, snippet, `title="opennlp/p:DT" class="notinindex"`)
 	})
 }
+
+func TestResponseMappingWithFallbackRules(t *testing.T) {
+	t.Run("Fallback OR-group replacement is discarded by RestrictToObligatory", func(t *testing.T) {
+		responseSnippet := `{
+			"snippet": "<span title=\"upos/p:ADJ\">schön</span>"
+		}`
+
+		mappingList := config.MappingList{
+			ID:       "test-fallback-resp",
+			FoundryA: "opennlp",
+			LayerA:   "p",
+			FoundryB: "upos",
+			LayerB:   "p",
+			Mappings: []config.MappingRule{
+				"[ADJA] <> [ADJ]",
+				"[ADJD] <> [ADJ & Variant=Short]",
+				"[ADJA | ADJD] <> [ADJ]",
+			},
+		}
+
+		m, err := NewMapper([]config.MappingList{mappingList})
+		require.NoError(t, err)
+
+		var inputData any
+		err = json.Unmarshal([]byte(responseSnippet), &inputData)
+		require.NoError(t, err)
+
+		result, err := m.ApplyResponseMappings("test-fallback-resp", MappingOptions{Direction: BtoA}, inputData)
+		require.NoError(t, err)
+
+		resultMap := result.(map[string]any)
+		snippet := resultMap["snippet"].(string)
+
+		// The specific rule [ADJA] <> [ADJ] should add opennlp/p:ADJA annotation
+		assert.Contains(t, snippet, `title="opennlp/p:ADJA" class="notinindex"`)
+		// The fallback rule [ADJA | ADJD] <> [ADJ] should NOT add an annotation
+		// because RestrictToObligatory discards OR groups
+		assert.NotContains(t, snippet, `title="opennlp/p:ADJD" class="notinindex"`)
+	})
+
+	t.Run("Specific DET rule produces annotation, fallback does not", func(t *testing.T) {
+		responseSnippet := `{
+			"snippet": "<span title=\"upos/p:DET\"><span title=\"upos/PronType:Art\">Der</span></span>"
+		}`
+
+		mappingList := config.MappingList{
+			ID:       "test-det-resp",
+			FoundryA: "opennlp",
+			LayerA:   "p",
+			FoundryB: "upos",
+			LayerB:   "p",
+			Mappings: []config.MappingRule{
+				"[ART] <> [DET & PronType=Art]",
+				"[ART | PDAT | PIAT | PIDAT | PPOSAT | PRELAT | PWAT] <> [DET]",
+			},
+		}
+
+		m, err := NewMapper([]config.MappingList{mappingList})
+		require.NoError(t, err)
+
+		var inputData any
+		err = json.Unmarshal([]byte(responseSnippet), &inputData)
+		require.NoError(t, err)
+
+		result, err := m.ApplyResponseMappings("test-det-resp", MappingOptions{Direction: BtoA}, inputData)
+		require.NoError(t, err)
+
+		resultMap := result.(map[string]any)
+		snippet := resultMap["snippet"].(string)
+
+		// The specific rule should add ART annotation
+		assert.Contains(t, snippet, `title="opennlp/p:ART" class="notinindex"`)
+	})
+}

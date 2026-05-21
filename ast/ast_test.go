@@ -1133,6 +1133,107 @@ func TestRestrictToObligatory(t *testing.T) {
 	}
 }
 
+func TestSpecificity(t *testing.T) {
+	tests := []struct {
+		name     string
+		node     Node
+		expected int
+	}{
+		{
+			name:     "Term returns 1",
+			node:     &Term{Key: "ADJ", Match: MatchEqual},
+			expected: 1,
+		},
+		{
+			name: "TermGroup(AND) with 2 terms returns 2",
+			node: &TermGroup{
+				Relation: AndRelation,
+				Operands: []Node{
+					&Term{Key: "ADJ", Match: MatchEqual},
+					&Term{Key: "Variant", Value: "Short", Match: MatchEqual},
+				},
+			},
+			expected: 2,
+		},
+		{
+			name: "TermGroup(AND) with 3 terms returns 3",
+			node: &TermGroup{
+				Relation: AndRelation,
+				Operands: []Node{
+					&Term{Key: "VERB", Match: MatchEqual},
+					&Term{Key: "Mood", Value: "Ind", Match: MatchEqual},
+					&Term{Key: "VerbForm", Value: "Fin", Match: MatchEqual},
+				},
+			},
+			expected: 3,
+		},
+		{
+			name: "TermGroup(OR) with 2 terms returns 0",
+			node: &TermGroup{
+				Relation: OrRelation,
+				Operands: []Node{
+					&Term{Key: "ADJA", Match: MatchEqual},
+					&Term{Key: "ADJD", Match: MatchEqual},
+				},
+			},
+			expected: 0,
+		},
+		{
+			name: "Nested AND containing OR returns count of AND terms only",
+			node: &TermGroup{
+				Relation: AndRelation,
+				Operands: []Node{
+					&Term{Key: "DET", Match: MatchEqual},
+					&TermGroup{
+						Relation: OrRelation,
+						Operands: []Node{
+							&Term{Key: "PronType", Value: "Ind", Match: MatchEqual},
+							&Term{Key: "PronType", Value: "Neg", Match: MatchEqual},
+						},
+					},
+				},
+			},
+			expected: 1,
+		},
+		{
+			name: "Token wrapping TermGroup(AND) with 2 terms returns 2",
+			node: &Token{
+				Wrap: &TermGroup{
+					Relation: AndRelation,
+					Operands: []Node{
+						&Term{Key: "DET", Match: MatchEqual},
+						&Term{Key: "PronType", Value: "Art", Match: MatchEqual},
+					},
+				},
+			},
+			expected: 2,
+		},
+		{
+			name:     "nil node returns 0",
+			node:     nil,
+			expected: 0,
+		},
+		{
+			name:     "CatchallNode returns 0",
+			node:     &CatchallNode{NodeType: "koral:group"},
+			expected: 0,
+		},
+		{
+			name: "Token wrapping a simple Term returns 1",
+			node: &Token{
+				Wrap: &Term{Key: "NOUN", Match: MatchEqual},
+			},
+			expected: 1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, Specificity(tt.node))
+		})
+	}
+}
+
 func TestRestrictToObligatoryDoesNotModifyOriginal(t *testing.T) {
 	// Test that the original node is not modified
 	original := &TermGroup{

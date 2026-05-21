@@ -1106,11 +1106,11 @@ func TestCorpusQueryComplexityOrdering(t *testing.T) {
 	// OR matches OR groups. The forward rule's OR B-side does NOT match
 	// individual AND groups in BtoA, so reverse rules handle those.
 	m := newCorpusMapper(t,
-		// Forward: Entertainment → OR-of-ANDs (complex B-side, for AtoB)
+		// Forward: Entertainment -> OR-of-ANDs (complex B-side, for AtoB)
 		"genre=Entertainment <> ((textClass=kultur & textClass=musik) | (textClass=kultur & textClass=film))",
-		// Reverse aggregated: (Entertainment | Culture) → AND (for BtoA with (k&f))
+		// Reverse aggregated: (Entertainment | Culture) -> AND (for BtoA with (k&f))
 		"(genre=Entertainment | genre=Culture) <> (textClass=kultur & textClass=film)",
-		// Reverse individual: Entertainment → AND (for BtoA with (k&m))
+		// Reverse individual: Entertainment -> AND (for BtoA with (k&m))
 		"genre=Entertainment <> (textClass=kultur & textClass=musik)",
 	)
 

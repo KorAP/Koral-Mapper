@@ -487,11 +487,11 @@ type Rewriteable interface {
 	SetRewrites([]Rewrite)
 }
 
-func (t *Term) GetRewrites() []Rewrite      { return t.Rewrites }
-func (t *Term) SetRewrites(r []Rewrite)      { t.Rewrites = r }
-func (tg *TermGroup) GetRewrites() []Rewrite { return tg.Rewrites }
+func (t *Term) GetRewrites() []Rewrite        { return t.Rewrites }
+func (t *Term) SetRewrites(r []Rewrite)       { t.Rewrites = r }
+func (tg *TermGroup) GetRewrites() []Rewrite  { return tg.Rewrites }
 func (tg *TermGroup) SetRewrites(r []Rewrite) { tg.Rewrites = r }
-func (t *Token) GetRewrites() []Rewrite      { return t.Rewrites }
+func (t *Token) GetRewrites() []Rewrite       { return t.Rewrites }
 func (t *Token) SetRewrites(r []Rewrite)      { t.Rewrites = r }
 
 // AppendRewrite appends a rewrite to any Rewriteable node.
@@ -499,6 +499,36 @@ func (t *Token) SetRewrites(r []Rewrite)      { t.Rewrites = r }
 func AppendRewrite(node Node, rw Rewrite) {
 	if r, ok := node.(Rewriteable); ok {
 		r.SetRewrites(append(r.GetRewrites(), rw))
+	}
+}
+
+// Specificity returns the specificity score of an AST node.
+// Specificity is the count of AND-connected leaf constraints:
+//   - Term -> 1
+//   - TermGroup(AND) -> sum of Specificity of all operands
+//   - TermGroup(OR) -> 0 (alternatives, not additional constraints)
+//   - Token -> Specificity(Wrap)
+//   - CatchallNode / nil -> 0
+func Specificity(node Node) int {
+	if node == nil {
+		return 0
+	}
+	switch n := node.(type) {
+	case *Term:
+		return 1
+	case *TermGroup:
+		if n.Relation == AndRelation {
+			total := 0
+			for _, op := range n.Operands {
+				total += Specificity(op)
+			}
+			return total
+		}
+		return 0
+	case *Token:
+		return Specificity(n.Wrap)
+	default:
+		return 0
 	}
 }
 

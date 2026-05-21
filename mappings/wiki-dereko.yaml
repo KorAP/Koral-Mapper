@@ -78,13 +78,13 @@ mappings:
   - "Technology <> (wissenschaft & populaerwissenschaft)"
   # Universe (1967 files): wissenschaft.populaerwissenschaft=41.1%
   - "Universe <> (wissenschaft & populaerwissenschaft)"
-  # freizeit-unterhaltung.reisen → History, Geography, Culture (AND)
+  # freizeit-unterhaltung.reisen -> History, Geography, Culture (AND)
   - "(History | Geography | Culture) <> (freizeit-unterhaltung & reisen)"
-  # technik-industrie.edv-elektronik → Entities, Internet (AND)
+  # technik-industrie.edv-elektronik -> Entities, Internet (AND)
   - "(Entities | Internet) <> (technik-industrie & edv-elektronik)"
-  # kultur.literatur → Language, History (AND)
+  # kultur.literatur -> Language, History (AND)
   - "(Language | History) <> (kultur & literatur)"
-  # politik.ausland → Law, Military (AND)
+  # politik.ausland -> Law, Military (AND)
   - "(Law | Military) <> (politik & ausland)"
   # Health (1952 files): gesundheit-ernaehrung.gesundheit=28.7%
   - "Health <> (gesundheit-ernaehrung & gesundheit)"

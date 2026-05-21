@@ -2634,7 +2634,7 @@ func TestRateLimitingEnforced(t *testing.T) {
 	// to verify enforcement.
 	var lastStatus int
 	exceeded := false
-	for i := 0; i < 150; i++ {
+	for range 150 {
 		req := httptest.NewRequest(http.MethodGet, "/health", nil)
 		resp, err := app.Test(req)
 		require.NoError(t, err)
@@ -2671,7 +2671,7 @@ func TestRateLimitingConfigurable(t *testing.T) {
 	setupRoutes(app, m, mockConfig)
 
 	// With a limit of 5, the 6th request should be rejected
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		req := httptest.NewRequest(http.MethodGet, "/health", nil)
 		resp, err := app.Test(req)
 		require.NoError(t, err)

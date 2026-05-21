@@ -2,6 +2,7 @@ package mapper
 
 import (
 	"encoding/json"
+	"os"
 	"testing"
 
 	"github.com/KorAP/Koral-Mapper/ast"
@@ -9,6 +10,7 @@ import (
 	"github.com/KorAP/Koral-Mapper/matcher"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
 )
 
 func TestMapper(t *testing.T) {
@@ -1307,5 +1309,666 @@ func TestIdenticalEffectiveValuesResponseEndpoint(t *testing.T) {
 		_, err = m.ApplyResponseMappings("test", MappingOptions{Direction: AtoB}, input)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "identical source and target field")
+	})
+}
+
+func newSTTSUPoSMapper(t *testing.T) *Mapper {
+	t.Helper()
+	data, err := os.ReadFile("../mappings/stts-upos.yaml")
+	require.NoError(t, err, "failed to read stts-upos.yaml from disk")
+
+	var mappingList config.MappingList
+	err = yaml.Unmarshal(data, &mappingList)
+	require.NoError(t, err, "failed to parse stts-upos.yaml")
+
+	m, err := NewMapper([]config.MappingList{mappingList})
+	require.NoError(t, err)
+	return m
+}
+
+func TestFallbackRules(t *testing.T) {
+	m := newSTTSUPoSMapper(t)
+
+	t.Run("Bare ADJ (BtoA) maps to ADJA|ADJD disjunction", func(t *testing.T) {
+		input := `{
+			"@type": "koral:token",
+			"wrap": {
+				"@type": "koral:term",
+				"foundry": "upos",
+				"key": "ADJ",
+				"layer": "p",
+				"match": "match:eq"
+			}
+		}`
+		var inputData any
+		err := json.Unmarshal([]byte(input), &inputData)
+		require.NoError(t, err)
+
+		result, err := m.ApplyQueryMappings("stts-upos", MappingOptions{Direction: BtoA}, inputData)
+		require.NoError(t, err)
+
+		resultMap := result.(map[string]any)
+		wrap := resultMap["wrap"].(map[string]any)
+		assert.Equal(t, "koral:termGroup", wrap["@type"])
+		assert.Equal(t, "relation:or", wrap["relation"])
+		operands := wrap["operands"].([]any)
+		assert.Len(t, operands, 2)
+		keys := []string{
+			operands[0].(map[string]any)["key"].(string),
+			operands[1].(map[string]any)["key"].(string),
+		}
+		assert.Contains(t, keys, "ADJA")
+		assert.Contains(t, keys, "ADJD")
+	})
+
+	t.Run("ADJ & Variant=Short (BtoA) maps to ADJD only", func(t *testing.T) {
+		input := `{
+			"@type": "koral:token",
+			"wrap": {
+				"@type": "koral:termGroup",
+				"operands": [
+					{
+						"@type": "koral:term",
+						"foundry": "upos",
+						"key": "ADJ",
+						"layer": "p",
+						"match": "match:eq"
+					},
+					{
+						"@type": "koral:term",
+						"foundry": "upos",
+						"key": "Short",
+						"layer": "Variant",
+						"match": "match:eq"
+					}
+				],
+				"relation": "relation:and"
+			}
+		}`
+		var inputData any
+		err := json.Unmarshal([]byte(input), &inputData)
+		require.NoError(t, err)
+
+		result, err := m.ApplyQueryMappings("stts-upos", MappingOptions{Direction: BtoA}, inputData)
+		require.NoError(t, err)
+
+		resultMap := result.(map[string]any)
+		wrap := resultMap["wrap"].(map[string]any)
+		assert.Equal(t, "koral:term", wrap["@type"])
+		assert.Equal(t, "ADJD", wrap["key"])
+	})
+
+	t.Run("Bare DET (BtoA) maps to DET subtypes disjunction", func(t *testing.T) {
+		input := `{
+			"@type": "koral:token",
+			"wrap": {
+				"@type": "koral:term",
+				"foundry": "upos",
+				"key": "DET",
+				"layer": "p",
+				"match": "match:eq"
+			}
+		}`
+		var inputData any
+		err := json.Unmarshal([]byte(input), &inputData)
+		require.NoError(t, err)
+
+		result, err := m.ApplyQueryMappings("stts-upos", MappingOptions{Direction: BtoA}, inputData)
+		require.NoError(t, err)
+
+		resultMap := result.(map[string]any)
+		wrap := resultMap["wrap"].(map[string]any)
+		assert.Equal(t, "koral:termGroup", wrap["@type"])
+		assert.Equal(t, "relation:or", wrap["relation"])
+		operands := wrap["operands"].([]any)
+		assert.Len(t, operands, 7)
+		var keys []string
+		for _, op := range operands {
+			keys = append(keys, op.(map[string]any)["key"].(string))
+		}
+		assert.Contains(t, keys, "ART")
+		assert.Contains(t, keys, "PDAT")
+		assert.Contains(t, keys, "PWAT")
+	})
+
+	t.Run("DET & PronType=Art (BtoA) maps to ART only", func(t *testing.T) {
+		input := `{
+			"@type": "koral:token",
+			"wrap": {
+				"@type": "koral:termGroup",
+				"operands": [
+					{
+						"@type": "koral:term",
+						"foundry": "upos",
+						"key": "DET",
+						"layer": "p",
+						"match": "match:eq"
+					},
+					{
+						"@type": "koral:term",
+						"foundry": "upos",
+						"key": "Art",
+						"layer": "PronType",
+						"match": "match:eq"
+					}
+				],
+				"relation": "relation:and"
+			}
+		}`
+		var inputData any
+		err := json.Unmarshal([]byte(input), &inputData)
+		require.NoError(t, err)
+
+		result, err := m.ApplyQueryMappings("stts-upos", MappingOptions{Direction: BtoA}, inputData)
+		require.NoError(t, err)
+
+		resultMap := result.(map[string]any)
+		wrap := resultMap["wrap"].(map[string]any)
+		assert.Equal(t, "koral:term", wrap["@type"])
+		assert.Equal(t, "ART", wrap["key"])
+	})
+
+	t.Run("Bare SCONJ (BtoA) maps to KOUI|KOUS disjunction", func(t *testing.T) {
+		input := `{
+			"@type": "koral:token",
+			"wrap": {
+				"@type": "koral:term",
+				"foundry": "upos",
+				"key": "SCONJ",
+				"layer": "p",
+				"match": "match:eq"
+			}
+		}`
+		var inputData any
+		err := json.Unmarshal([]byte(input), &inputData)
+		require.NoError(t, err)
+
+		result, err := m.ApplyQueryMappings("stts-upos", MappingOptions{Direction: BtoA}, inputData)
+		require.NoError(t, err)
+
+		resultMap := result.(map[string]any)
+		wrap := resultMap["wrap"].(map[string]any)
+		assert.Equal(t, "koral:termGroup", wrap["@type"])
+		assert.Equal(t, "relation:or", wrap["relation"])
+		operands := wrap["operands"].([]any)
+		assert.Len(t, operands, 2)
+	})
+
+	t.Run("Bare VERB (BtoA) maps to STTS verb subtypes disjunction", func(t *testing.T) {
+		input := `{
+			"@type": "koral:token",
+			"wrap": {
+				"@type": "koral:term",
+				"foundry": "upos",
+				"key": "VERB",
+				"layer": "p",
+				"match": "match:eq"
+			}
+		}`
+		var inputData any
+		err := json.Unmarshal([]byte(input), &inputData)
+		require.NoError(t, err)
+
+		result, err := m.ApplyQueryMappings("stts-upos", MappingOptions{Direction: BtoA}, inputData)
+		require.NoError(t, err)
+
+		resultMap := result.(map[string]any)
+		wrap := resultMap["wrap"].(map[string]any)
+		assert.Equal(t, "koral:termGroup", wrap["@type"])
+		assert.Equal(t, "relation:or", wrap["relation"])
+		operands := wrap["operands"].([]any)
+		assert.Len(t, operands, 8)
+	})
+
+	t.Run("Bare AUX (BtoA) maps to AUX subtypes disjunction", func(t *testing.T) {
+		input := `{
+			"@type": "koral:token",
+			"wrap": {
+				"@type": "koral:term",
+				"foundry": "upos",
+				"key": "AUX",
+				"layer": "p",
+				"match": "match:eq"
+			}
+		}`
+		var inputData any
+		err := json.Unmarshal([]byte(input), &inputData)
+		require.NoError(t, err)
+
+		result, err := m.ApplyQueryMappings("stts-upos", MappingOptions{Direction: BtoA}, inputData)
+		require.NoError(t, err)
+
+		resultMap := result.(map[string]any)
+		wrap := resultMap["wrap"].(map[string]any)
+		assert.Equal(t, "koral:termGroup", wrap["@type"])
+		assert.Equal(t, "relation:or", wrap["relation"])
+		operands := wrap["operands"].([]any)
+		assert.Len(t, operands, 4)
+	})
+
+	t.Run("Forward direction AtoB: ADJA maps to ADJ", func(t *testing.T) {
+		input := `{
+			"@type": "koral:token",
+			"wrap": {
+				"@type": "koral:term",
+				"foundry": "opennlp",
+				"key": "ADJA",
+				"layer": "p",
+				"match": "match:eq"
+			}
+		}`
+		var inputData any
+		err := json.Unmarshal([]byte(input), &inputData)
+		require.NoError(t, err)
+
+		result, err := m.ApplyQueryMappings("stts-upos", MappingOptions{Direction: AtoB}, inputData)
+		require.NoError(t, err)
+
+		resultMap := result.(map[string]any)
+		wrap := resultMap["wrap"].(map[string]any)
+		assert.Equal(t, "koral:term", wrap["@type"])
+		assert.Equal(t, "ADJ", wrap["key"])
+	})
+
+	t.Run("Forward direction AtoB: ART maps to DET & PronType=Art", func(t *testing.T) {
+		input := `{
+			"@type": "koral:token",
+			"wrap": {
+				"@type": "koral:term",
+				"foundry": "opennlp",
+				"key": "ART",
+				"layer": "p",
+				"match": "match:eq"
+			}
+		}`
+		var inputData any
+		err := json.Unmarshal([]byte(input), &inputData)
+		require.NoError(t, err)
+
+		result, err := m.ApplyQueryMappings("stts-upos", MappingOptions{Direction: AtoB}, inputData)
+		require.NoError(t, err)
+
+		resultMap := result.(map[string]any)
+		wrap := resultMap["wrap"].(map[string]any)
+		assert.Equal(t, "koral:termGroup", wrap["@type"])
+		assert.Equal(t, "relation:and", wrap["relation"])
+	})
+}
+
+func TestOriginalProblemMultiTokenQuery(t *testing.T) {
+	m := newSTTSUPoSMapper(t)
+
+	t.Run("Multi-token [DET][ADJ][NOUN] BtoA produces correct disjunctions", func(t *testing.T) {
+		// This reproduces the exact problem from the issue:
+		// [upos/p=DET][upos/p=ADJ][upos/p=NOUN] mapped B->A
+		input := `{
+			"@type": "koral:group",
+			"operation": "operation:sequence",
+			"operands": [
+				{
+					"@type": "koral:token",
+					"wrap": {
+						"@type": "koral:term",
+						"foundry": "upos",
+						"key": "DET",
+						"layer": "p",
+						"match": "match:eq"
+					}
+				},
+				{
+					"@type": "koral:token",
+					"wrap": {
+						"@type": "koral:term",
+						"foundry": "upos",
+						"key": "ADJ",
+						"layer": "p",
+						"match": "match:eq"
+					}
+				},
+				{
+					"@type": "koral:token",
+					"wrap": {
+						"@type": "koral:term",
+						"foundry": "upos",
+						"key": "NOUN",
+						"layer": "p",
+						"match": "match:eq"
+					}
+				}
+			]
+		}`
+
+		var inputData any
+		err := json.Unmarshal([]byte(input), &inputData)
+		require.NoError(t, err)
+
+		result, err := m.ApplyQueryMappings("stts-upos", MappingOptions{Direction: BtoA}, inputData)
+		require.NoError(t, err)
+
+		resultMap := result.(map[string]any)
+		operands := resultMap["operands"].([]any)
+		require.Len(t, operands, 3)
+
+		// Token 1: DET -> ART | PDAT | PIAT | PIDAT | PPOSAT | PRELAT | PWAT
+		token1 := operands[0].(map[string]any)
+		wrap1 := token1["wrap"].(map[string]any)
+		assert.Equal(t, "koral:termGroup", wrap1["@type"], "DET should be mapped to OR group")
+		assert.Equal(t, "relation:or", wrap1["relation"])
+		ops1 := wrap1["operands"].([]any)
+		assert.Len(t, ops1, 7, "DET fallback should have 7 alternatives")
+
+		// Token 2: ADJ -> ADJA | ADJD
+		token2 := operands[1].(map[string]any)
+		wrap2 := token2["wrap"].(map[string]any)
+		assert.Equal(t, "koral:termGroup", wrap2["@type"], "ADJ should be mapped to OR group")
+		assert.Equal(t, "relation:or", wrap2["relation"])
+		ops2 := wrap2["operands"].([]any)
+		assert.Len(t, ops2, 2, "ADJ fallback should have 2 alternatives")
+
+		adjKeys := []string{
+			ops2[0].(map[string]any)["key"].(string),
+			ops2[1].(map[string]any)["key"].(string),
+		}
+		assert.Contains(t, adjKeys, "ADJA")
+		assert.Contains(t, adjKeys, "ADJD")
+
+		// Token 3: NOUN -> NN (specific rule, not fallback, because
+		// [NN] <> [NOUN] has specificity 1 and [NN | NE] <> [NOUN | PROPN]
+		// has pattern specificity 0 on B-side (OR group))
+		token3 := operands[2].(map[string]any)
+		wrap3 := token3["wrap"].(map[string]any)
+		assert.Equal(t, "koral:term", wrap3["@type"], "NOUN should map to single NN term")
+		assert.Equal(t, "NN", wrap3["key"])
+	})
+
+	t.Run("Specific input [ADJ & Variant=Short] maps to ADJD only", func(t *testing.T) {
+		input := `{
+			"@type": "koral:token",
+			"wrap": {
+				"@type": "koral:termGroup",
+				"operands": [
+					{
+						"@type": "koral:term",
+						"foundry": "upos",
+						"key": "ADJ",
+						"layer": "p",
+						"match": "match:eq"
+					},
+					{
+						"@type": "koral:term",
+						"foundry": "upos",
+						"key": "Short",
+						"layer": "Variant",
+						"match": "match:eq"
+					}
+				],
+				"relation": "relation:and"
+			}
+		}`
+
+		var inputData any
+		err := json.Unmarshal([]byte(input), &inputData)
+		require.NoError(t, err)
+
+		result, err := m.ApplyQueryMappings("stts-upos", MappingOptions{Direction: BtoA}, inputData)
+		require.NoError(t, err)
+
+		resultMap := result.(map[string]any)
+		wrap := resultMap["wrap"].(map[string]any)
+		assert.Equal(t, "koral:term", wrap["@type"])
+		assert.Equal(t, "ADJD", wrap["key"])
+	})
+
+	t.Run("Specific input [DET & PronType=Art] maps to ART only", func(t *testing.T) {
+		input := `{
+			"@type": "koral:token",
+			"wrap": {
+				"@type": "koral:termGroup",
+				"operands": [
+					{
+						"@type": "koral:term",
+						"foundry": "upos",
+						"key": "DET",
+						"layer": "p",
+						"match": "match:eq"
+					},
+					{
+						"@type": "koral:term",
+						"foundry": "upos",
+						"key": "Art",
+						"layer": "PronType",
+						"match": "match:eq"
+					}
+				],
+				"relation": "relation:and"
+			}
+		}`
+
+		var inputData any
+		err := json.Unmarshal([]byte(input), &inputData)
+		require.NoError(t, err)
+
+		result, err := m.ApplyQueryMappings("stts-upos", MappingOptions{Direction: BtoA}, inputData)
+		require.NoError(t, err)
+
+		resultMap := result.(map[string]any)
+		wrap := resultMap["wrap"].(map[string]any)
+		assert.Equal(t, "koral:term", wrap["@type"])
+		assert.Equal(t, "ART", wrap["key"])
+	})
+}
+
+func TestSpecificityBasedRuleSelection(t *testing.T) {
+	t.Run("More specific rule wins over less specific", func(t *testing.T) {
+		mappingList := config.MappingList{
+			ID:       "spec-test",
+			FoundryA: "opennlp",
+			LayerA:   "p",
+			FoundryB: "upos",
+			LayerB:   "p",
+			Mappings: []config.MappingRule{
+				"[ADJA] <> [ADJ]",
+				"[ADJD] <> [ADJ & Variant=Short]",
+			},
+		}
+
+		m, err := NewMapper([]config.MappingList{mappingList})
+		require.NoError(t, err)
+
+		// Input: ADJ & Variant=Short — matches the internal representation
+		// where "Variant=Short" is parsed as layer="Variant", key="Short"
+		input := `{
+			"@type": "koral:token",
+			"wrap": {
+				"@type": "koral:termGroup",
+				"operands": [
+					{
+						"@type": "koral:term",
+						"foundry": "upos",
+						"key": "ADJ",
+						"layer": "p",
+						"match": "match:eq"
+					},
+					{
+						"@type": "koral:term",
+						"foundry": "upos",
+						"key": "Short",
+						"layer": "Variant",
+						"match": "match:eq"
+					}
+				],
+				"relation": "relation:and"
+			}
+		}`
+
+		var inputData any
+		err = json.Unmarshal([]byte(input), &inputData)
+		require.NoError(t, err)
+
+		result, err := m.ApplyQueryMappings("spec-test", MappingOptions{Direction: BtoA}, inputData)
+		require.NoError(t, err)
+
+		resultMap := result.(map[string]any)
+		wrap := resultMap["wrap"].(map[string]any)
+		assert.Equal(t, "koral:term", wrap["@type"])
+		assert.Equal(t, "ADJD", wrap["key"])
+	})
+
+	t.Run("Same specificity - first rule in file order wins", func(t *testing.T) {
+		mappingList := config.MappingList{
+			ID:       "tie-test",
+			FoundryA: "opennlp",
+			LayerA:   "p",
+			FoundryB: "upos",
+			LayerB:   "p",
+			Mappings: []config.MappingRule{
+				"[KOUI] <> [SCONJ]",
+				"[KOUS] <> [SCONJ]",
+			},
+		}
+
+		m, err := NewMapper([]config.MappingList{mappingList})
+		require.NoError(t, err)
+
+		input := `{
+			"@type": "koral:token",
+			"wrap": {
+				"@type": "koral:term",
+				"foundry": "upos",
+				"key": "SCONJ",
+				"layer": "p",
+				"match": "match:eq"
+			}
+		}`
+
+		var inputData any
+		err = json.Unmarshal([]byte(input), &inputData)
+		require.NoError(t, err)
+
+		result, err := m.ApplyQueryMappings("tie-test", MappingOptions{Direction: BtoA}, inputData)
+		require.NoError(t, err)
+
+		resultMap := result.(map[string]any)
+		wrap := resultMap["wrap"].(map[string]any)
+		assert.Equal(t, "KOUI", wrap["key"])
+	})
+
+	t.Run("Single matching rule - identical to first-match-wins", func(t *testing.T) {
+		mappingList := config.MappingList{
+			ID:       "single-test",
+			FoundryA: "opennlp",
+			LayerA:   "p",
+			FoundryB: "upos",
+			LayerB:   "p",
+			Mappings: []config.MappingRule{
+				"[NN] <> [NOUN]",
+			},
+		}
+
+		m, err := NewMapper([]config.MappingList{mappingList})
+		require.NoError(t, err)
+
+		input := `{
+			"@type": "koral:token",
+			"wrap": {
+				"@type": "koral:term",
+				"foundry": "upos",
+				"key": "NOUN",
+				"layer": "p",
+				"match": "match:eq"
+			}
+		}`
+
+		var inputData any
+		err = json.Unmarshal([]byte(input), &inputData)
+		require.NoError(t, err)
+
+		result, err := m.ApplyQueryMappings("single-test", MappingOptions{Direction: BtoA}, inputData)
+		require.NoError(t, err)
+
+		resultMap := result.(map[string]any)
+		wrap := resultMap["wrap"].(map[string]any)
+		assert.Equal(t, "NN", wrap["key"])
+	})
+
+	t.Run("No matching rule - node passes through unchanged", func(t *testing.T) {
+		mappingList := config.MappingList{
+			ID:       "nomatch-test",
+			FoundryA: "opennlp",
+			LayerA:   "p",
+			FoundryB: "upos",
+			LayerB:   "p",
+			Mappings: []config.MappingRule{
+				"[NN] <> [NOUN]",
+			},
+		}
+
+		m, err := NewMapper([]config.MappingList{mappingList})
+		require.NoError(t, err)
+
+		input := `{
+			"@type": "koral:token",
+			"wrap": {
+				"@type": "koral:term",
+				"foundry": "upos",
+				"key": "VERB",
+				"layer": "p",
+				"match": "match:eq"
+			}
+		}`
+
+		var inputData any
+		err = json.Unmarshal([]byte(input), &inputData)
+		require.NoError(t, err)
+
+		result, err := m.ApplyQueryMappings("nomatch-test", MappingOptions{Direction: BtoA}, inputData)
+		require.NoError(t, err)
+
+		resultMap := result.(map[string]any)
+		wrap := resultMap["wrap"].(map[string]any)
+		assert.Equal(t, "VERB", wrap["key"])
+	})
+
+	t.Run("Fallback OR-disjunction rule loses to specific rule", func(t *testing.T) {
+		mappingList := config.MappingList{
+			ID:       "fallback-test",
+			FoundryA: "opennlp",
+			LayerA:   "p",
+			FoundryB: "upos",
+			LayerB:   "p",
+			Mappings: []config.MappingRule{
+				"[ADJA] <> [ADJ]",
+				"[ADJA | ADJD] <> [ADJ]",
+			},
+		}
+
+		m, err := NewMapper([]config.MappingList{mappingList})
+		require.NoError(t, err)
+
+		input := `{
+			"@type": "koral:token",
+			"wrap": {
+				"@type": "koral:term",
+				"foundry": "upos",
+				"key": "ADJ",
+				"layer": "p",
+				"match": "match:eq"
+			}
+		}`
+
+		var inputData any
+		err = json.Unmarshal([]byte(input), &inputData)
+		require.NoError(t, err)
+
+		result, err := m.ApplyQueryMappings("fallback-test", MappingOptions{Direction: BtoA}, inputData)
+		require.NoError(t, err)
+
+		// Both rules match with pattern specificity 1 on B-side.
+		// Rule 1 replacement specificity = 1 (Term), Rule 2 replacement specificity = 0 (OR group).
+		// Lower replacement specificity wins (broader/fallback output) => rule 2 wins.
+		resultMap := result.(map[string]any)
+		wrap := resultMap["wrap"].(map[string]any)
+		assert.Equal(t, "koral:termGroup", wrap["@type"])
+		assert.Equal(t, "relation:or", wrap["relation"])
 	})
 }

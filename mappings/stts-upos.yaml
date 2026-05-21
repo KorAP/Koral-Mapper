@@ -59,4 +59,19 @@ mappings:
   - "[VVIZU] <> [VERB	& VerbForm=Inf]"
   - "[VVPP] <> [VERB & Aspect=Perf & VerbForm=Part]"
   - "[XY] <> [X]"
+  # Fallback rules for bare UPoS tags (less specific, selected only when no
+  # more-specific rule matches)
+  - "[ADJA | ADJD] <> [ADJ]"
+  - "[ART | PDAT | PIAT | PIDAT | PPOSAT | PRELAT | PWAT] <> [DET]"
+  - "[KOUI | KOUS] <> [SCONJ]"
+  - "[VVFIN | VVIMP | VVINF | VVIZU | VVPP | VMFIN | VMINF | VMPP] <> [VERB]"
+  - "[VAFIN | VAIMP | VAINF | VAPP] <> [AUX]"
+  - "[APPO | APPR | APPRART | APZR | PTKVZ] <> [ADP]"
+  - "[PDS | PIS | PPER | PPOSS | PRELS | PRF | PWS] <> [PRON]"
+  - "[PTKA | PTKANT | PTKNEG | PTKZU] <> [PART]"
+  - "[FM | TRUNC | XY] <> [X]"
+  - "[$\\( | $, | $.] <> [PUNCT]"
+  - "[KON | KOKOM] <> [CCONJ]"
+  - "[ADV | PAV | PWAV] <> [ADV]"
+  - "[NN | NE] <> [NOUN | PROPN]"
 

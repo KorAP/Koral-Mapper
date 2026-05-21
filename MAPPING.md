@@ -50,6 +50,41 @@ mappings:
   - "[PIAT] <> [DET & (PronType=Ind | PronType=Neg | PronType=Tot)]"
 ```
 
+### Recall vs Precision: Fallback Rules
+
+Most mapping rule formulations focus on **increased recall** rather than
+precision. When a user searches for a broad category like `[upos/p=ADJ]`,
+they typically want to find *all* adjectives - both attributive (`ADJA`) and
+predicative (`ADJD`) in STTS terms. To support this, mapping files can include
+**fallback rules** that expand a bare category into a disjunction of all its
+subtypes:
+
+```yaml
+mappings:
+  # Precise rules (match when features are specified)
+  - "[ADJA] <> [ADJ]"
+  - "[ADJD] <> [ADJ & Variant=Short]"
+  # Fallback rule (broad recall for bare category)
+  - "[ADJA | ADJD] <> [ADJ]"
+```
+
+With this configuration:
+
+- `[upos/p=ADJ]` (B->A) produces `opennlp/p=ADJA | opennlp/p=ADJD` - the
+  fallback rule fires because no precise rule is a better match.
+- `[upos/p=ADJ & upos/p=Variant:Short]` (B->A) produces `opennlp/p=ADJD`
+  - the precise rule wins because it matches more constraints.
+- `[opennlp/p=ADJA]` (A->B) produces `upos/p=ADJ` - the precise rule wins.
+
+When multiple rules match the same input, the mapper automatically picks the
+**most specific** one (the rule whose pattern matches the most constraints).
+Among equally specific rules, it prefers the one with the **broader
+replacement** (e.g. an OR disjunction over a single term). If there is still
+a tie, rule file order decides.
+
+Response mapping is not affected - the response path already adds annotations
+for every matching rule independently.
+
 ### Foundry and Layer Precedence
 
 Koral-Mapper follows a strict precedence hierarchy when determining which foundry and layer values to use during mapping transformations:
@@ -100,11 +135,11 @@ Rules can use AND (`&`) and OR (`|`) groups on either side:
 
 ```yaml
 mappings:
-  # Single field → AND group
+  # Single field -> AND group
   - "textClass=novel <> (genre=fiction & type=book)"
-  # AND group → single field (matches AND docGroups via subset matching)
+  # AND group -> single field (matches AND docGroups via subset matching)
   - "genre=fiction <> (textClass=kultur & textClass=musik)"
-  # OR group → single field (matches individual docs or OR docGroups)
+  # OR group -> single field (matches individual docs or OR docGroups)
   - "(genre=fiction | genre=novel) <> textClass=belletristik"
   # Complex: OR-of-AND on B-side
   - "Entertainment <> ((kultur & musik) | (kultur & film))"
@@ -133,7 +168,7 @@ mappings:
 
 ### Matching Semantics
 
-#### Query rewriting — iterative rule application
+#### Query rewriting - iterative rule application
 
 Corpus rules are applied **iteratively**: each rule is applied to the **entire tree** in order, and subsequent rules see the **transformed result** of all previous rules. This means multiple rules can transform successive AST states, just like the annotation matcher.
 
@@ -144,13 +179,13 @@ For each rule, the matcher tries matching at the current node first. If no match
 OR patterns like `(a | b)` match in two ways:
 
 - **Leaf nodes** (`koral:doc` / `koral:field`): An OR pattern matches if **any operand** matches the leaf. For example, the pattern `(Entertainment | Culture)` matches a single `koral:doc` with value `Entertainment`.
-- **Group nodes** (`koral:docGroup` / `koral:fieldGroup`): Structural matching — the node must be an OR group with **exactly** the same operands (commutative, exact count).
+- **Group nodes** (`koral:docGroup` / `koral:fieldGroup`): Structural matching - the node must be an OR group with **exactly** the same operands (commutative, exact count).
 
 #### AND pattern matching (subset)
 
 AND patterns like `(a & b)` use **subset matching**: the node must be an AND `koral:docGroup` / `koral:fieldGroup` containing **at least** all pattern operands. Extra operands beyond the pattern are preserved alongside the replacement.
 
-For example, if the rule is `genre=fiction <> (textClass=kultur & textClass=musik)` and the input is `AND(textClass=kultur, textClass=musik, pubDate=2020)`, the AND pattern matches (subset of 3 operands), and the result is `AND(genre=fiction, pubDate=2020)` — the replacement plus the preserved extra operand.
+For example, if the rule is `genre=fiction <> (textClass=kultur & textClass=musik)` and the input is `AND(textClass=kultur, textClass=musik, pubDate=2020)`, the AND pattern matches (subset of 3 operands), and the result is `AND(genre=fiction, pubDate=2020)` - the replacement plus the preserved extra operand.
 
 If all operands match (no extras), the group is replaced entirely by the replacement node.
 
@@ -159,13 +194,13 @@ If all operands match (no extras), the group is replaced entirely by the replace
 For response field enrichment, the matching rules work as follows:
 
 - **Pattern matching**: Field patterns match directly. OR group patterns match a single response field if **any operand** matches. AND group patterns **cannot** match a single field and are skipped.
-- **Replacement collection**: AND group replacements are **flattened** — all operands become individual `koral:field` entries. OR group replacements are **skipped** because response fields are flat key/value entries and OR semantics (one-of) cannot be represented.
+- **Replacement collection**: AND group replacements are **flattened** - all operands become individual `koral:field` entries. OR group replacements are **skipped** because response fields are flat key/value entries and OR semantics (one-of) cannot be represented.
 
 Examples:
-- `(a | b) <> (c & d)` — when field `a` is in the response, both `c` and `d` are added.
-- `(a | b) <> (c | d)` — when field `a` is in the response, nothing is added (OR replacement skipped).
-- `a <> (c & d)` — when field `a` is in the response, both `c` and `d` are added.
-- `a <> c` — when field `a` is in the response, `c` is added.
+- `(a | b) <> (c & d)` - when field `a` is in the response, both `c` and `d` are added.
+- `(a | b) <> (c | d)` - when field `a` is in the response, nothing is added (OR replacement skipped).
+- `a <> (c & d)` - when field `a` is in the response, both `c` and `d` are added.
+- `a <> c` - when field `a` is in the response, `c` is added.
 
 (Supported `@type` aliases: `koral:field` for `koral:doc`, `koral:fieldGroup` for `koral:docGroup`).
 
@@ -173,8 +208,8 @@ Examples:
 
 Rules should be ordered from **most specific to most general** (by total leaf count across both sides, descending). Because rules are applied iteratively, more specific rules should appear first to transform the AST before more general rules get a chance to match. Generated mapping files typically contain complementary rule types such as:
 
-1. **Aggregated rules** with OR-of-AND groups — match exact complex structures
-2. **Individual group rules** with AND patterns — match individual `koral:docGroup` nodes (subset matching)
+1. **Aggregated rules** with OR-of-AND groups - match exact complex structures
+2. **Individual group rules** with AND patterns - match individual `koral:docGroup` nodes (subset matching)
 
 ### Iterative Application and Rule Chaining
 
@@ -192,7 +227,7 @@ This also means that for bidirectional mappings, you often need complementary ru
 
 ```yaml
 mappings:
-  # Forward: source category → OR-of-AND target categories (for AtoB)
+  # Forward: source category -> OR-of-AND target categories (for AtoB)
   - "Entertainment <> ((kultur & musik) | (kultur & film))"
   # Reverse AND: multiple source categories ← AND group (for BtoA with AND input)
   - "(Entertainment | Culture) <> (kultur & film)"
