@@ -321,6 +321,30 @@ The SDK script and server data-attribute in the HTML are determined by the confi
 
 Health check endpoint. Returns `OK` with HTTP 200.
 
+## Kalamar Plugin Registration
+
+To register Koral-Mapper as a Kalamar plugin, a JSON manifest must be provided to the Kalamar plugin system. The manifest specifies how the plugin is embedded and what permissions it requires. For example:
+
+```json
+{
+  "name": "Koral-Mapper",
+  "desc": "Rewrites annotation terms in queries and responses",
+  "embed": [{
+    "panel": "query",
+    "title": "Term Mapper Configuration",
+    "icon": "\uf074",
+    "classes": ["button-icon", "plugin"],
+    "onClick": {
+      "action": "addWidget",
+      "template": "https://korap.ids-mannheim.de/plugin/koralmapper/",
+      "permissions": ["scripts", "forms", "same-origin"]
+    }
+  }]
+}
+```
+
+Adjust the `template` URL to match your deployment's `serviceURL`.
+
 ## Supported Mappings
 
 ### `mappings/stts-upos.yaml`
