@@ -1,0 +1,20 @@
+# This CITATION.cff file was generated with cffinit.
+# Visit https://bit.ly/cffinit to generate yours today!
+
+cff-version: 1.2.0
+title: Koral-Mapper
+message: >-
+  If you use this software, please cite it using the
+  metadata from this file.
+type: software
+authors:
+  - given-names: Nils
+    family-names: Diewald
+    affiliation: Leibniz Institute for the German Language
+    orcid: 'https://orcid.org/0000-0002-2993-9180'
+repository-code: 'https://github.com/KorAP/Koral-Mapper'
+url: 'https://korap.ids-mannheim.de/'
+abstract: >-
+  Service using the KoralPipe mechanism to map between
+  different annotation and metadata schemes 
+license: BSD-2-Clause
