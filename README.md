@@ -12,6 +12,10 @@ Koral-Mapper is a tool for transforming linguistic annotations between different
 
 ## Installation
 
+The easiest way to install Koral-Mapper for deployment is using [Docker](https://hub.docker.com/r/korap/koral-mapper).
+
+For development purposes or non-docker environments, use
+
 ```bash
 go get github.com/KorAP/Koral-Mapper
 ```
