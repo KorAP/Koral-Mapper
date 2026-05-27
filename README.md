@@ -1,5 +1,7 @@
 # Koral-Mapper
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20340398.svg)](https://doi.org/10.5281/zenodo.20340398)
+
 A KorAP service using the KoralPipe mechanism to rewrite terms in queries and responses between different annotations.
 
 ![Koral-Mapper Screenshot](https://raw.githubusercontent.com/KorAP/Koral-Mapper/main/misc/koral-mapper.png)
