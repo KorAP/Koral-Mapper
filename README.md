@@ -71,11 +71,12 @@ serviceURL: "https://korap.ids-mannheim.de/plugin/koralmapper"
 # Optional: Maximum requests per minute per IP for rate limiting (default: 100)
 rateLimit: 100
 
-# Optional: Comma-separated list of allowed CORS origins.
+# Optional: List of allowed CORS origins.
 # Defaults to the server value (trailing slash stripped).
 # Required when the service is called cross-origin (e.g. as a Kalamar plugin in an iframe).
 # Use "*" to allow all origins (not recommended for production).
-allowOrigins: "https://korap.ids-mannheim.de"
+allowOrigins:
+  - "https://korap.ids-mannheim.de"
 
 # Optional: Base path for file loading confinement (default: current working directory).
 # All config and mapping file paths must resolve within this directory or /tmp.
@@ -124,7 +125,7 @@ The `sdk`, `stylesheet`, `server`, `port`, `loglevel`, `rewrites`, and `basePath
 - **`loglevel`**: Log level (default: `warn`)
 - **`serviceURL`**: Service URL of the KoralMapper (default: `https://korap.ids-mannheim.de/plugin/koralmapper`)
 - **`rateLimit`**: Maximum number of requests per minute per IP address (default: `100`). When the limit is exceeded, the server responds with HTTP 429 (Too Many Requests).
-- **`allowOrigins`**: Comma-separated list of origins allowed for CORS (default: derived from `server` with trailing slash removed, e.g. `https://korap.ids-mannheim.de`). The service is designed to be called cross-origin as a Kalamar plugin loaded in iframes. This setting controls which origins may make cross-origin API requests. Allowed methods are `GET` and `POST`. The `Content-Type` header is permitted. Use `"*"` to allow all origins (not recommended for production).
+- **`allowOrigins`**: List of origins allowed for CORS (default: derived from `server` with trailing slash removed, e.g. `["https://korap.ids-mannheim.de"]`). Must be specified as a YAML list. The service is designed to be called cross-origin as a Kalamar plugin loaded in iframes. This setting controls which origins may make cross-origin API requests. Allowed methods are `GET` and `POST`. The `Content-Type` header is permitted. Use `["*"]` to allow all origins (not recommended for production).
 - **`rewrites`**: Global default for attaching `koral:rewrite` annotations (default: `false`). When `true`, all mapping lists will attach rewrite annotations unless individually overridden. See [Rewrites Resolution](#rewrites-resolution) for the full precedence chain.
 - **`basePath`**: Directory tree for file loading confinement (default: current working directory). Configuration and mapping files must resolve within this path or the system temp directory. Set to `"/"` to disable confinement. This prevents path traversal attacks (CWE-22).
 
@@ -143,7 +144,7 @@ All variables are optional and use the `KORAL_MAPPER_` prefix:
 - `KORAL_MAPPER_LOG_LEVEL`: Overrides `loglevel`
 - `KORAL_MAPPER_PORT`: Overrides `port` (integer)
 - `KORAL_MAPPER_RATE_LIMIT`: Overrides `rateLimit` (integer, requests per minute per IP)
-- `KORAL_MAPPER_ALLOW_ORIGINS`: Overrides `allowOrigins` (comma-separated list of allowed CORS origins)
+- `KORAL_MAPPER_ALLOW_ORIGINS`: Overrides `allowOrigins` (comma-separated string of allowed CORS origins, e.g. `https://a.com,https://b.com`)
 - `KORAL_MAPPER_REWRITES`: Overrides `rewrites` (`true` or `false`, global default for koral:rewrite annotations)
 - `KORAL_MAPPER_BASE_PATH`: Overrides `basePath` (directory path for file loading confinement)
 

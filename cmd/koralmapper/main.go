@@ -19,9 +19,9 @@ import (
 	"github.com/KorAP/Koral-Mapper/config"
 	"github.com/KorAP/Koral-Mapper/mapper"
 	"github.com/alecthomas/kong"
-	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/cors"
-	"github.com/gofiber/fiber/v2/middleware/limiter"
+	"github.com/gofiber/fiber/v3"
+	"github.com/gofiber/fiber/v3/middleware/cors"
+	"github.com/gofiber/fiber/v3/middleware/limiter"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
@@ -140,12 +140,12 @@ func setupFiberLogger() fiber.Handler {
 
 	// Only enable HTTP request logging if log level is debug or info
 	if currentLevel > zerolog.InfoLevel {
-		return func(c *fiber.Ctx) error {
+		return func(c fiber.Ctx) error {
 			return c.Next()
 		}
 	}
 
-	return func(c *fiber.Ctx) error {
+	return func(c fiber.Ctx) error {
 		// Record start time
 		start := time.Now()
 
@@ -179,9 +179,14 @@ func setupFiberLogger() fiber.Handler {
 }
 
 // extractRequestParams extracts and validates common request parameters
-func extractRequestParams(c *fiber.Ctx) (*requestParams, error) {
+func extractRequestParams(c fiber.Ctx) (*requestParams, error) {
+	mapID, err := url.PathUnescape(c.Params("map"))
+	if err != nil {
+		return nil, fmt.Errorf("mapID contains invalid characters")
+	}
+
 	params := &requestParams{
-		MapID:    c.Params("map"),
+		MapID:    mapID,
 		Dir:      c.Query("dir", "atob"),
 		FoundryA: c.Query("foundryA", ""),
 		FoundryB: c.Query("foundryB", ""),
@@ -208,9 +213,9 @@ func extractRequestParams(c *fiber.Ctx) (*requestParams, error) {
 }
 
 // parseRequestBody parses JSON request body and direction
-func parseRequestBody(c *fiber.Ctx, dir string) (any, mapper.Direction, error) {
+func parseRequestBody(c fiber.Ctx, dir string) (any, mapper.Direction, error) {
 	var jsonData any
-	if err := c.BodyParser(&jsonData); err != nil {
+	if err := c.Bind().Body(&jsonData); err != nil {
 		return nil, mapper.BtoA, fmt.Errorf("invalid JSON in request body")
 	}
 
@@ -280,10 +285,9 @@ func main() {
 
 	// Create fiber app
 	app := fiber.New(fiber.Config{
-		DisableStartupMessage: true,
-		BodyLimit:             maxInputLength,
-		ReadBufferSize:        64 * 1024, // 64KB - increase header size limit
-		WriteBufferSize:       64 * 1024, // 64KB - increase response buffer size
+		BodyLimit:       maxInputLength,
+		ReadBufferSize:  64 * 1024, // 64KB - increase header size limit
+		WriteBufferSize: 64 * 1024, // 64KB - increase response buffer size,
 	})
 
 	// Add zerolog-integrated logger middleware
@@ -305,7 +309,7 @@ func main() {
 			)
 		}
 
-		if err := app.Listen(fmt.Sprintf(":%d", finalPort)); err != nil {
+		if err := app.Listen(fmt.Sprintf(":%d", finalPort), fiber.ListenConfig{DisableStartupMessage: true}); err != nil {
 			log.Fatal().Err(err).Msg("Server error")
 		}
 	}()
@@ -330,7 +334,7 @@ func setupRoutes(app *fiber.App, m *mapper.Mapper, yamlConfig *config.MappingCon
 	// information leaks (OWASP Secure Headers). X-Frame-Options is
 	// intentionally omitted because the service is designed to be embedded
 	// in cross-origin iframes (Kalamar plugin).
-	app.Use(func(c *fiber.Ctx) error {
+	app.Use(func(c fiber.Ctx) error {
 		c.Set("X-Content-Type-Options", "nosniff")
 		c.Set("Referrer-Policy", "strict-origin-when-cross-origin")
 		return c.Next()
@@ -344,8 +348,8 @@ func setupRoutes(app *fiber.App, m *mapper.Mapper, yamlConfig *config.MappingCon
 	// (default: "https://korap.ids-mannheim.de").
 	app.Use(cors.New(cors.Config{
 		AllowOrigins: yamlConfig.AllowOrigins,
-		AllowMethods: "GET,POST",
-		AllowHeaders: "Content-Type",
+		AllowMethods: []string{"GET", "POST"},
+		AllowHeaders: []string{"Content-Type"},
 	}))
 
 	// Rate limiting middleware to prevent resource exhaustion from
@@ -363,7 +367,7 @@ func setupRoutes(app *fiber.App, m *mapper.Mapper, yamlConfig *config.MappingCon
 	}))
 
 	// Health check endpoint
-	app.Get("/health", func(c *fiber.Ctx) error {
+	app.Get("/health", func(c fiber.Ctx) error {
 		return c.SendString("OK")
 	})
 
@@ -386,7 +390,7 @@ func setupRoutes(app *fiber.App, m *mapper.Mapper, yamlConfig *config.MappingCon
 }
 
 func handleStaticFile() fiber.Handler {
-	return func(c *fiber.Ctx) error {
+	return func(c fiber.Ctx) error {
 		name := c.Params("*")
 		data, err := fs.ReadFile(staticFS, "static/"+name)
 		if err != nil {
@@ -468,7 +472,7 @@ func handleCompositeQueryTransform(m *mapper.Mapper, yamlConfig *config.MappingC
 		listsByID[yamlConfig.Lists[i].ID] = &yamlConfig.Lists[i]
 	}
 
-	return func(c *fiber.Ctx) error {
+	return func(c fiber.Ctx) error {
 		cfgRaw := c.Params("cfg")
 		if len(cfgRaw) > maxParamLength {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -477,7 +481,7 @@ func handleCompositeQueryTransform(m *mapper.Mapper, yamlConfig *config.MappingC
 		}
 
 		var jsonData any
-		if err := c.BodyParser(&jsonData); err != nil {
+		if err := c.Bind().Body(&jsonData); err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"error": "invalid JSON in request body",
 			})
@@ -548,7 +552,7 @@ func handleCompositeResponseTransform(m *mapper.Mapper, yamlConfig *config.Mappi
 		listsByID[yamlConfig.Lists[i].ID] = &yamlConfig.Lists[i]
 	}
 
-	return func(c *fiber.Ctx) error {
+	return func(c fiber.Ctx) error {
 		cfgRaw := c.Params("cfg")
 		if len(cfgRaw) > maxParamLength {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -557,7 +561,7 @@ func handleCompositeResponseTransform(m *mapper.Mapper, yamlConfig *config.Mappi
 		}
 
 		var jsonData any
-		if err := c.BodyParser(&jsonData); err != nil {
+		if err := c.Bind().Body(&jsonData); err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"error": "invalid JSON in request body",
 			})
@@ -628,7 +632,7 @@ func handleTransform(m *mapper.Mapper, yamlConfig *config.MappingConfig) fiber.H
 		listsByID[yamlConfig.Lists[i].ID] = &yamlConfig.Lists[i]
 	}
 
-	return func(c *fiber.Ctx) error {
+	return func(c fiber.Ctx) error {
 		// Extract and validate parameters
 		params, err := extractRequestParams(c)
 		if err != nil {
@@ -685,7 +689,7 @@ func handleResponseTransform(m *mapper.Mapper, yamlConfig *config.MappingConfig)
 		listsByID[yamlConfig.Lists[i].ID] = &yamlConfig.Lists[i]
 	}
 
-	return func(c *fiber.Ctx) error {
+	return func(c fiber.Ctx) error {
 		// Extract and validate parameters
 		params, err := extractRequestParams(c)
 		if err != nil {
@@ -769,8 +773,8 @@ func validateInput(mapID, dir, foundryA, foundryB, layerA, layerB string, body [
 }
 
 func handleKalamarPlugin(yamlConfig *config.MappingConfig, configTmpl *template.Template, pluginTmpl *template.Template) fiber.Handler {
-	return func(c *fiber.Ctx) error {
-		mapID := c.Params("map")
+	return func(c fiber.Ctx) error {
+		mapID, _ := url.PathUnescape(c.Params("map"))
 
 		// Config page (GET /)
 		if mapID == "" {

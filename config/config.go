@@ -109,12 +109,34 @@ type MappingConfig struct {
 	ServiceURL   string        `yaml:"serviceURL,omitempty"`
 	CookieName   string        `yaml:"cookieName,omitempty"`
 	BasePath     string        `yaml:"basePath,omitempty"`     // restricts config file loading to this directory tree
-	AllowOrigins string        `yaml:"allowOrigins,omitempty"` // comma-separated list of allowed CORS origins
+	AllowOrigins []string      `yaml:"allowOrigins,omitempty"`
 	Port         int           `yaml:"port,omitempty"`
 	LogLevel     string        `yaml:"loglevel,omitempty"`
 	RateLimit    int           `yaml:"rateLimit,omitempty"` // max requests per minute per IP (0 = use default 100)
 	Rewrites     bool          `yaml:"rewrites,omitempty"`  // global default for koral:rewrite annotations
 	Lists        []MappingList `yaml:"lists,omitempty"`
+}
+
+// UnmarshalYAML rejects the deprecated comma-separated string format for
+// allowOrigins and requires a YAML list instead.
+func (m *MappingConfig) UnmarshalYAML(value *yaml.Node) error {
+	if value.Kind == yaml.MappingNode {
+		for i := 0; i < len(value.Content)-1; i += 2 {
+			if value.Content[i].Value == "allowOrigins" && value.Content[i+1].Kind == yaml.ScalarNode {
+				return fmt.Errorf(
+					"allowOrigins must be a YAML list, not a comma-separated string; update your config:\n" +
+						"  allowOrigins:\n" +
+						"    - \"https://example.com\"")
+			}
+		}
+	}
+	type plain MappingConfig
+	var p plain
+	if err := value.Decode(&p); err != nil {
+		return err
+	}
+	*m = MappingConfig(p)
+	return nil
 }
 
 // AllowedBasePath restricts file loading to a specific directory tree.
@@ -206,6 +228,8 @@ func LoadFromSources(configFile string, mappingFiles []string) (*MappingConfig, 
 				seenIDs[list.ID] = true
 			}
 			allLists = append(allLists, globalConfig.Lists...)
+		} else if strings.Contains(err.Error(), "allowOrigins must be") {
+			return nil, fmt.Errorf("failed to parse config file '%s': %w", configFile, err)
 		} else {
 			// Fall back to old format (direct list)
 			var lists []MappingList
@@ -309,8 +333,8 @@ func ApplyDefaults(config *MappingConfig) {
 
 	// AllowOrigins defaults to the Server value. This avoids duplicating
 	// the server URL string and keeps CORS in sync with the deployment.
-	if config.AllowOrigins == "" {
-		config.AllowOrigins = config.Server
+	if len(config.AllowOrigins) == 0 {
+		config.AllowOrigins = []string{config.Server}
 	}
 	config.AllowOrigins = normalizeOrigins(config.AllowOrigins)
 
@@ -322,21 +346,24 @@ func ApplyDefaults(config *MappingConfig) {
 	}
 }
 
-// normalizeOrigins takes a comma-separated list of origin URLs and strips
-// any path components, returning only scheme + host (+ port when present).
-// The CORS middleware requires bare origins without paths; URLs like
+// normalizeOrigins strips path components from origin URLs, returning only
+// scheme + host (+ port when present). The CORS middleware requires bare
+// origins without paths; URLs like
 // "https://example.com/instance/test" are pruned to "https://example.com".
-func normalizeOrigins(raw string) string {
-	parts := strings.Split(raw, ",")
-	for i, part := range parts {
-		part = strings.TrimSpace(part)
-		if u, err := url.Parse(part); err == nil && u.Host != "" {
-			parts[i] = u.Scheme + "://" + u.Host
+func normalizeOrigins(origins []string) []string {
+	result := make([]string, 0, len(origins))
+	for _, origin := range origins {
+		origin = strings.TrimSpace(origin)
+		if origin == "" {
+			continue
+		}
+		if u, err := url.Parse(origin); err == nil && u.Host != "" {
+			result = append(result, u.Scheme+"://"+u.Host)
 		} else {
-			parts[i] = strings.TrimRight(part, "/")
+			result = append(result, strings.TrimRight(origin, "/"))
 		}
 	}
-	return strings.Join(parts, ",")
+	return result
 }
 
 // ApplyEnvOverrides overrides configuration fields from environment variables.
@@ -344,20 +371,23 @@ func normalizeOrigins(raw string) string {
 // Non-empty environment values override any previously loaded config values.
 func ApplyEnvOverrides(config *MappingConfig) {
 	envMappings := map[string]*string{
-		"KORAL_MAPPER_SERVER":        &config.Server,
-		"KORAL_MAPPER_SDK":           &config.SDK,
-		"KORAL_MAPPER_STYLESHEET":    &config.Stylesheet,
-		"KORAL_MAPPER_SERVICE_URL":   &config.ServiceURL,
-		"KORAL_MAPPER_COOKIE_NAME":   &config.CookieName,
-		"KORAL_MAPPER_LOG_LEVEL":     &config.LogLevel,
-		"KORAL_MAPPER_BASE_PATH":     &config.BasePath,
-		"KORAL_MAPPER_ALLOW_ORIGINS": &config.AllowOrigins,
+		"KORAL_MAPPER_SERVER":      &config.Server,
+		"KORAL_MAPPER_SDK":         &config.SDK,
+		"KORAL_MAPPER_STYLESHEET":  &config.Stylesheet,
+		"KORAL_MAPPER_SERVICE_URL": &config.ServiceURL,
+		"KORAL_MAPPER_COOKIE_NAME": &config.CookieName,
+		"KORAL_MAPPER_LOG_LEVEL":   &config.LogLevel,
+		"KORAL_MAPPER_BASE_PATH":   &config.BasePath,
 	}
 
 	for envKey, field := range envMappings {
 		if val := os.Getenv(envKey); val != "" {
 			*field = val
 		}
+	}
+
+	if val := os.Getenv("KORAL_MAPPER_ALLOW_ORIGINS"); val != "" {
+		config.AllowOrigins = strings.Split(val, ",")
 	}
 
 	if val := os.Getenv("KORAL_MAPPER_PORT"); val != "" {

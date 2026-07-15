@@ -13,7 +13,7 @@ import (
 
 	tmconfig "github.com/KorAP/Koral-Mapper/config"
 	"github.com/KorAP/Koral-Mapper/mapper"
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -56,8 +56,7 @@ func FuzzTransformEndpoint(f *testing.F) {
 
 	// Create fiber app
 	app := fiber.New(fiber.Config{
-		DisableStartupMessage: true,
-		ErrorHandler: func(c *fiber.Ctx, err error) error {
+		ErrorHandler: func(c fiber.Ctx, err error) error {
 			// For body limit errors, return 413 status code
 			if err.Error() == "body size exceeds the given limit" || errors.Is(err, fiber.ErrRequestEntityTooLarge) {
 				return c.Status(fiber.StatusRequestEntityTooLarge).JSON(fiber.Map{
@@ -176,8 +175,7 @@ func FuzzResponseTransformEndpoint(f *testing.F) {
 
 	// Create fiber app
 	app := fiber.New(fiber.Config{
-		DisableStartupMessage: true,
-		ErrorHandler: func(c *fiber.Ctx, err error) error {
+		ErrorHandler: func(c fiber.Ctx, err error) error {
 			// For body limit errors, return 413 status code
 			if err.Error() == "body size exceeds the given limit" || errors.Is(err, fiber.ErrRequestEntityTooLarge) {
 				return c.Status(fiber.StatusRequestEntityTooLarge).JSON(fiber.Map{
@@ -289,8 +287,7 @@ func TestLargeInput(t *testing.T) {
 
 	// Create fiber app
 	app := fiber.New(fiber.Config{
-		DisableStartupMessage: true,
-		ErrorHandler: func(c *fiber.Ctx, err error) error {
+		ErrorHandler: func(c fiber.Ctx, err error) error {
 			// For body limit errors, return 413 status code
 			if err.Error() == "body size exceeds the given limit" || errors.Is(err, fiber.ErrRequestEntityTooLarge) {
 				return c.Status(fiber.StatusRequestEntityTooLarge).JSON(fiber.Map{

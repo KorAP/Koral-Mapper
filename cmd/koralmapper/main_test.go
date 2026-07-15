@@ -16,7 +16,7 @@ import (
 
 	tmconfig "github.com/KorAP/Koral-Mapper/config"
 	"github.com/KorAP/Koral-Mapper/mapper"
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -2797,7 +2797,7 @@ func TestCORSHeadersCustomOrigin(t *testing.T) {
 	require.NoError(t, err)
 
 	mockConfig := &tmconfig.MappingConfig{
-		AllowOrigins: "https://custom.example.com",
+		AllowOrigins: []string{"https://custom.example.com"},
 		Lists:        []tmconfig.MappingList{mappingList},
 	}
 	tmconfig.ApplyDefaults(mockConfig)
@@ -2830,7 +2830,7 @@ func TestCORSRejectsDisallowedOrigin(t *testing.T) {
 	require.NoError(t, err)
 
 	mockConfig := &tmconfig.MappingConfig{
-		AllowOrigins: "https://allowed.example.com",
+		AllowOrigins: []string{"https://allowed.example.com"},
 		Lists:        []tmconfig.MappingList{mappingList},
 	}
 	tmconfig.ApplyDefaults(mockConfig)
@@ -2860,7 +2860,7 @@ func TestCORSAllowsMultipleOrigins(t *testing.T) {
 	require.NoError(t, err)
 
 	mockConfig := &tmconfig.MappingConfig{
-		AllowOrigins: "https://first.example.com,https://second.example.com",
+		AllowOrigins: []string{"https://first.example.com", "https://second.example.com"},
 		Lists:        []tmconfig.MappingList{mappingList},
 	}
 	tmconfig.ApplyDefaults(mockConfig)

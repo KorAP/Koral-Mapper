@@ -1191,31 +1191,31 @@ func TestEffectiveRewrites(t *testing.T) {
 
 	tests := []struct {
 		name          string
-		listRewrites *bool
+		listRewrites  *bool
 		globalDefault bool
 		expected      bool
 	}{
 		{
 			name:          "nil per-list, global false",
-			listRewrites: nil,
+			listRewrites:  nil,
 			globalDefault: false,
 			expected:      false,
 		},
 		{
 			name:          "nil per-list, global true",
-			listRewrites: nil,
+			listRewrites:  nil,
 			globalDefault: true,
 			expected:      true,
 		},
 		{
 			name:          "per-list true, global false",
-			listRewrites: &trueVal,
+			listRewrites:  &trueVal,
 			globalDefault: false,
 			expected:      true,
 		},
 		{
 			name:          "per-list false, global true",
-			listRewrites: &falseVal,
+			listRewrites:  &falseVal,
 			globalDefault: true,
 			expected:      false,
 		},
@@ -1425,7 +1425,7 @@ func TestAllowOriginsDefault(t *testing.T) {
 	cfg := &MappingConfig{}
 	ApplyDefaults(cfg)
 	// AllowOrigins should derive from the Server default (trailing slash stripped)
-	assert.Equal(t, "https://korap.ids-mannheim.de", cfg.AllowOrigins,
+	assert.Equal(t, []string{"https://korap.ids-mannheim.de"}, cfg.AllowOrigins,
 		"default AllowOrigins should derive from defaultServer")
 }
 
@@ -1434,23 +1434,25 @@ func TestAllowOriginsDerivedFromCustomServer(t *testing.T) {
 		Server: "https://custom.example.com/",
 	}
 	ApplyDefaults(cfg)
-	assert.Equal(t, "https://custom.example.com", cfg.AllowOrigins,
+	assert.Equal(t, []string{"https://custom.example.com"}, cfg.AllowOrigins,
 		"AllowOrigins should derive from the configured Server (trailing slash stripped)")
 }
 
 func TestAllowOriginsExplicitNotOverriddenByServer(t *testing.T) {
 	cfg := &MappingConfig{
 		Server:       "https://custom.example.com/",
-		AllowOrigins: "https://explicit-origin.example.com",
+		AllowOrigins: []string{"https://explicit-origin.example.com"},
 	}
 	ApplyDefaults(cfg)
-	assert.Equal(t, "https://explicit-origin.example.com", cfg.AllowOrigins,
+	assert.Equal(t, []string{"https://explicit-origin.example.com"}, cfg.AllowOrigins,
 		"explicit AllowOrigins should not be overridden by Server default")
 }
 
 func TestAllowOriginsFromYAML(t *testing.T) {
 	content := `
-allowOrigins: "https://custom.example.com,https://other.example.com"
+allowOrigins:
+  - "https://custom.example.com"
+  - "https://other.example.com"
 lists:
   - id: test-mapper
     mappings:
@@ -1466,15 +1468,37 @@ lists:
 
 	cfg, err := LoadFromSources(tmpfile.Name(), nil)
 	require.NoError(t, err)
-	assert.Equal(t, "https://custom.example.com,https://other.example.com",
+	assert.Equal(t, []string{"https://custom.example.com", "https://other.example.com"},
 		cfg.AllowOrigins)
+}
+
+func TestAllowOriginsStringFormatRejected(t *testing.T) {
+	content := `
+allowOrigins: "https://custom.example.com,https://other.example.com"
+lists:
+  - id: test-mapper
+    mappings:
+      - "[A] <> [B]"
+`
+	tmpfile, err := os.CreateTemp("", "config-cors-reject-*.yaml")
+	require.NoError(t, err)
+	defer os.Remove(tmpfile.Name())
+
+	_, err = tmpfile.WriteString(content)
+	require.NoError(t, err)
+	require.NoError(t, tmpfile.Close())
+
+	_, err = LoadFromSources(tmpfile.Name(), nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "allowOrigins must be a YAML list")
 }
 
 func TestAllowOriginsEnvOverride(t *testing.T) {
 	t.Setenv("KORAL_MAPPER_ALLOW_ORIGINS", "https://env-origin.example.com")
 
 	content := `
-allowOrigins: "https://yaml-origin.example.com"
+allowOrigins:
+  - "https://yaml-origin.example.com"
 lists:
   - id: test-mapper
     mappings:
@@ -1490,7 +1514,7 @@ lists:
 
 	cfg, err := LoadFromSources(tmpfile.Name(), nil)
 	require.NoError(t, err)
-	assert.Equal(t, "https://env-origin.example.com", cfg.AllowOrigins,
+	assert.Equal(t, []string{"https://env-origin.example.com"}, cfg.AllowOrigins,
 		"KORAL_MAPPER_ALLOW_ORIGINS env var should override YAML value")
 }
 
@@ -1499,16 +1523,16 @@ func TestAllowOriginsDerivedFromServerWithPath(t *testing.T) {
 		Server: "https://korap.ids-mannheim.de/instance/test",
 	}
 	ApplyDefaults(cfg)
-	assert.Equal(t, "https://korap.ids-mannheim.de", cfg.AllowOrigins,
+	assert.Equal(t, []string{"https://korap.ids-mannheim.de"}, cfg.AllowOrigins,
 		"AllowOrigins should be pruned to host-level origin when Server contains a path")
 }
 
 func TestAllowOriginsExplicitWithPathsPruned(t *testing.T) {
 	cfg := &MappingConfig{
-		AllowOrigins: "https://korap.ids-mannheim.de/instance/test,https://other.example.com/app",
+		AllowOrigins: []string{"https://korap.ids-mannheim.de/instance/test", "https://other.example.com/app"},
 	}
 	ApplyDefaults(cfg)
-	assert.Equal(t, "https://korap.ids-mannheim.de,https://other.example.com", cfg.AllowOrigins,
+	assert.Equal(t, []string{"https://korap.ids-mannheim.de", "https://other.example.com"}, cfg.AllowOrigins,
 		"explicit AllowOrigins entries should be pruned to host-level origins")
 }
 
@@ -1517,7 +1541,7 @@ func TestAllowOriginsWithPort(t *testing.T) {
 		Server: "https://korap.ids-mannheim.de:8080/instance/test",
 	}
 	ApplyDefaults(cfg)
-	assert.Equal(t, "https://korap.ids-mannheim.de:8080", cfg.AllowOrigins,
+	assert.Equal(t, []string{"https://korap.ids-mannheim.de:8080"}, cfg.AllowOrigins,
 		"AllowOrigins should preserve port but strip path")
 }
 
